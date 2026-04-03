@@ -1863,20 +1863,24 @@ async function addTask() {
   const recurrence = document.getElementById('recurrenceInput').value.trim() || null;
 
   try {
-    const prompt = await buildPromptFromList(currentPrompt, promptListRaw);
+    const agentPrompt = await buildPromptFromList(currentPrompt, promptListRaw);
+    const body = {
+      prompt: currentPrompt,
+      provider,
+      model,
+      priority,
+      working_dir: workdir,
+      skip_permissions: skipPermissions,
+      scheduled_at: schedule ? new Date(schedule).toISOString() : null,
+      recurrence,
+    };
+    if (agentPrompt !== currentPrompt) {
+      body.agent_prompt = agentPrompt;
+    }
     await fetchJSON(`${API}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        provider,
-        model,
-        priority,
-        working_dir: workdir,
-        skip_permissions: skipPermissions,
-        scheduled_at: schedule ? new Date(schedule).toISOString() : null,
-        recurrence,
-      }),
+      body: JSON.stringify(body),
     });
 
     document.getElementById('promptInput').value = '';
@@ -2080,6 +2084,9 @@ function updateModelSelect() {
     modelSel.innerHTML = `<option value="">${tr('default_model')}</option>` +
       models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
     label.style.display = '';
+    if (sel && sel.value === 'claude' && models.includes('sonnet')) {
+      modelSel.value = 'sonnet';
+    }
   } else {
     label.style.display = 'none';
     modelSel.value = '';

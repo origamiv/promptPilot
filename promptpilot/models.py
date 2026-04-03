@@ -18,6 +18,7 @@ class TaskStatus(str, Enum):
 
 class TaskCreate(BaseModel):
     prompt: str
+    agent_prompt: Optional[str] = None  # Combined prompt passed to the agent CLI (if differs from prompt)
     working_dir: Optional[str] = None
     provider: Optional[str] = None  # e.g. "claude", "claude-z", or raw command
     priority: int = Field(default=5, ge=1, le=10)
@@ -39,6 +40,7 @@ class TaskUpdate(BaseModel):
 class TaskInDB(BaseModel):
     id: int
     prompt: str
+    agent_prompt: Optional[str] = None
     working_dir: Optional[str] = None
     provider: Optional[str] = None
     status: TaskStatus = TaskStatus.PENDING

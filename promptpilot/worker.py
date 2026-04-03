@@ -290,7 +290,8 @@ def execute_task(task):
         except Exception as e:
             print(f"  -> Limits refresh failed: {e}")
 
-    cmd = build_cmd(provider, task.prompt, skip_permissions=task.skip_permissions, session_id=task.session_id, model=task.model)
+    effective_prompt = task.agent_prompt or task.prompt
+    cmd = build_cmd(provider, effective_prompt, skip_permissions=task.skip_permissions, session_id=task.session_id, model=task.model)
 
     env = get_provider_env(provider)
     preexec_fn = None
@@ -363,7 +364,7 @@ def execute_task(task):
         and "--dangerously-bypass-approvals-and-sandbox" not in cmd
     ):
         fallback_cmd = list(cmd)
-        prompt_idx = fallback_cmd.index(task.prompt) if task.prompt in fallback_cmd else len(fallback_cmd)
+        prompt_idx = fallback_cmd.index(effective_prompt) if effective_prompt in fallback_cmd else len(fallback_cmd)
         fallback_cmd[prompt_idx:prompt_idx] = ["--dangerously-bypass-approvals-and-sandbox"]
         print("  -> Codex bwrap incompatibility detected, retrying without sandbox...")
         try:
@@ -488,6 +489,7 @@ def execute_task(task):
             from .models import TaskCreate
             db.create_task(TaskCreate(
                 prompt=task.prompt,
+                agent_prompt=task.agent_prompt or None,
                 working_dir=task.working_dir,
                 provider=task.provider,
                 priority=task.priority,

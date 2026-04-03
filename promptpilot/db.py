@@ -262,6 +262,7 @@ def init_db():
             "ADD COLUMN IF NOT EXISTS recurrence TEXT",
             "ADD COLUMN IF NOT EXISTS agent_account_id BIGINT",
             "ADD COLUMN IF NOT EXISTS src JSONB",
+            "ADD COLUMN IF NOT EXISTS agent_prompt TEXT",
         ]:
             cur.execute(sql.SQL("ALTER TABLE {} {}").format(_tasks_ref(), sql.SQL(col_sql)))
 
@@ -283,16 +284,17 @@ def create_task(task: TaskCreate) -> TaskInDB:
             sql.SQL(
                 """
                 INSERT INTO {} (
-                    prompt, working_dir, provider, status, priority,
+                    prompt, agent_prompt, working_dir, provider, status, priority,
                     scheduled_at, created_at, max_retries, skip_permissions,
                     model, session_id, parent_task_id, tg_chat_id, recurrence
                 )
-                VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """
             ).format(_tasks_ref()),
             (
                 task.prompt,
+                task.agent_prompt or None,
                 task.working_dir,
                 task.provider,
                 task.priority,
