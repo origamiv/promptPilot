@@ -302,16 +302,6 @@
     border-top: 1px solid var(--border);
   }
   .task-row.expanded .task-detail { display: block; }
-  #taskMobileList .admin-mobile-card {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 10px;
-    margin-bottom: 8px;
-  }
-  #taskMobileList .admin-mobile-title {
-    font-size: 13px;
-    margin-bottom: 0;
-  }
   #taskMobileList .admin-mobile-sub {
     margin-top: 6px;
     min-width: 0;
@@ -339,16 +329,16 @@
     font-family: var(--mono);
   }
   .task-mobile-prompt {
-    margin-top: 8px;
-    padding: 9px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg);
+    margin-top: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
     white-space: pre-wrap;
     word-break: break-word;
     font-size: 12px;
     line-height: 1.35;
-    color: var(--text);
+    color: var(--text2);
   }
 
   .result-block {
@@ -1950,8 +1940,9 @@ async function loadTasks() {
           </div>
         </div>
       </div>
-      <div class="task-mobile-prompt" onclick="toggleTask(${t.id})">${esc(t.prompt)}</div>
       <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>${tr('prompt')}:</b></div>
+        <div class="task-mobile-prompt">${esc(t.prompt)}</div>
         ${buildTaskDetailHTML(t, resultHTML, { includeSubject: false, includePrompt: false })}
       </div>
     </div>`;
