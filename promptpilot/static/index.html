@@ -836,6 +836,40 @@
     margin-top: 0;
     padding: 8px;
   }
+  #projectsCards .admin-mobile-card {
+    border-radius: 0;
+    margin-bottom: 0;
+    padding: 0;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  #projectsCards .admin-mobile-card + .admin-mobile-card {
+    border-top: 0;
+  }
+  #projectsCards .admin-mobile-card:first-child {
+    border-top: 1px solid var(--border);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+  }
+  #projectsCards .admin-mobile-card:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    margin-bottom: 10px;
+  }
+  #projectsCards .admin-mobile-head {
+    gap: 8px;
+    padding: 7px 8px;
+    align-items: center;
+  }
+  #projectsCards .admin-mobile-title {
+    margin-bottom: 0;
+    font-size: 12px;
+  }
+  #projectsCards .admin-mobile-body {
+    margin-top: 0;
+    padding: 8px;
+  }
   #accountsCards .admin-mobile-card.active-account-card {
     background: color-mix(in oklab, var(--green) 14%, var(--bg));
     border-color: color-mix(in oklab, var(--green) 42%, var(--border));
@@ -2616,28 +2650,21 @@ function renderProjectsCards(rows) {
   const cards = document.getElementById('projectsCards');
   cards.innerHTML = rows.map(r => {
     const expanded = isAdminExpanded('project', r.id);
-    const menuOpen = isAdminMenuOpen('project', r.id);
+    const title = [`#${r.id}`, esc(r.name || ''), esc(r.shortname || '')]
+      .filter(Boolean)
+      .join(' · ');
     return `
     <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
-      <div class="admin-mobile-menu-wrap">
-        <button class="admin-mobile-menu-btn" onclick="toggleAdminMenu(event, 'project', ${r.id})">⋮</button>
-        ${menuOpen ? `<div class="admin-mobile-menu">
-          <button class="admin-mobile-menu-item" onclick="editProjectCrud(${r.id})">Edit</button>
-          <button class="admin-mobile-menu-item danger" onclick="deleteProjectCrud(${r.id})">Delete</button>
-        </div>` : ''}
-      </div>
       <div class="admin-mobile-head" onclick="toggleAdminCard('project', ${r.id})">
-        <span class="admin-mobile-icon">📁</span>
         <div class="admin-mobile-main">
-          <div class="admin-mobile-title">#${r.id} · ${esc(r.name || '')}</div>
-          <div class="admin-mobile-sub">
-            <span class="admin-mobile-chip">${esc(r.shortname || '')}</span>
-            <span class="admin-mobile-chip">${esc(r.folder || '')}</span>
-          </div>
+          <div class="admin-mobile-title">${title}</div>
+        </div>
+        <div class="prompt-mobile-inline-actions">
+          <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit project" onclick="event.stopPropagation(); editProjectCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" aria-label="Delete project" onclick="event.stopPropagation(); deleteProjectCrud(${r.id})">🗑</button>
         </div>
       </div>
       <div class="admin-mobile-body">
-        <div class="admin-mobile-kv"><b>Short:</b> ${esc(r.shortname || '')}</div>
         <div class="admin-mobile-kv"><b>Folder:</b> ${esc(r.folder || '')}</div>
         ${r.comment ? `<div class="admin-mobile-kv"><b>Comment:</b> ${esc(r.comment)}</div>` : ''}
       </div>

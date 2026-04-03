@@ -21,6 +21,7 @@ from .config import (
     PG_SETTINGS_TABLE,
     PG_SSLMODE,
     PG_TASKS_TABLE,
+    PROJECTS_ROOT,
     PG_USER,
 )
 from .models import Stats, TaskCreate, TaskInDB, TaskStatus
@@ -238,6 +239,14 @@ def init_db():
                 "ALTER TABLE {}.prompts ADD COLUMN IF NOT EXISTS status SMALLINT NOT NULL DEFAULT 1"
             ).format(sql.Identifier(SCHEMA_NAME))
         )
+        try:
+            cur.execute(
+                sql.SQL(
+                    "ALTER TABLE {}.projects ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ"
+                ).format(sql.Identifier(SCHEMA_NAME))
+            )
+        except UndefinedTable:
+            pass
 
         # Non-destructive migrations for existing tables.
         for col_sql in [
@@ -376,6 +385,7 @@ def mark_completed(task_id: int, result: str, exit_code: int = 0, model_used: st
             ).format(_tasks_ref()),
             (result, exit_code, _now(), model_used, session_id, task_id),
         )
+    touch_project_last_used_by_task(task_id)
 
 
 def mark_failed(task_id: int, error: str, exit_code: int = 1):
@@ -386,6 +396,7 @@ def mark_failed(task_id: int, error: str, exit_code: int = 1):
             ),
             (error, exit_code, _now(), task_id),
         )
+    touch_project_last_used_by_task(task_id)
 
 
 def mark_rate_limited(task_id: int, next_run_at: datetime, error: str = None):
@@ -412,6 +423,45 @@ def cancel_task(task_id: int) -> bool:
                 "UPDATE {} SET status = 'cancelled', completed_at = %s WHERE id = %s AND status IN ('pending', 'rate_limited')"
             ).format(_tasks_ref()),
             (_now(), task_id),
+        )
+        return cur.rowcount > 0
+
+
+def touch_project_last_used_by_task(task_id: int) -> bool:
+    """Set projects.last_used_at for project matching task working_dir."""
+    now = _now()
+    base_root = (PROJECTS_ROOT or "/www/wwwroot").rstrip("/")
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                WITH t AS (
+                    SELECT NULLIF(REGEXP_REPLACE(TRIM(working_dir), '/+$', ''), '') AS wd
+                    FROM {}
+                    WHERE id = %s
+                    LIMIT 1
+                )
+                UPDATE {}.projects p
+                SET last_used_at = %s
+                FROM t
+                WHERE p.deleted_at IS NULL
+                  AND t.wd IS NOT NULL
+                  AND (
+                    REGEXP_REPLACE(TRIM(p.folder), '/+$', '') = t.wd
+                    OR REGEXP_REPLACE(
+                        TRIM(
+                          CASE
+                            WHEN p.folder LIKE '/%%' THEN p.folder
+                            ELSE %s || '/' || p.folder
+                          END
+                        ),
+                        '/+$',
+                        ''
+                      ) = t.wd
+                  )
+                """
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME)),
+            (task_id, now, base_root),
         )
         return cur.rowcount > 0
 
@@ -640,11 +690,11 @@ def list_projects_admin(search: Optional[str] = None, limit: int = 200) -> list[
             cur.execute(
                 sql.SQL(
                     """
-                    SELECT id, name, shortname, folder, comment, created_at, updated_at
+                    SELECT id, name, shortname, folder, comment, last_used_at, created_at, updated_at
                     FROM {}.projects
                     WHERE deleted_at IS NULL
                       AND (name ILIKE %s OR shortname ILIKE %s OR folder ILIKE %s)
-                    ORDER BY id DESC
+                    ORDER BY last_used_at DESC NULLS LAST, id DESC
                     LIMIT %s
                     """
                 ).format(sql.Identifier(SCHEMA_NAME)),
@@ -654,10 +704,10 @@ def list_projects_admin(search: Optional[str] = None, limit: int = 200) -> list[
             cur.execute(
                 sql.SQL(
                     """
-                    SELECT id, name, shortname, folder, comment, created_at, updated_at
+                    SELECT id, name, shortname, folder, comment, last_used_at, created_at, updated_at
                     FROM {}.projects
                     WHERE deleted_at IS NULL
-                    ORDER BY id DESC
+                    ORDER BY last_used_at DESC NULLS LAST, id DESC
                     LIMIT %s
                     """
                 ).format(sql.Identifier(SCHEMA_NAME)),
