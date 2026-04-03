@@ -274,6 +274,31 @@
     align-items: center;
     min-width: 0;
   }
+  #taskMobileList .task-mobile-head-meta .task-mobile-project-badge {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    background: var(--surface2);
+    color: var(--text);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #taskMobileList .task-mobile-head-meta .task-mobile-agent-icon {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: 20px;
+    height: 20px;
+    background: var(--surface2);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+    flex: 0 0 20px;
+  }
 
   .task-row {
     background: var(--surface);
@@ -1934,6 +1959,24 @@ function taskAgentAccountName(t) {
   return String(t.agent_account_name || t.agent_account_shortname || '').trim();
 }
 
+function providerIcon(providerName) {
+  const key = String(providerName || '').trim().toLowerCase();
+  if (!key) return '🤖';
+  if (key.includes('claude')) return '✶';
+  if (key.includes('codex')) return '⌘';
+  if (key.includes('qwen')) return '◈';
+  if (key.includes('cursor')) return '▣';
+  return '🤖';
+}
+
+function taskAgentIconInfo(t) {
+  const provider = String(t.provider || '').trim();
+  const agent = taskAgentName(t);
+  const source = provider || agent;
+  if (!source) return null;
+  return { icon: providerIcon(source), label: source };
+}
+
 function taskWorkedMinutes(t) {
   if (!t.started_at) return null;
   const started = new Date(t.started_at);
@@ -2055,8 +2098,8 @@ async function loadTasks() {
     const parsed = parseResult(t.result);
     const projectName = projectNameByWorkingDir(t.working_dir);
     const resultHTML = buildTaskResultHTML(t, parsed);
-    const agentName = taskAgentName(t);
     const agentAccountName = taskAgentAccountName(t);
+    const agentIconInfo = taskAgentIconInfo(t);
     const workedMinutes = taskWorkedMinutes(t);
 
     return `
@@ -2065,9 +2108,9 @@ async function loadTasks() {
         <div class="admin-mobile-main">
           <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
           <div class="task-mobile-head-meta">
-            <span>${tr('project')}: ${esc(projectName || '—')}</span>
+            <span class="task-mobile-project-badge">${esc(projectName || '—')}</span>
             <span>${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
-            <span>${tr('task_agent')}: ${esc(agentName || '—')}</span>
+            ${agentIconInfo ? `<span class="task-mobile-agent-icon" title="${esc(agentIconInfo.label)}">${agentIconInfo.icon}</span>` : ''}
             <span>${tr('worked_minutes', { n: workedMinutes ?? 0 })}</span>
           </div>
         </div>
@@ -2081,8 +2124,8 @@ async function loadTasks() {
           <span class="admin-mobile-chip">${statusLabel(t.status)}</span>
           <span class="admin-mobile-chip">P${t.priority}</span>
           <span class="admin-mobile-chip">${time}</span>
-          ${t.provider ? `<span class="admin-mobile-chip">${esc(t.provider)}</span>` : ''}
-          ${projectName ? `<span class="admin-mobile-chip">${tr('project')}: ${esc(projectName)}</span>` : ''}
+          ${agentIconInfo ? `<span class="admin-mobile-chip" title="${esc(agentIconInfo.label)}">${agentIconInfo.icon}</span>` : ''}
+          ${projectName ? `<span class="admin-mobile-chip">${esc(projectName)}</span>` : ''}
           ${scheduleInfo(t)}
         </div>
         <div class="admin-mobile-kv"><b>${tr('prompt')}:</b></div>
