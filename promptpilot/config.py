@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -45,6 +46,35 @@ def _load_dotenv():
 # Load .env BEFORE reading any os.environ values
 _load_dotenv()
 
+
+def _parse_duration_seconds(raw_value: str, default: int) -> int:
+    """Parse duration in seconds.
+
+    Supports plain seconds ("900") and values with units:
+    s/sec/сек, m/min/мин, h/hour/час.
+    """
+    value = (raw_value or "").strip().lower()
+    if not value:
+        return default
+
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([a-zа-я.]*)", value)
+    if not match:
+        return default
+
+    amount = float(match.group(1))
+    unit = match.group(2).strip(".")
+
+    if unit in ("", "s", "sec", "secs", "second", "seconds", "сек", "с"):
+        multiplier = 1
+    elif unit in ("m", "min", "mins", "minute", "minutes", "мин", "м"):
+        multiplier = 60
+    elif unit in ("h", "hr", "hrs", "hour", "hours", "ч", "час", "часа", "часов"):
+        multiplier = 3600
+    else:
+        return default
+
+    return max(1, int(amount * multiplier))
+
 # Database
 DB_DIR = Path(os.environ.get("PP_DATA_DIR", Path.home() / ".promptpilot"))
 DB_PATH = DB_DIR / "promptpilot.db"
@@ -65,6 +95,7 @@ PG_SETTINGS_TABLE = os.environ.get("PP_DB_SETTINGS_TABLE", "promptpilot_settings
 POLL_INTERVAL = int(os.environ.get("PP_POLL_INTERVAL", "5"))
 TASK_TIMEOUT = int(os.environ.get("PP_TASK_TIMEOUT", "300"))
 CLAUDE_TASK_TIMEOUT = int(os.environ.get("PP_CLAUDE_TASK_TIMEOUT", "900"))
+AGENT_TIMEOUT = _parse_duration_seconds(os.environ.get("AGENT_TIMEOUT", ""), 0)
 BASE_DELAY = int(os.environ.get("PP_BASE_DELAY", "60"))
 MAX_DELAY = int(os.environ.get("PP_MAX_DELAY", "3600"))
 MAX_RETRIES = int(os.environ.get("PP_MAX_RETRIES", "5"))

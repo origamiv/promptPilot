@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import db
 from .config import (
+    AGENT_TIMEOUT,
     AGENT_USER,
     BASE_DELAY,
     CLAUDE_TASK_TIMEOUT,
@@ -349,7 +350,7 @@ def execute_task(task):
     if resolved:
         cmd[0] = resolved
 
-    task_timeout = CLAUDE_TASK_TIMEOUT if provider.startswith("claude") else TASK_TIMEOUT
+    task_timeout = AGENT_TIMEOUT or (CLAUDE_TASK_TIMEOUT if provider.startswith("claude") else TASK_TIMEOUT)
 
     def _run_once(command):
         return subprocess.run(
@@ -547,7 +548,8 @@ def run_worker():
     db.recover_running()
 
     print(f"PromptPilot worker started (poll every {POLL_INTERVAL}s)")
-    print(f"Timeout: {TASK_TIMEOUT}s | Backoff: {BASE_DELAY}-{MAX_DELAY}s")
+    timeout_label = f"{AGENT_TIMEOUT}s (AGENT_TIMEOUT)" if AGENT_TIMEOUT else f"{TASK_TIMEOUT}s"
+    print(f"Timeout: {timeout_label} | Backoff: {BASE_DELAY}-{MAX_DELAY}s")
     print("Waiting for tasks...\n")
 
     while running:
