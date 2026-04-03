@@ -1927,12 +1927,8 @@ async function loadTasks() {
           </div>
         </div>
       </div>
-      <div class="task-mobile-prompt">${esc(t.prompt)}</div>
+      <div class="task-mobile-prompt" onclick="toggleTask(${t.id})">${esc(t.prompt)}</div>
       <div class="admin-mobile-body">
-        <div class="result-block">
-          <pre>${esc(t.prompt)}</pre>
-          <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.prompt))})">${tr('copy')}</button>
-        </div>
         ${buildTaskDetailHTML(t, resultHTML, { includeSubject: false, includePrompt: false })}
       </div>
     </div>`;
