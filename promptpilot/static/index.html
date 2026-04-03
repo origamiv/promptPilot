@@ -227,6 +227,7 @@
 
   /* Task list */
   .task-list { display: flex; flex-direction: column; gap: 6px; }
+  .task-mobile-list { display: none; }
 
   .task-row {
     background: var(--surface);
@@ -301,6 +302,31 @@
     border-top: 1px solid var(--border);
   }
   .task-row.expanded .task-detail { display: block; }
+  #taskMobileList .admin-mobile-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+  #taskMobileList .admin-mobile-title {
+    font-size: 13px;
+    margin-bottom: 0;
+  }
+  #taskMobileList .admin-mobile-sub {
+    margin-top: 6px;
+  }
+  .task-mobile-prompt {
+    margin-top: 8px;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--text);
+  }
 
   .result-block {
     position: relative;
@@ -1118,6 +1144,12 @@
     .task-list {
       gap: 8px;
     }
+    .task-list {
+      display: none;
+    }
+    .task-mobile-list {
+      display: block;
+    }
     .task-row {
       padding: 10px;
     }
@@ -1327,6 +1359,7 @@
     </div>
 
     <div class="task-list" id="taskList"></div>
+    <div class="task-mobile-list" id="taskMobileList"></div>
   </div>
 
   <div class="admin-view" id="projectsView">
@@ -1760,16 +1793,88 @@ function projectNameByWorkingDir(workingDir) {
   return parts[parts.length - 1] || String(workingDir);
 }
 
+function taskCardTitle(t) {
+  const subject = String(t.subject || '').trim();
+  if (subject) return subject;
+  const firstPromptLine = String(t.prompt || '')
+    .split(/\r?\n/)
+    .map(x => x.trim())
+    .find(Boolean);
+  return firstPromptLine || `#${t.id}`;
+}
+
+function buildTaskResultHTML(t, parsed) {
+  let resultHTML = '';
+  if (parsed) {
+    resultHTML += `<div class="detail-label">${tr('result')}</div>`;
+    resultHTML += renderResultMeta(parsed);
+
+    const displayText = parsed.text || (parsed.metaBlock ? tr('task_completed_no_text') : '');
+    if (displayText) {
+      const copyable = parsed.text || '';
+      resultHTML += `<div class="result-block">
+        <pre>${esc(displayText)}</pre>
+        ${copyable ? `<button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(copyable))})">${tr('copy')}</button>` : ''}
+      </div>`;
+    }
+  } else if (t.result) {
+    resultHTML += `<div class="detail-label">${tr('result')}</div>`;
+    resultHTML += `<div class="result-block">
+      <pre>${esc(t.result)}</pre>
+      <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.result))})">${tr('copy')}</button>
+    </div>`;
+  }
+  return resultHTML;
+}
+
+function buildTaskDetailHTML(t, resultHTML, opts = {}) {
+  const includeSubject = opts.includeSubject ?? false;
+  const includePrompt = opts.includePrompt ?? true;
+  return `
+    ${includeSubject && t.subject ? `<div class="detail-info"><span class="label">Тема: </span><span>${esc(t.subject)}</span></div>` : ''}
+    ${includePrompt ? `
+      <div class="detail-label">${tr('prompt')}</div>
+      <div class="result-block">
+        <pre>${esc(t.prompt)}</pre>
+        <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.prompt))})">${tr('copy')}</button>
+      </div>
+    ` : ''}
+    ${t.working_dir ? `<div class="detail-info"><span class="label">${tr('dir')}: </span><span>${esc(t.working_dir)}</span></div>` : ''}
+    ${resultHTML}
+    ${t.error ? `
+      <div class="detail-label">${tr('error')}</div>
+      <div class="result-block">
+        <pre>${esc(t.error)}</pre>
+        <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.error))})">${tr('copy')}</button>
+      </div>
+    ` : ''}
+    ${t.recurrence ? `<div class="detail-info"><span class="label">${tr('recurrence')}: </span><span>${esc(t.recurrence)}</span></div>` : ''}
+    ${t.scheduled_at ? `<div class="detail-info"><span class="label">${tr('scheduled')}: </span><span>${new Date(t.scheduled_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
+    ${t.started_at ? `<div class="detail-info"><span class="label">${tr('started')}: </span><span>${new Date(t.started_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
+    ${t.completed_at ? `<div class="detail-info"><span class="label">${tr('completed_at')}: </span><span>${new Date(t.completed_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
+    ${t.next_run_at ? `<div class="detail-info"><span class="label">${tr('next_retry')}: </span><span>${new Date(t.next_run_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
+    <div class="detail-info"><span class="label">${tr('retries')}: </span><span>${t.retry_count}/${t.max_retries}</span>${t.exit_code !== null ? ` <span class="label">| ${tr('exit')}: </span><span>${t.exit_code}</span>` : ''}</div>
+    <div class="detail-actions">
+      ${['pending','rate_limited'].includes(t.status) ? `<button class="btn btn-sm btn-ghost" onclick="cancelTask(event,${t.id})">${tr('cancel')}</button>` : ''}
+      ${t.status === 'running' ? `<button class="btn btn-sm btn-ghost" onclick="resetTask(event,${t.id})">${tr('reset_to_pending')}</button>` : ''}
+      <button class="btn btn-sm btn-danger" onclick="deleteTask(event,${t.id})">${tr('delete')}</button>
+    </div>
+  `;
+}
+
 async function loadTasks() {
   const params = currentFilter ? `?status=${currentFilter}&limit=100` : '?limit=100';
   const tasks = await fetchJSON(`${API}/tasks${params}`);
   const list = document.getElementById('taskList');
+  const mobileList = document.getElementById('taskMobileList');
 
   if (!tasks.length) {
-    list.innerHTML = `<div class="empty">
+    const emptyHTML = `<div class="empty">
       <div class="empty-icon">&#9744;</div>
       <div>${tr('no_tasks')}${currentFilter ? `: "${statusLabel(currentFilter)}"` : ''}.</div>
     </div>`;
+    list.innerHTML = emptyHTML;
+    mobileList.innerHTML = emptyHTML;
     return;
   }
 
@@ -1779,27 +1884,7 @@ async function loadTasks() {
     const parsed = parseResult(t.result);
     const projectName = projectNameByWorkingDir(t.working_dir);
 
-    // Build result section
-    let resultHTML = '';
-    if (parsed) {
-      resultHTML += `<div class="detail-label">${tr('result')}</div>`;
-      resultHTML += renderResultMeta(parsed);
-
-      const displayText = parsed.text || (parsed.metaBlock ? tr('task_completed_no_text') : '');
-      if (displayText) {
-        const copyable = parsed.text || '';
-        resultHTML += `<div class="result-block">
-          <pre>${esc(displayText)}</pre>
-          ${copyable ? `<button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(copyable))})">${tr('copy')}</button>` : ''}
-        </div>`;
-      }
-    } else if (t.result) {
-      resultHTML += `<div class="detail-label">${tr('result')}</div>`;
-      resultHTML += `<div class="result-block">
-        <pre>${esc(t.result)}</pre>
-        <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.result))})">${tr('copy')}</button>
-      </div>`;
-    }
+    const resultHTML = buildTaskResultHTML(t, parsed);
 
     return `
     <div class="task-row${expanded ? ' expanded' : ''}">
@@ -1814,37 +1899,41 @@ async function loadTasks() {
         <span class="task-meta">${time}</span>
       </div>
       <div class="task-detail">
-        ${t.subject ? `<div class="detail-info"><span class="label">Тема: </span><span>${esc(t.subject)}</span></div>` : ''}
-        <div class="detail-label">${tr('prompt')}</div>
+        ${buildTaskDetailHTML(t, resultHTML, { includeSubject: true, includePrompt: true })}
+      </div>
+    </div>`;
+  }).join('');
+
+  mobileList.innerHTML = tasks.map(t => {
+    const expanded = t.id === expandedId;
+    const time = timeAgo(t.created_at);
+    const parsed = parseResult(t.result);
+    const projectName = projectNameByWorkingDir(t.working_dir);
+    const resultHTML = buildTaskResultHTML(t, parsed);
+
+    return `
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+      <div class="admin-mobile-head" onclick="toggleTask(${t.id})">
+        <div class="admin-mobile-main">
+          <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
+          <div class="admin-mobile-sub">
+            <span class="admin-mobile-chip">#${t.id}</span>
+            <span class="admin-mobile-chip">${statusLabel(t.status)}</span>
+            <span class="admin-mobile-chip">P${t.priority}</span>
+            <span class="admin-mobile-chip">${time}</span>
+            ${t.provider ? `<span class="admin-mobile-chip">${esc(t.provider)}</span>` : ''}
+            ${projectName ? `<span class="admin-mobile-chip">${tr('project')}: ${esc(projectName)}</span>` : ''}
+            ${scheduleInfo(t)}
+          </div>
+        </div>
+      </div>
+      <div class="task-mobile-prompt">${esc(t.prompt)}</div>
+      <div class="admin-mobile-body">
         <div class="result-block">
           <pre>${esc(t.prompt)}</pre>
           <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.prompt))})">${tr('copy')}</button>
         </div>
-
-        ${t.working_dir ? `<div class="detail-info"><span class="label">${tr('dir')}: </span><span>${esc(t.working_dir)}</span></div>` : ''}
-
-        ${resultHTML}
-
-        ${t.error ? `
-          <div class="detail-label">${tr('error')}</div>
-          <div class="result-block">
-            <pre>${esc(t.error)}</pre>
-            <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.error))})">${tr('copy')}</button>
-          </div>
-        ` : ''}
-
-        ${t.recurrence ? `<div class="detail-info"><span class="label">${tr('recurrence')}: </span><span>${esc(t.recurrence)}</span></div>` : ''}
-        ${t.scheduled_at ? `<div class="detail-info"><span class="label">${tr('scheduled')}: </span><span>${new Date(t.scheduled_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
-        ${t.started_at ? `<div class="detail-info"><span class="label">${tr('started')}: </span><span>${new Date(t.started_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
-        ${t.completed_at ? `<div class="detail-info"><span class="label">${tr('completed_at')}: </span><span>${new Date(t.completed_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
-        ${t.next_run_at ? `<div class="detail-info"><span class="label">${tr('next_retry')}: </span><span>${new Date(t.next_run_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
-        <div class="detail-info"><span class="label">${tr('retries')}: </span><span>${t.retry_count}/${t.max_retries}</span>${t.exit_code !== null ? ` <span class="label">| ${tr('exit')}: </span><span>${t.exit_code}</span>` : ''}</div>
-
-        <div class="detail-actions">
-          ${['pending','rate_limited'].includes(t.status) ? `<button class="btn btn-sm btn-ghost" onclick="cancelTask(event,${t.id})">${tr('cancel')}</button>` : ''}
-          ${t.status === 'running' ? `<button class="btn btn-sm btn-ghost" onclick="resetTask(event,${t.id})">${tr('reset_to_pending')}</button>` : ''}
-          <button class="btn btn-sm btn-danger" onclick="deleteTask(event,${t.id})">${tr('delete')}</button>
-        </div>
+        ${buildTaskDetailHTML(t, resultHTML, { includeSubject: false, includePrompt: false })}
       </div>
     </div>`;
   }).join('');
