@@ -153,6 +153,183 @@ def api_projects(q: Optional[str] = None):
     return entries
 
 
+@app.get("/api/admin/projects")
+def api_admin_projects(q: Optional[str] = None):
+    return db.list_projects_admin(search=q, limit=500)
+
+
+@app.post("/api/admin/projects")
+def api_admin_create_project(payload: dict):
+    required = ("name", "shortname", "folder")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name, shortname, folder are required")
+    try:
+        row = db.create_project(
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            folder=str(payload["folder"]).strip(),
+            comment=(str(payload.get("comment")).strip() if payload.get("comment") is not None else None),
+        )
+        return row
+    except Exception as e:
+        raise HTTPException(400, f"Create project failed: {e}")
+
+
+@app.patch("/api/admin/projects/{project_id}")
+def api_admin_update_project(project_id: int, payload: dict):
+    required = ("name", "shortname", "folder")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name, shortname, folder are required")
+    try:
+        ok = db.update_project(
+            project_id=project_id,
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            folder=str(payload["folder"]).strip(),
+            comment=(str(payload.get("comment")).strip() if payload.get("comment") is not None else None),
+        )
+        if not ok:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Update project failed: {e}")
+
+
+@app.delete("/api/admin/projects/{project_id}")
+def api_admin_delete_project(project_id: int):
+    try:
+        ok = db.delete_project(project_id)
+        if not ok:
+            raise HTTPException(404, "Project not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Delete project failed: {e}")
+
+
+@app.get("/api/admin/agents")
+def api_admin_agents(q: Optional[str] = None):
+    return db.list_agents(search=q, limit=500)
+
+
+@app.post("/api/admin/agents")
+def api_admin_create_agent(payload: dict):
+    required = ("name", "shortname")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name and shortname are required")
+    try:
+        return db.create_agent(
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            email=(str(payload.get("email")).strip() if payload.get("email") is not None else None),
+            priority=int(payload.get("priority", 0) or 0),
+            status=int(payload.get("status", 1) or 1),
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Create agent failed: {e}")
+
+
+@app.patch("/api/admin/agents/{agent_id}")
+def api_admin_update_agent(agent_id: int, payload: dict):
+    required = ("name", "shortname")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name and shortname are required")
+    try:
+        ok = db.update_agent(
+            agent_id=agent_id,
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            email=(str(payload.get("email")).strip() if payload.get("email") is not None else None),
+            priority=int(payload.get("priority", 0) or 0),
+            status=int(payload.get("status", 1) or 1),
+        )
+        if not ok:
+            raise HTTPException(404, "Agent not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Update agent failed: {e}")
+
+
+@app.delete("/api/admin/agents/{agent_id}")
+def api_admin_delete_agent(agent_id: int):
+    try:
+        ok = db.delete_agent(agent_id)
+        if not ok:
+            raise HTTPException(404, "Agent not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Delete agent failed: {e}")
+
+
+@app.get("/api/admin/agents-accounts")
+def api_admin_agents_accounts(q: Optional[str] = None):
+    return db.list_agents_accounts(search=q, limit=500)
+
+
+@app.post("/api/admin/agents-accounts")
+def api_admin_create_agents_account(payload: dict):
+    required = ("name", "shortname", "agent_id")
+    if any(str(payload.get(k, "")).strip() == "" for k in required):
+        raise HTTPException(400, "name, shortname, agent_id are required")
+    try:
+        return db.create_agent_account(
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            agent_id=int(payload["agent_id"]),
+            login=(str(payload.get("login")).strip() if payload.get("login") is not None else None),
+            password=(str(payload.get("pass")).strip() if payload.get("pass") is not None else None),
+            token=(str(payload.get("token")).strip() if payload.get("token") is not None else None),
+            login_mode=(str(payload.get("login_mode")).strip() if payload.get("login_mode") is not None else None),
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Create agent account failed: {e}")
+
+
+@app.patch("/api/admin/agents-accounts/{account_id}")
+def api_admin_update_agents_account(account_id: int, payload: dict):
+    required = ("name", "shortname", "agent_id")
+    if any(str(payload.get(k, "")).strip() == "" for k in required):
+        raise HTTPException(400, "name, shortname, agent_id are required")
+    try:
+        ok = db.update_agent_account(
+            account_id=account_id,
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            agent_id=int(payload["agent_id"]),
+            login=(str(payload.get("login")).strip() if payload.get("login") is not None else None),
+            password=(str(payload.get("pass")).strip() if payload.get("pass") is not None else None),
+            token=(str(payload.get("token")).strip() if payload.get("token") is not None else None),
+            login_mode=(str(payload.get("login_mode")).strip() if payload.get("login_mode") is not None else None),
+        )
+        if not ok:
+            raise HTTPException(404, "Agent account not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Update agent account failed: {e}")
+
+
+@app.delete("/api/admin/agents-accounts/{account_id}")
+def api_admin_delete_agents_account(account_id: int):
+    try:
+        ok = db.delete_agent_account(account_id)
+        if not ok:
+            raise HTTPException(404, "Agent account not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Delete agent account failed: {e}")
+
+
 # --- Frontend ---
 
 @app.get("/")

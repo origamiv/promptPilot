@@ -49,6 +49,44 @@
     min-height: 100vh;
   }
 
+  .app-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+  .sidebar {
+    width: 220px;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    padding: 18px 12px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .side-title {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+  }
+  .side-btn {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 10px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .side-btn.active {
+    border-color: var(--accent);
+    background: color-mix(in oklab, var(--accent) 14%, transparent);
+    color: var(--text);
+  }
+
   .container { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
 
   /* Header */
@@ -452,6 +490,143 @@
   .skill-arghint { font-size: 11px; color: var(--yellow); }
   .skill-desc { font-size: 11px; color: var(--text2); }
 
+  /* Admin views */
+  .admin-view {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .admin-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .admin-title { font-size: 16px; font-weight: 700; }
+  .admin-form {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .admin-form input, .admin-form select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 12px;
+    min-width: 150px;
+  }
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .admin-table th, .admin-table td {
+    border-bottom: 1px solid var(--border);
+    padding: 8px 6px;
+    vertical-align: top;
+    text-align: left;
+  }
+  .admin-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .crud-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 1200;
+  }
+  .crud-modal.open { display: flex; }
+  .crud-dialog {
+    width: min(560px, 100%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.4);
+  }
+  .crud-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .crud-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .crud-close {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .crud-form {
+    padding: 14px 16px 16px;
+    display: grid;
+    gap: 12px;
+  }
+  .crud-fields {
+    display: grid;
+    gap: 10px;
+  }
+  .crud-field {
+    display: grid;
+    gap: 6px;
+  }
+  .crud-field label {
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .crud-field input,
+  .crud-field select,
+  .crud-field textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .crud-field textarea {
+    min-height: 84px;
+    resize: vertical;
+  }
+  .crud-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  @media (max-width: 980px) {
+    .app-layout { display: block; }
+    .sidebar {
+      width: auto;
+      height: auto;
+      position: static;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+  }
+
   /* Select2 project select */
   #workdirSelect + .select2-container { min-width: 260px; }
   .select2-container--default .select2-selection--single {
@@ -485,6 +660,14 @@
 </style>
 </head>
 <body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="side-title">Меню</div>
+    <button id="menuTasks" class="side-btn active" onclick="switchView('tasks')">Задачи</button>
+    <button id="menuProjects" class="side-btn" onclick="switchView('projects')">Проекты</button>
+    <button id="menuAgents" class="side-btn" onclick="switchView('agents')">Агенты</button>
+    <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Аккаунты агентов</button>
+  </aside>
 <div class="container">
   <header>
     <div class="logo">Prompt<span>Pilot</span></div>
@@ -495,14 +678,15 @@
     </div>
   </header>
 
-  <div id="updateBanner" class="update-banner hidden">
-    <span id="updateMsg"></span>
-    <button onclick="document.getElementById('updateBanner').classList.add('hidden')" style="background:transparent;border:none;color:var(--cyan);cursor:pointer;font-size:16px">✕</button>
-  </div>
+  <div id="tasksView">
+    <div id="updateBanner" class="update-banner hidden">
+      <span id="updateMsg"></span>
+      <button onclick="document.getElementById('updateBanner').classList.add('hidden')" style="background:transparent;border:none;color:var(--cyan);cursor:pointer;font-size:16px">✕</button>
+    </div>
 
-  <div class="cost-bar" id="costBar"></div>
+    <div class="cost-bar" id="costBar"></div>
 
-  <div class="add-form">
+    <div class="add-form" id="addForm">
     <textarea id="promptInput" placeholder="Введите ваш промпт..."></textarea>
     <div class="skills-toggle-row" id="skillsToggleRow">
       <button type="button" class="btn-skills" id="skillsToggleBtn" onclick="toggleSkills()">⚡ Skills</button>
@@ -546,9 +730,9 @@
       </label>
       <button class="btn btn-primary" id="addTaskBtn" onclick="addTask()">Добавить задачу</button>
     </div>
-  </div>
+    </div>
 
-  <div class="filter-bar" id="filterBar">
+    <div class="filter-bar" id="filterBar">
     <button class="filter-btn active" data-filter="" id="filterAllBtn">Все</button>
     <button class="filter-btn" data-filter="pending" id="filterPendingBtn">В очереди</button>
     <button class="filter-btn" data-filter="running" id="filterRunningBtn">В работе</button>
@@ -556,9 +740,63 @@
     <button class="filter-btn" data-filter="failed" id="filterFailedBtn">Ошибка</button>
     <button class="filter-btn" data-filter="rate_limited" id="filterRateBtn">Лимит</button>
     <button id="pauseBtn" class="btn-pause" onclick="toggleWorkerPause()" style="margin-left:auto">⏸ Пауза</button>
+    </div>
+
+    <div class="task-list" id="taskList"></div>
   </div>
 
-  <div class="task-list" id="taskList"></div>
+  <div class="admin-view" id="projectsView">
+    <div class="admin-header">
+      <div class="admin-title">Проекты</div>
+      <input id="projectsSearch" placeholder="Поиск..." oninput="loadProjectsCrud()">
+      <button class="btn btn-primary" onclick="createProjectCrud()">Добавить</button>
+    </div>
+    <table class="admin-table">
+      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Folder</th><th>Comment</th><th></th></tr></thead>
+      <tbody id="projectsTbody"></tbody>
+    </table>
+  </div>
+
+  <div class="admin-view" id="agentsView">
+    <div class="admin-header">
+      <div class="admin-title">Агенты</div>
+      <input id="agentsSearch" placeholder="Поиск..." oninput="loadAgentsCrud()">
+      <button class="btn btn-primary" onclick="createAgentCrud()">Добавить</button>
+    </div>
+    <table class="admin-table">
+      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Email</th><th>Priority</th><th>Status</th><th></th></tr></thead>
+      <tbody id="agentsTbody"></tbody>
+    </table>
+  </div>
+
+  <div class="admin-view" id="accountsView">
+    <div class="admin-header">
+      <div class="admin-title">Аккаунты агентов</div>
+      <input id="accountsSearch" placeholder="Поиск..." oninput="loadAccountsCrud()">
+      <button class="btn btn-primary" onclick="createAccountCrud()">Добавить</button>
+    </div>
+    <table class="admin-table">
+      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Agent</th><th>Login</th><th>Mode</th><th></th></tr></thead>
+      <tbody id="accountsTbody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<div id="crudModal" class="crud-modal" onclick="onCrudModalBackdrop(event)">
+  <div class="crud-dialog">
+    <div class="crud-head">
+      <div id="crudModalTitle" class="crud-title"></div>
+      <button class="crud-close" type="button" onclick="closeCrudModal()">×</button>
+    </div>
+    <form id="crudForm" class="crud-form" onsubmit="submitCrudModal(event)">
+      <div id="crudFields" class="crud-fields"></div>
+      <div class="crud-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeCrudModal()">Отмена</button>
+        <button type="submit" id="crudSubmitBtn" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -573,6 +811,10 @@ let skillsPanelOpen = false;
 let currentTheme = 'dark';
 let currentLang = 'ru';
 let projectsCache = [];
+let adminProjectsRows = [];
+let adminAgentsRows = [];
+let adminAccountsRows = [];
+let crudState = { entity: null, mode: 'create', id: null };
 
 const I18N = {
   ru: {
@@ -748,6 +990,7 @@ function applyLanguage(lang) {
   if (p1) p1.textContent = `1 (${tr('highest')})`;
   if (p10) p10.textContent = `10 (${tr('lowest')})`;
   if (projectsCache.length) renderProjectOptions();
+  setCrudActionLabels();
 
   loadWorkerStatus();
   refresh();
@@ -776,7 +1019,17 @@ function toggleTheme() {
 // --- API calls ---
 async function fetchJSON(url, opts) {
   const res = await fetch(url, opts);
-  return res.json();
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (_) {
+    data = {};
+  }
+  if (!res.ok) {
+    const msg = (data && (data.detail || data.message || data.error)) || `HTTP ${res.status}`;
+    throw new Error(String(msg));
+  }
+  return data;
 }
 
 async function loadStats() {
@@ -1201,6 +1454,362 @@ function onProjectSelect() {
   } else {
     inp.style.display = 'none';
     inp.value = '';
+  }
+}
+
+let currentView = 'tasks';
+
+function switchView(view) {
+  currentView = view;
+  const isTasks = view === 'tasks';
+  document.getElementById('tasksView').style.display = isTasks ? '' : 'none';
+  document.getElementById('projectsView').style.display = view === 'projects' ? 'block' : 'none';
+  document.getElementById('agentsView').style.display = view === 'agents' ? 'block' : 'none';
+  document.getElementById('accountsView').style.display = view === 'accounts' ? 'block' : 'none';
+
+  document.getElementById('menuTasks').classList.toggle('active', view === 'tasks');
+  document.getElementById('menuProjects').classList.toggle('active', view === 'projects');
+  document.getElementById('menuAgents').classList.toggle('active', view === 'agents');
+  document.getElementById('menuAccounts').classList.toggle('active', view === 'accounts');
+
+  if (view === 'projects') loadProjectsCrud();
+  if (view === 'agents') loadAgentsCrud();
+  if (view === 'accounts') loadAccountsCrud();
+}
+
+const CRUD_TX = {
+  ru: {
+    add: 'Добавить',
+    edit: 'Редактировать',
+    save: 'Сохранить',
+    cancel: 'Отмена',
+    project: 'проект',
+    agent: 'агента',
+    account: 'аккаунт',
+    name: 'Название',
+    shortname: 'Короткое имя',
+    folder: 'Папка',
+    comment: 'Комментарий',
+    email: 'Email',
+    priority: 'Приоритет',
+    status: 'Статус',
+    active: 'Активный',
+    disabled: 'Отключен',
+    agent_link: 'Агент',
+    login: 'Логин',
+    pass: 'Пароль',
+    token: 'Токен',
+    login_mode: 'Режим входа',
+    no_agents: 'Нет доступных агентов',
+    save_failed: 'Не удалось сохранить',
+    delete_failed: 'Не удалось удалить',
+    delete_project_confirm: 'Удалить проект',
+    delete_agent_confirm: 'Удалить агента',
+    delete_account_confirm: 'Удалить аккаунт',
+  },
+  en: {
+    add: 'Add',
+    edit: 'Edit',
+    save: 'Save',
+    cancel: 'Cancel',
+    project: 'project',
+    agent: 'agent',
+    account: 'account',
+    name: 'Name',
+    shortname: 'Short name',
+    folder: 'Folder',
+    comment: 'Comment',
+    email: 'Email',
+    priority: 'Priority',
+    status: 'Status',
+    active: 'Active',
+    disabled: 'Disabled',
+    agent_link: 'Agent',
+    login: 'Login',
+    pass: 'Password',
+    token: 'Token',
+    login_mode: 'Login mode',
+    no_agents: 'No agents available',
+    save_failed: 'Failed to save',
+    delete_failed: 'Failed to delete',
+    delete_project_confirm: 'Delete project',
+    delete_agent_confirm: 'Delete agent',
+    delete_account_confirm: 'Delete account',
+  },
+};
+
+function tc(key) {
+  const dict = CRUD_TX[currentLang] || CRUD_TX.ru;
+  return dict[key] || key;
+}
+
+function setCrudActionLabels() {
+  const cancelBtn = document.querySelector('#crudForm .crud-actions .btn-ghost');
+  const submitBtn = document.getElementById('crudSubmitBtn');
+  if (cancelBtn) cancelBtn.textContent = tc('cancel');
+  if (submitBtn) submitBtn.textContent = tc('save');
+}
+
+function onCrudModalBackdrop(e) {
+  if (e.target.id === 'crudModal') closeCrudModal();
+}
+
+function closeCrudModal() {
+  document.getElementById('crudModal').classList.remove('open');
+  document.getElementById('crudFields').innerHTML = '';
+  crudState = { entity: null, mode: 'create', id: null };
+}
+
+async function ensureAgentsRows(force = false) {
+  if (!force && adminAgentsRows.length) return;
+  adminAgentsRows = await fetchJSON(`${API}/admin/agents`);
+}
+
+function entityTitle(entity) {
+  if (entity === 'project') return tc('project');
+  if (entity === 'agent') return tc('agent');
+  return tc('account');
+}
+
+function renderCrudFields(entity, row = {}) {
+  if (entity === 'project') {
+    return `
+      <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
+      <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field"><label>${tc('folder')}</label><input id="crud_folder" required value="${esc(row.folder || '')}"></div>
+      <div class="crud-field"><label>${tc('comment')}</label><textarea id="crud_comment">${esc(row.comment || '')}</textarea></div>
+    `;
+  }
+  if (entity === 'agent') {
+    return `
+      <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
+      <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field"><label>${tc('email')}</label><input id="crud_email" value="${esc(row.email || '')}"></div>
+      <div class="crud-field"><label>${tc('priority')}</label><input id="crud_priority" type="number" value="${esc(String(row.priority ?? 0))}"></div>
+      <div class="crud-field"><label>${tc('status')}</label>
+        <select id="crud_status">
+          <option value="1" ${(row.status ?? 1) === 1 ? 'selected' : ''}>${tc('active')}</option>
+          <option value="0" ${(row.status ?? 1) === 0 ? 'selected' : ''}>${tc('disabled')}</option>
+        </select>
+      </div>
+    `;
+  }
+  const agentOptions = adminAgentsRows.length
+    ? adminAgentsRows.map(a => `<option value="${a.id}" ${Number(row.agent_id) === Number(a.id) ? 'selected' : ''}>${esc(a.name || '')} (#${a.id})</option>`).join('')
+    : `<option value="">${tc('no_agents')}</option>`;
+  return `
+    <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
+    <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+    <div class="crud-field"><label>${tc('agent_link')}</label><select id="crud_agent_id" required>${agentOptions}</select></div>
+    <div class="crud-field"><label>${tc('login')}</label><input id="crud_login" value="${esc(row.login || '')}"></div>
+    <div class="crud-field"><label>${tc('pass')}</label><input id="crud_pass" value="${esc(row.pass || '')}"></div>
+    <div class="crud-field"><label>${tc('token')}</label><input id="crud_token" value="${esc(row.token || '')}"></div>
+    <div class="crud-field"><label>${tc('login_mode')}</label><input id="crud_login_mode" value="${esc(row.login_mode || '')}"></div>
+  `;
+}
+
+async function openCrudModal(entity, mode, id = null) {
+  if (entity === 'account') await ensureAgentsRows();
+  let row = {};
+  if (mode === 'edit') {
+    if (entity === 'project') row = adminProjectsRows.find(x => x.id === id) || {};
+    if (entity === 'agent') row = adminAgentsRows.find(x => x.id === id) || {};
+    if (entity === 'account') row = adminAccountsRows.find(x => x.id === id) || {};
+  }
+  crudState = { entity, mode, id };
+  document.getElementById('crudModalTitle').textContent = `${mode === 'create' ? tc('add') : tc('edit')} ${entityTitle(entity)}`;
+  document.getElementById('crudFields').innerHTML = renderCrudFields(entity, row);
+  setCrudActionLabels();
+  const modal = document.getElementById('crudModal');
+  modal.classList.add('open');
+  const first = modal.querySelector('input,select,textarea');
+  if (first) first.focus();
+}
+
+async function submitCrudModal(e) {
+  e.preventDefault();
+  const mode = crudState.mode;
+  const id = crudState.id;
+  try {
+    if (crudState.entity === 'project') {
+      const body = {
+        name: document.getElementById('crud_name').value.trim(),
+        shortname: document.getElementById('crud_shortname').value.trim(),
+        folder: document.getElementById('crud_folder').value.trim(),
+        comment: document.getElementById('crud_comment').value.trim() || null,
+      };
+      if (mode === 'create') {
+        await fetchJSON(`${API}/admin/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await fetchJSON(`${API}/admin/projects/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      closeCrudModal();
+      await loadProjectsCrud();
+      await loadProjects();
+      return;
+    }
+    if (crudState.entity === 'agent') {
+      const body = {
+        name: document.getElementById('crud_name').value.trim(),
+        shortname: document.getElementById('crud_shortname').value.trim(),
+        email: document.getElementById('crud_email').value.trim() || null,
+        priority: parseInt(document.getElementById('crud_priority').value || '0', 10),
+        status: parseInt(document.getElementById('crud_status').value || '1', 10),
+      };
+      if (mode === 'create') {
+        await fetchJSON(`${API}/admin/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await fetchJSON(`${API}/admin/agents/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      closeCrudModal();
+      await loadAgentsCrud();
+      return;
+    }
+    const body = {
+      name: document.getElementById('crud_name').value.trim(),
+      shortname: document.getElementById('crud_shortname').value.trim(),
+      agent_id: parseInt(document.getElementById('crud_agent_id').value || '0', 10),
+      login: document.getElementById('crud_login').value.trim() || null,
+      pass: document.getElementById('crud_pass').value.trim() || null,
+      token: document.getElementById('crud_token').value.trim() || null,
+      login_mode: document.getElementById('crud_login_mode').value.trim() || null,
+    };
+    if (mode === 'create') {
+      await fetchJSON(`${API}/admin/agents-accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    } else {
+      await fetchJSON(`${API}/admin/agents-accounts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    }
+    closeCrudModal();
+    await loadAccountsCrud();
+  } catch (err) {
+    alert(`${tc('save_failed')}: ${err.message}`);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('crudModal').classList.contains('open')) {
+    closeCrudModal();
+  }
+});
+
+// --- CRUD: Projects ---
+async function loadProjectsCrud() {
+  const q = document.getElementById('projectsSearch').value.trim();
+  const rows = await fetchJSON(`${API}/admin/projects${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  adminProjectsRows = rows;
+  const tbody = document.getElementById('projectsTbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td>${esc(r.name || '')}</td>
+      <td>${esc(r.shortname || '')}</td>
+      <td>${esc(r.folder || '')}</td>
+      <td>${esc(r.comment || '')}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" onclick="editProjectCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteProjectCrud(${r.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function createProjectCrud() {
+  await openCrudModal('project', 'create');
+}
+
+async function editProjectCrud(id) {
+  await openCrudModal('project', 'edit', id);
+}
+
+async function deleteProjectCrud(id) {
+  if (!confirm(`${tc('delete_project_confirm')} #${id}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/projects/${id}`, { method: 'DELETE' });
+    await loadProjectsCrud();
+    await loadProjects();
+  } catch (e) {
+    alert(`${tc('delete_failed')}: ${e.message}`);
+  }
+}
+
+// --- CRUD: Agents ---
+async function loadAgentsCrud() {
+  const q = document.getElementById('agentsSearch').value.trim();
+  const rows = await fetchJSON(`${API}/admin/agents${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  adminAgentsRows = rows;
+  const tbody = document.getElementById('agentsTbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td>${esc(r.name || '')}</td>
+      <td>${esc(r.shortname || '')}</td>
+      <td>${esc(r.email || '')}</td>
+      <td>${r.priority ?? 0}</td>
+      <td>${r.status ?? 1}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" onclick="editAgentCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteAgentCrud(${r.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function createAgentCrud() {
+  await openCrudModal('agent', 'create');
+}
+
+async function editAgentCrud(id) {
+  await openCrudModal('agent', 'edit', id);
+}
+
+async function deleteAgentCrud(id) {
+  if (!confirm(`${tc('delete_agent_confirm')} #${id}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/agents/${id}`, { method: 'DELETE' });
+    await loadAgentsCrud();
+  } catch (e) {
+    alert(`${tc('delete_failed')}: ${e.message}`);
+  }
+}
+
+// --- CRUD: Agent Accounts ---
+async function loadAccountsCrud() {
+  await ensureAgentsRows();
+  const q = document.getElementById('accountsSearch').value.trim();
+  const rows = await fetchJSON(`${API}/admin/agents-accounts${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  adminAccountsRows = rows;
+  const tbody = document.getElementById('accountsTbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td>${esc(r.name || '')}</td>
+      <td>${esc(r.shortname || '')}</td>
+      <td>${esc(r.agent_name || String(r.agent_id || ''))}</td>
+      <td>${esc(r.login || '')}</td>
+      <td>${esc(r.login_mode || '')}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" onclick="editAccountCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteAccountCrud(${r.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function createAccountCrud() {
+  await openCrudModal('account', 'create');
+}
+
+async function editAccountCrud(id) {
+  await openCrudModal('account', 'edit', id);
+}
+
+async function deleteAccountCrud(id) {
+  if (!confirm(`${tc('delete_account_confirm')} #${id}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/agents-accounts/${id}`, { method: 'DELETE' });
+    await loadAccountsCrud();
+  } catch (e) {
+    alert(`${tc('delete_failed')}: ${e.message}`);
   }
 }
 

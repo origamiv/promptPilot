@@ -7,6 +7,8 @@ build/
 .env
 .pp-pids.json
 logs/
+.venv/
+.data/
 .claude/
 article_habr.md
 Переписка.txt
