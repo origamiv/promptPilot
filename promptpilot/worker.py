@@ -2,6 +2,7 @@
 
 import json
 import random
+import re
 import shutil
 import signal
 import subprocess
@@ -24,11 +25,30 @@ RATE_LIMIT_PATTERNS = [
     "try again later",
 ]
 
+AUTH_ERROR_PATTERNS = [
+    "401",
+    "unauthorized",
+    "forbidden",
+    "authentication failed",
+    "failed to authenticate",
+    "invalid api key",
+    "token expired",
+    "token is invalid",
+]
+
+BWRAP_ARGV0_PATTERN = "bwrap: unknown option --argv0"
+
 
 def is_rate_limited(stderr: str, exit_code: int) -> bool:
     if exit_code == 0:
         return False
     text = stderr.lower()
+    # Auth and token failures must be treated as hard failures, not retries.
+    if any(p in text for p in AUTH_ERROR_PATTERNS):
+        return False
+    # 429 should match as a standalone code (avoid accidental substring hits).
+    if re.search(r"\b429\b", text):
+        return True
     return any(p in text for p in RATE_LIMIT_PATTERNS)
 
 
@@ -150,6 +170,39 @@ def is_stream_json(stdout: str) -> bool:
         return False
 
 
+def humanize_error(stdout: str, stderr: str) -> str:
+    """Return a readable error message instead of raw JSONL streams."""
+    for payload in (stderr or "", stdout or ""):
+        if not payload or not is_stream_json(payload):
+            continue
+
+        parsed = parse_stream_json(payload)
+        text = (parsed.get("text") or "").strip()
+        if text:
+            if parsed.get("rate_limit_info"):
+                return f"Rate limit: {text}"
+            return text
+
+        # Fallback: extract `error` field from JSON events.
+        for line in payload.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            err = event.get("error")
+            if isinstance(err, str) and err.strip():
+                return err.strip()
+
+        formatted = format_result(parsed).strip()
+        if formatted:
+            return formatted
+
+    return (stderr or stdout or "Execution failed").strip()
+
+
 def execute_task(task):
     """Run CLI with the task's prompt."""
     provider = task.provider or DEFAULT_CLI
@@ -164,9 +217,9 @@ def execute_task(task):
     if resolved:
         cmd[0] = resolved
 
-    try:
-        result = subprocess.run(
-            cmd,
+    def _run_once(command):
+        return subprocess.run(
+            command,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -176,6 +229,9 @@ def execute_task(task):
             stdin=subprocess.DEVNULL,
             env=env,
         )
+
+    try:
+        result = _run_once(cmd)
     except subprocess.TimeoutExpired:
         db.mark_failed(task.id, "Execution timed out", exit_code=-1)
         return
@@ -183,17 +239,44 @@ def execute_task(task):
         db.mark_failed(task.id, f"CLI '{provider}' not found. Is it installed and in PATH?", exit_code=-1)
         return
 
-    if is_rate_limited(result.stderr, result.returncode):
+    # Codex fallback for older bubblewrap versions that don't support --argv0.
+    # Retry once without sandbox if the known bwrap incompatibility is detected.
+    if (
+        result.returncode != 0
+        and provider == "codex"
+        and BWRAP_ARGV0_PATTERN in (result.stderr or "")
+        and "--dangerously-bypass-approvals-and-sandbox" not in cmd
+    ):
+        fallback_cmd = list(cmd)
+        prompt_idx = fallback_cmd.index(task.prompt) if task.prompt in fallback_cmd else len(fallback_cmd)
+        fallback_cmd[prompt_idx:prompt_idx] = ["--dangerously-bypass-approvals-and-sandbox"]
+        print("  -> Codex bwrap incompatibility detected, retrying without sandbox...")
+        try:
+            result = _run_once(fallback_cmd)
+        except subprocess.TimeoutExpired:
+            db.mark_failed(task.id, "Execution timed out", exit_code=-1)
+            return
+        except FileNotFoundError:
+            db.mark_failed(task.id, f"CLI '{provider}' not found. Is it installed and in PATH?", exit_code=-1)
+            return
+
+    # Some CLIs (including Claude in --output-format stream-json) can emit
+    # rate-limit details to stdout instead of stderr, so inspect both.
+    err_text = result.stderr or ""
+    out_text = result.stdout or ""
+    readable_error = humanize_error(result.stdout, result.stderr)
+    if is_rate_limited(f"{err_text}\n{out_text}", result.returncode):
         if task.retry_count >= task.max_retries:
-            db.mark_failed(task.id, f"Rate limited, max retries ({task.max_retries}) exceeded.\n{result.stderr}")
+            details = readable_error or "Rate limited"
+            db.mark_failed(task.id, f"Rate limited, max retries ({task.max_retries}) exceeded.\n{details}")
             return
         next_run = compute_next_run(task.retry_count)
-        db.mark_rate_limited(task.id, next_run, error=result.stderr or "Rate limited")
+        db.mark_rate_limited(task.id, next_run, error=readable_error or "Rate limited")
         print(f"  -> Rate limited. Retry #{task.retry_count + 1} at {next_run.strftime('%H:%M:%S')}")
         return
 
     if result.returncode != 0:
-        db.mark_failed(task.id, result.stderr or result.stdout, exit_code=result.returncode)
+        db.mark_failed(task.id, readable_error, exit_code=result.returncode)
         print(f"  -> Failed (exit {result.returncode})")
         return
 

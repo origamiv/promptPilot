@@ -63,7 +63,7 @@ DEFAULT_CLI = os.environ.get("PP_DEFAULT_CLI", "claude")
 # Can be overridden/extended via ~/.promptpilot/providers.json
 CLAUDE_EXE = os.environ.get(
     "PP_CLAUDE_EXE",
-    str(Path.home() / ".local" / "bin" / "claude.exe"),
+    str(Path.home() / ".local" / "bin" / ("claude.exe" if os.name == "nt" else "claude")),
 )
 
 def _cursor_agent_cmd() -> str:
@@ -123,7 +123,9 @@ BUILTIN_PROVIDERS = {
         },
     },
     "codex": {
-        "cmd": "codex exec {prompt}",
+        # Use no-sandbox mode by default to avoid bwrap incompatibilities
+        # on older Linux hosts (e.g. "bwrap: unknown option --argv0").
+        "cmd": "codex exec --dangerously-bypass-approvals-and-sandbox {prompt}",
         "description": "OpenAI Codex",
         "supports_skills": False,
     },
@@ -225,8 +227,16 @@ def build_cmd(provider: str, prompt: str, skip_permissions: bool = False, sessio
     if session_id:
         extras += ["--resume", session_id]
     if skip_permissions:
-        extras.append("--dangerously-skip-permissions")
+        # Provider-specific "skip permissions" flags:
+        # - Claude Code: --dangerously-skip-permissions
+        # - Codex CLI:  --dangerously-bypass-approvals-and-sandbox
+        if provider == "codex":
+            extras.append("--dangerously-bypass-approvals-and-sandbox")
+        elif providers.get(provider, {}).get("supports_skills", False):
+            extras.append("--dangerously-skip-permissions")
     if extras:
+        # Avoid duplicating flags if they are already present in provider template.
+        extras = [x for x in extras if x not in cmd]
         prompt_idx = cmd.index(prompt)
         cmd[prompt_idx:prompt_idx] = extras
     return cmd

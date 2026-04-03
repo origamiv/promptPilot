@@ -23,6 +23,21 @@
     --mono: 'JetBrains Mono', 'Fira Code', monospace;
   }
 
+  [data-theme="light"] {
+    --bg: #f4f6fb;
+    --surface: #ffffff;
+    --surface2: #eef2fb;
+    --border: #d6deef;
+    --text: #1d2538;
+    --text2: #55607a;
+    --accent: #3b5ed8;
+    --accent2: #5f7ff0;
+    --green: #16a34a;
+    --red: #dc2626;
+    --yellow: #b45309;
+    --cyan: #0284c7;
+  }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
@@ -51,6 +66,7 @@
   }
   .logo span { color: var(--accent2); }
 
+  .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .badges { display: flex; gap: 8px; flex-wrap: wrap; }
   .badge {
     font-size: 12px;
@@ -65,6 +81,10 @@
   .badge[data-status="completed"] { color: var(--green); background: #4ade8018; }
   .badge[data-status="failed"] { color: var(--red); background: #f8717118; }
   .badge[data-status="rate_limited"] { color: var(--yellow); background: #fbbf2418; }
+  [data-theme="light"] .badge[data-status="running"] { background: #0284c71a; }
+  [data-theme="light"] .badge[data-status="completed"] { background: #16a34a1a; }
+  [data-theme="light"] .badge[data-status="failed"] { background: #dc26261a; }
+  [data-theme="light"] .badge[data-status="rate_limited"] { background: #b453091a; }
 
   /* Add form */
   .add-form {
@@ -136,6 +156,17 @@
   }
   .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--border); }
   .btn-copy { background: transparent; color: var(--accent2); border: 1px solid var(--border); }
+  .btn-theme {
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: transparent;
+    color: var(--text2);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-theme:hover { border-color: var(--accent); color: var(--text); }
 
   /* Task list */
   .task-list { display: flex; flex-direction: column; gap: 6px; }
@@ -175,6 +206,10 @@
   .task-status[data-s="failed"] { color: var(--red); background: #f8717115; }
   .task-status[data-s="rate_limited"] { color: var(--yellow); background: #fbbf2415; }
   .task-status[data-s="cancelled"] { color: var(--text2); background: var(--surface2); }
+  [data-theme="light"] .task-status[data-s="running"] { background: #0284c71a; }
+  [data-theme="light"] .task-status[data-s="completed"] { background: #16a34a1a; }
+  [data-theme="light"] .task-status[data-s="failed"] { background: #dc26261a; }
+  [data-theme="light"] .task-status[data-s="rate_limited"] { background: #b453091a; }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -324,6 +359,7 @@
   }
   .btn-pause:hover { border-color: var(--yellow); color: var(--yellow); }
   .btn-pause.paused { border-color: var(--yellow); color: var(--yellow); background: #fbbf2410; }
+  [data-theme="light"] .btn-pause.paused { background: #b4530912; }
 
   /* Update banner */
   .update-banner {
@@ -340,6 +376,10 @@
     justify-content: space-between;
   }
   .update-banner.hidden { display: none !important; }
+  [data-theme="light"] .update-banner {
+    background: #0284c712;
+    border-color: #0284c73a;
+  }
 
   /* Cost bar */
   .cost-bar {
@@ -405,7 +445,10 @@
 <div class="container">
   <header>
     <div class="logo">Prompt<span>Pilot</span></div>
-    <div class="badges" id="badges"></div>
+    <div class="header-right">
+      <button id="themeBtn" class="btn-theme" onclick="toggleTheme()">Light</button>
+      <div class="badges" id="badges"></div>
+    </div>
   </header>
 
   <div id="updateBanner" class="update-banner hidden">
@@ -481,6 +524,20 @@ let expandedId = null;
 let providersData = {};
 let skillsCache = {};
 let skillsPanelOpen = false;
+let currentTheme = 'dark';
+
+function applyTheme(theme) {
+  currentTheme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = currentTheme === 'light' ? 'Dark' : 'Light';
+}
+
+function toggleTheme() {
+  const next = currentTheme === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  localStorage.setItem('pp_theme', next);
+}
 
 // --- API calls ---
 async function fetchJSON(url, opts) {
@@ -942,6 +999,7 @@ async function loadCosts() {
 }
 
 // --- Init ---
+applyTheme(localStorage.getItem('pp_theme') || 'dark');
 setDefaultSchedule();
 loadProviders();
 loadProjects();
