@@ -308,7 +308,9 @@ def create_task(task: TaskCreate) -> TaskInDB:
             ),
         )
         task_id = cur.fetchone()["id"]
-        return get_task(task_id, conn=conn)
+        result = get_task(task_id, conn=conn)
+    touch_project_last_used_by_task(task_id)
+    return result
 
 
 def get_task(task_id: int, *, conn=None) -> Optional[TaskInDB]:
@@ -671,7 +673,7 @@ def list_projects(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                           AND folder IS NOT NULL
                           AND folder <> ''
                           AND (name ILIKE %s OR folder ILIKE %s)
-                        ORDER BY name ASC, id ASC
+                        ORDER BY last_used_at DESC NULLS LAST, name ASC
                         LIMIT %s
                         """
                     ).format(sql.Identifier(SCHEMA_NAME)),
@@ -686,7 +688,7 @@ def list_projects(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                         WHERE deleted_at IS NULL
                           AND folder IS NOT NULL
                           AND folder <> ''
-                        ORDER BY name ASC, id ASC
+                        ORDER BY last_used_at DESC NULLS LAST, name ASC
                         LIMIT %s
                         """
                     ).format(sql.Identifier(SCHEMA_NAME)),
