@@ -197,8 +197,10 @@ def humanize_error(stdout: str, stderr: str) -> str:
 
         parsed = parse_stream_json(payload)
         text = (parsed.get("text") or "").strip()
+        rl = parsed.get("rate_limit_info") or {}
+        rl_status = str(rl.get("status") or "").strip().lower()
         if text:
-            if parsed.get("rate_limit_info"):
+            if rl_status and rl_status != "allowed":
                 return f"Rate limit: {text}"
             return text
 
@@ -220,6 +222,15 @@ def humanize_error(stdout: str, stderr: str) -> str:
             return formatted
 
     return (stderr or stdout or "Execution failed").strip()
+
+
+def stream_is_rate_limited(parsed: dict) -> bool:
+    rl = (parsed or {}).get("rate_limit_info") or {}
+    status = str(rl.get("status") or "").strip().lower()
+    if status and status != "allowed":
+        return True
+    text = ((parsed or {}).get("text") or "").lower()
+    return "you've hit your limit" in text or "rate limit exceeded" in text
 
 
 def build_src_payload(provider: str, stdout: str, stderr: str) -> dict:
@@ -371,7 +382,7 @@ def execute_task(task):
     err_text = result.stderr or ""
     out_text = result.stdout or ""
     readable_error = humanize_error(result.stdout, result.stderr)
-    if is_rate_limited(f"{err_text}\n{out_text}", result.returncode):
+    if not is_stream_json(result.stdout or "") and is_rate_limited(f"{err_text}\n{out_text}", result.returncode):
         src_payload = build_src_payload(provider, result.stdout or "", result.stderr or "")
         if task.retry_count >= task.max_retries:
             details = readable_error or "Rate limited"
@@ -389,6 +400,16 @@ def execute_task(task):
         return
 
     if result.returncode != 0:
+        if result.returncode == 143:
+            db.mark_failed(
+                task.id,
+                "Task interrupted: worker/service was restarted",
+                exit_code=result.returncode,
+                src=build_src_payload(provider, result.stdout or "", result.stderr or ""),
+            )
+            _refresh_limits()
+            print("  -> Failed (interrupted by restart)")
+            return
         db.mark_failed(
             task.id,
             readable_error,
@@ -428,8 +449,7 @@ def execute_task(task):
             print("  -> Failed: permission denials")
             return
         # Check for rate limit in stream events — only if no text was returned
-        rl = parsed.get("rate_limit_info")
-        if rl and not parsed["text"]:
+        if stream_is_rate_limited(parsed):
             if task.retry_count >= task.max_retries:
                 db.mark_failed(task.id, f"Rate limited.\n{output}", src=src_payload)
                 _refresh_limits(exhausted_hint=True)
