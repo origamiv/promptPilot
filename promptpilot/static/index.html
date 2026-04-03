@@ -1633,6 +1633,7 @@ const I18N = {
     d_short: 'д',
     prompts_not_found: 'Не найдены промпты: {names}',
     task_agent: 'Агент',
+    task_account: 'Аккаунт агента',
     worked_minutes: '{n} мин',
   },
   en: {
@@ -1705,6 +1706,7 @@ const I18N = {
     d_short: 'd',
     prompts_not_found: 'Prompts not found: {names}',
     task_agent: 'Agent',
+    task_account: 'Agent account',
     worked_minutes: '{n} min',
   }
 };
@@ -1919,6 +1921,10 @@ function taskAgentName(t) {
   return String(t.agent_name || t.agent_account_name || t.agent_account_shortname || '').trim();
 }
 
+function taskAgentAccountName(t) {
+  return String(t.agent_account_name || t.agent_account_shortname || '').trim();
+}
+
 function taskWorkedMinutes(t) {
   if (!t.started_at) return null;
   const started = new Date(t.started_at);
@@ -2011,6 +2017,7 @@ async function loadTasks() {
     const time = timeAgo(t.created_at);
     const parsed = parseResult(t.result);
     const projectName = projectNameByWorkingDir(t.working_dir);
+    const agentAccountName = taskAgentAccountName(t);
 
     const resultHTML = buildTaskResultHTML(t, parsed);
 
@@ -2020,7 +2027,8 @@ async function loadTasks() {
         <span class="task-id">#${t.id}</span>
         <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
         <span class="task-prompt">${esc(t.subject || t.prompt)}</span>
-        ${projectName ? `<span class="task-meta">${tr('project')}: ${esc(projectName)}</span>` : ''}
+        <span class="task-meta">${tr('project')}: ${esc(projectName || '—')}</span>
+        <span class="task-meta">${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
         ${scheduleInfo(t)}
         <span class="task-meta">P${t.priority}</span>
@@ -2039,6 +2047,7 @@ async function loadTasks() {
     const projectName = projectNameByWorkingDir(t.working_dir);
     const resultHTML = buildTaskResultHTML(t, parsed);
     const agentName = taskAgentName(t);
+    const agentAccountName = taskAgentAccountName(t);
     const workedMinutes = taskWorkedMinutes(t);
 
     return `
@@ -2047,6 +2056,8 @@ async function loadTasks() {
         <div class="admin-mobile-main">
           <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
           <div class="task-mobile-head-meta">
+            <span>${tr('project')}: ${esc(projectName || '—')}</span>
+            <span>${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
             <span>${tr('task_agent')}: ${esc(agentName || '—')}</span>
             <span>${tr('worked_minutes', { n: workedMinutes ?? 0 })}</span>
           </div>
