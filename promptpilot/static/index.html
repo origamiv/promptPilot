@@ -1187,6 +1187,16 @@
       width: 100%;
       min-width: 0;
     }
+    #taskFormScreen .crud-mobile-body {
+      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    }
+    #taskFormScreen input[type="text"],
+    #taskFormScreen input[type="datetime-local"],
+    #taskFormScreen select,
+    #taskFormScreen textarea {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
     .form-row .compact-check {
       grid-column: 1 / -1;
       flex-direction: row;
@@ -1486,7 +1496,7 @@
   <div class="crud-mobile-head">
     <button class="btn btn-ghost" type="button" onclick="closeTaskFormScreen()">←</button>
     <div id="taskFormTitle" class="crud-mobile-title">Добавить задачу</div>
-    <button id="taskFormSaveTop" class="btn btn-primary" type="button" onclick="submitTaskFromScreen()">Добавить задачу</button>
+    <div></div>
   </div>
   <div class="crud-mobile-body">
     <div class="add-form" id="addForm">
@@ -1751,7 +1761,6 @@ function applyLanguage(lang) {
   document.getElementById('promptListInput').placeholder = tr('prompt_list_placeholder');
   document.getElementById('addTaskBtn').textContent = tr('add_task');
   document.getElementById('taskFormTitle').textContent = tr('add_task');
-  document.getElementById('taskFormSaveTop').textContent = tr('add_task');
   document.getElementById('openTaskFormBtn').title = tr('add_task');
   document.getElementById('openTaskFormBtn').setAttribute('aria-label', tr('add_task'));
   document.getElementById('skillsHint').textContent = tr('skills_hint');
@@ -2319,9 +2328,15 @@ document.getElementById('promptInput').addEventListener('keydown', e => {
 async function loadProviders() {
   providersData = await fetchJSON(`${API}/providers`);
   const sel = document.getElementById('providerInput');
+  const providerNames = Object.keys(providersData);
   sel.innerHTML = Object.entries(providersData)
     .map(([name, info]) => `<option value="${esc(name)}">${esc(name)} — ${esc(info.description || info)}</option>`)
     .join('');
+  if (providerNames.includes('codex')) {
+    sel.value = 'codex';
+  } else if (providerNames.length) {
+    sel.value = providerNames[0];
+  }
   sel.addEventListener('change', () => { skillsCache = {}; updateSkillsToggle(); closeSkillsPanel(); updateModelSelect(); });
   updateSkillsToggle();
   updateModelSelect();
