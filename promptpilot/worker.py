@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import db
 from .config import BASE_DELAY, DEFAULT_CLI, MAX_DELAY, POLL_INTERVAL, TASK_TIMEOUT, build_cmd, get_provider_env
+from .limits import refresh_limits_for_provider
 
 RATE_LIMIT_PATTERNS = [
     "rate limit",
@@ -222,6 +223,36 @@ def humanize_error(stdout: str, stderr: str) -> str:
 def execute_task(task):
     """Run CLI with the task's prompt."""
     provider = task.provider or DEFAULT_CLI
+    account = db.pick_available_agent_account(provider)
+    if account:
+        try:
+            db.set_task_agent_account(task.id, int(account["id"]))
+        except Exception:
+            pass
+
+    def _refresh_limits(exhausted_hint: bool = False):
+        if not account:
+            return
+        try:
+            limits = refresh_limits_for_provider(provider, token=account.get("token"))
+            if limits:
+                status = limits.get("status")
+                if exhausted_hint and status == 1:
+                    status = 3
+                db.update_agent_account_limits(
+                    int(account["id"]),
+                    status=status,
+                    percent_5h=limits.get("percent_5h"),
+                    percent_7d=limits.get("percent_7d"),
+                    balance_tokens=limits.get("balance_tokens"),
+                    reset_5h=limits.get("reset_5h"),
+                    reset_7d=limits.get("reset_7d"),
+                )
+            elif exhausted_hint:
+                db.update_agent_account_limits(int(account["id"]), status=3)
+        except Exception as e:
+            print(f"  -> Limits refresh failed: {e}")
+
     cmd = build_cmd(provider, task.prompt, skip_permissions=task.skip_permissions, session_id=task.session_id, model=task.model)
 
     env = get_provider_env(provider)
@@ -250,9 +281,11 @@ def execute_task(task):
         result = _run_once(cmd)
     except subprocess.TimeoutExpired:
         db.mark_failed(task.id, "Execution timed out", exit_code=-1)
+        _refresh_limits()
         return
     except FileNotFoundError:
         db.mark_failed(task.id, f"CLI '{provider}' not found. Is it installed and in PATH?", exit_code=-1)
+        _refresh_limits()
         return
 
     # Codex fallback for older bubblewrap versions that don't support --argv0.
@@ -271,9 +304,11 @@ def execute_task(task):
             result = _run_once(fallback_cmd)
         except subprocess.TimeoutExpired:
             db.mark_failed(task.id, "Execution timed out", exit_code=-1)
+            _refresh_limits()
             return
         except FileNotFoundError:
             db.mark_failed(task.id, f"CLI '{provider}' not found. Is it installed and in PATH?", exit_code=-1)
+            _refresh_limits()
             return
 
     # Some CLIs (including Claude in --output-format stream-json) can emit
@@ -285,14 +320,17 @@ def execute_task(task):
         if task.retry_count >= task.max_retries:
             details = readable_error or "Rate limited"
             db.mark_failed(task.id, f"Rate limited, max retries ({task.max_retries}) exceeded.\n{details}")
+            _refresh_limits(exhausted_hint=True)
             return
         next_run = compute_next_run(task.retry_count)
         db.mark_rate_limited(task.id, next_run, error=readable_error or "Rate limited")
+        _refresh_limits(exhausted_hint=True)
         print(f"  -> Rate limited. Retry #{task.retry_count + 1} at {next_run.strftime('%H:%M:%S')}")
         return
 
     if result.returncode != 0:
         db.mark_failed(task.id, readable_error, exit_code=result.returncode)
+        _refresh_limits()
         print(f"  -> Failed (exit {result.returncode})")
         return
 
@@ -314,9 +352,11 @@ def execute_task(task):
         if rl and not parsed["text"]:
             if task.retry_count >= task.max_retries:
                 db.mark_failed(task.id, f"Rate limited.\n{output}")
+                _refresh_limits(exhausted_hint=True)
                 return
             next_run = compute_next_run(task.retry_count)
             db.mark_rate_limited(task.id, next_run, error=output or "Rate limited")
+            _refresh_limits(exhausted_hint=True)
             print(f"  -> Rate limited (stream event). Retry at {next_run.strftime('%H:%M:%S')}")
             return
     else:
@@ -330,6 +370,7 @@ def execute_task(task):
             output += f"--- Agent Output (stderr) ---\n{stderr}"
 
     db.mark_completed(task.id, output, exit_code=0, model_used=model_used, session_id=session_id)
+    _refresh_limits()
     text_preview = output[:80].replace("\n", " ").strip()
     print(f"  -> Completed: {text_preview}")
 

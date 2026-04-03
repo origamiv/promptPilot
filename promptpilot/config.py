@@ -370,3 +370,4 @@ TASK_PASSWORD = os.environ.get("PP_TASK_PASSWORD", "")
 # Server
 HOST = os.environ.get("PP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PP_PORT", "8420"))
+APP_TIMEZONE = os.environ.get("PP_TIMEZONE", "UTC")

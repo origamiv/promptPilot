@@ -200,6 +200,7 @@
     border: 1px solid var(--border);
   }
   .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--border); }
+  .btn-ok { background: transparent; color: var(--green); border: 1px solid var(--border); }
   .btn-copy { background: transparent; color: var(--accent2); border: 1px solid var(--border); }
   .btn-theme {
     padding: 5px 14px;
@@ -543,6 +544,25 @@
     display: flex;
     gap: 6px;
   }
+  .admin-add-btn {
+    margin-left: auto;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 0 4px;
+    border-radius: 0;
+    border: none;
+    background: transparent;
+    color: var(--green);
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 700;
+  }
+  .admin-add-btn:hover {
+    background: transparent;
+    color: color-mix(in oklab, var(--green) 84%, white 16%);
+    opacity: 1;
+  }
   .admin-mobile-list {
     display: none;
   }
@@ -614,13 +634,6 @@
   .status-dot.s1 { background: #22c55e; }
   .status-dot.s2 { background: #ef4444; }
   .status-dot.s3 { background: #f59e0b; }
-  .admin-mobile-chevron {
-    margin-left: auto;
-    color: var(--text2);
-    font-size: 14px;
-    line-height: 1;
-    align-self: center;
-  }
   .admin-mobile-kv {
     font-size: 12px;
     color: var(--text2);
@@ -690,6 +703,13 @@
   .admin-mobile-actions .btn {
     flex: 1 1 0;
   }
+  .limit-val {
+    font-weight: 700;
+    font-family: var(--mono);
+  }
+  .limit-good { color: var(--green); }
+  .limit-warn { color: var(--yellow); }
+  .limit-bad { color: var(--red); }
   #promptsCards .admin-mobile-card {
     border-radius: 0;
     margin-bottom: 0;
@@ -741,13 +761,87 @@
   .prompt-mobile-icon-btn.danger {
     color: var(--red);
   }
-  #promptsCards .admin-mobile-chevron {
-    margin-left: 2px;
-    font-size: 12px;
+  .prompt-mobile-icon-btn.login {
+    color: var(--green);
   }
   #promptsCards .admin-mobile-body {
     margin-top: 0;
     padding: 8px;
+  }
+  #agentsCards .admin-mobile-card {
+    border-radius: 0;
+    margin-bottom: 0;
+    padding: 0;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  #agentsCards .admin-mobile-card + .admin-mobile-card {
+    border-top: 0;
+  }
+  #agentsCards .admin-mobile-card:first-child {
+    border-top: 1px solid var(--border);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+  }
+  #agentsCards .admin-mobile-card:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    margin-bottom: 10px;
+  }
+  #agentsCards .admin-mobile-head {
+    gap: 8px;
+    padding: 7px 8px;
+    align-items: center;
+  }
+  #agentsCards .admin-mobile-title {
+    margin-bottom: 0;
+    font-size: 12px;
+  }
+  #agentsCards .admin-mobile-body {
+    margin-top: 0;
+    padding: 8px;
+  }
+  #accountsCards .admin-mobile-card {
+    border-radius: 0;
+    margin-bottom: 0;
+    padding: 0;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  #accountsCards .admin-mobile-card + .admin-mobile-card {
+    border-top: 0;
+  }
+  #accountsCards .admin-mobile-card:first-child {
+    border-top: 1px solid var(--border);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+  }
+  #accountsCards .admin-mobile-card:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    margin-bottom: 10px;
+  }
+  #accountsCards .admin-mobile-head {
+    gap: 8px;
+    padding: 7px 8px;
+    align-items: center;
+  }
+  #accountsCards .admin-mobile-title {
+    margin-bottom: 0;
+    font-size: 12px;
+  }
+  #accountsCards .admin-mobile-body {
+    margin-top: 0;
+    padding: 8px;
+  }
+  #accountsCards .admin-mobile-card.active-account-card {
+    background: color-mix(in oklab, var(--green) 14%, var(--bg));
+    border-color: color-mix(in oklab, var(--green) 42%, var(--border));
+  }
+  #accountsTbody tr.active-account-row td {
+    background: color-mix(in oklab, var(--green) 10%, transparent);
   }
   .crud-modal {
     position: fixed;
@@ -1045,6 +1139,10 @@
       padding: 12px;
       overflow-x: auto;
     }
+    .admin-header input {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
     .admin-table {
       display: none;
     }
@@ -1200,7 +1298,7 @@
     <div class="admin-header">
       <div class="admin-title">Проекты</div>
       <input id="projectsSearch" placeholder="Поиск..." oninput="loadProjectsCrud()">
-      <button class="btn btn-primary" onclick="createProjectCrud()">Добавить</button>
+      <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createProjectCrud()">+</button>
     </div>
     <div class="admin-mobile-list" id="projectsCards"></div>
     <table class="admin-table">
@@ -1213,7 +1311,7 @@
     <div class="admin-header">
       <div class="admin-title">Агенты</div>
       <input id="agentsSearch" placeholder="Поиск..." oninput="loadAgentsCrud()">
-      <button class="btn btn-primary" onclick="createAgentCrud()">Добавить</button>
+      <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createAgentCrud()">+</button>
     </div>
     <div class="admin-mobile-list" id="agentsCards"></div>
     <table class="admin-table">
@@ -1226,11 +1324,11 @@
     <div class="admin-header">
       <div class="admin-title">Аккаунты агентов</div>
       <input id="accountsSearch" placeholder="Поиск..." oninput="loadAccountsCrud()">
-      <button class="btn btn-primary" onclick="createAccountCrud()">Добавить</button>
+      <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createAccountCrud()">+</button>
     </div>
     <div class="admin-mobile-list" id="accountsCards"></div>
     <table class="admin-table">
-      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Agent</th><th>Login</th><th>Mode</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Agent</th><th>Active</th><th>Status</th><th>5h %</th><th>7d %</th><th>Tokens</th><th>Reset 5h</th><th>Reset 7d</th><th>Login</th><th>Mode</th><th></th></tr></thead>
       <tbody id="accountsTbody"></tbody>
     </table>
   </div>
@@ -1239,7 +1337,7 @@
     <div class="admin-header">
       <div class="admin-title">Промпты</div>
       <input id="promptsSearch" placeholder="Поиск..." oninput="loadPromptsCrud()">
-      <button class="btn btn-primary" onclick="createPromptCrud()">Добавить</button>
+      <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createPromptCrud()">+</button>
     </div>
     <div class="admin-mobile-list" id="promptsCards"></div>
     <table class="admin-table">
@@ -1300,6 +1398,7 @@ let adminAccountsRows = [];
 let adminPromptsRows = [];
 let adminCardExpanded = new Set();
 let adminCardMenuKey = null;
+let appTimezone = 'UTC';
 let crudState = { entity: null, mode: 'create', id: null };
 
 const I18N = {
@@ -1857,6 +1956,56 @@ function timeAgo(iso) {
   return Math.floor(diff / 86400) + tr('d_short');
 }
 
+function tzYmd(date, tz) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function tzHm(date, tz) {
+  return new Intl.DateTimeFormat('ru-RU', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+function humanReset(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const tz = appTimezone || 'UTC';
+  const now = new Date();
+  const tomorrow = new Date(now.getTime() + 24 * 3600 * 1000);
+  const dateYmd = tzYmd(d, tz);
+  const nowYmd = tzYmd(now, tz);
+  const tomorrowYmd = tzYmd(tomorrow, tz);
+  if (dateYmd === nowYmd) return `сегодня в ${tzHm(d, tz)}`;
+  if (dateYmd === tomorrowYmd) return `завтра в ${tzHm(d, tz)}`;
+  const dayMonth = new Intl.DateTimeFormat('ru-RU', { timeZone: tz, day: 'numeric', month: 'long' }).format(d);
+  return `${dayMonth} в ${tzHm(d, tz)}`;
+}
+
+function limitToneClass(percent) {
+  const v = Number(percent);
+  if (!Number.isFinite(v)) return '';
+  if (v >= 90) return 'limit-bad';
+  if (v >= 70) return 'limit-warn';
+  return 'limit-good';
+}
+
+function limitValueHtml(percent) {
+  if (percent === null || percent === undefined || percent === '') return '—';
+  const v = Number(percent);
+  if (!Number.isFinite(v)) return esc(String(percent));
+  const cls = limitToneClass(v);
+  return `<span class="limit-val ${cls}">${v}%</span>`;
+}
+
 function refresh() { loadStats(); loadTasks(); }
 
 // --- Set default schedule to current datetime ---
@@ -2152,6 +2301,9 @@ const CRUD_TX = {
     delete_account_confirm: 'Удалить аккаунт',
     delete_prompt_confirm: 'Удалить промпт',
     invalid_json: 'Некорректный JSON в options',
+    relogin: 'Войти',
+    relogin_code: 'Код авторизации',
+    relogin_enter_code: 'Вставьте код из страницы авторизации',
   },
   en: {
     add: 'Add',
@@ -2186,6 +2338,9 @@ const CRUD_TX = {
     delete_account_confirm: 'Delete account',
     delete_prompt_confirm: 'Delete prompt',
     invalid_json: 'Invalid JSON in options',
+    relogin: 'Login',
+    relogin_code: 'Authorization code',
+    relogin_enter_code: 'Paste code from authorization page',
   },
 };
 
@@ -2261,6 +2416,14 @@ function renderCrudFields(entity, row = {}) {
     return `
       <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
       <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field"><label>${tc('status')}</label>
+        <select id="crud_status">
+          <option value="1" ${Number(row.status ?? 1) === 1 ? 'selected' : ''}>1</option>
+          <option value="2" ${Number(row.status ?? 1) === 2 ? 'selected' : ''}>2</option>
+          <option value="0" ${Number(row.status ?? 1) === 0 ? 'selected' : ''}>0</option>
+          <option value="3" ${Number(row.status ?? 1) === 3 ? 'selected' : ''}>3</option>
+        </select>
+      </div>
       <div class="crud-field"><label>${tc('message')}</label><textarea id="crud_message" required>${esc(row.message || '')}</textarea></div>
       <div class="crud-field"><label>${tc('options')}</label><textarea id="crud_options">${esc(row.options ? JSON.stringify(row.options, null, 2) : '')}</textarea></div>
     `;
@@ -2294,6 +2457,20 @@ function renderCrudFields(entity, row = {}) {
     <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
     <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
     <div class="crud-field"><label>${tc('agent_link')}</label><select id="crud_agent_id" required>${agentOptions}</select></div>
+    <div class="crud-field"><label>${tc('status')}</label>
+      <select id="crud_status">
+        <option value="1" ${Number(row.status ?? 1) === 1 ? 'selected' : ''}>1</option>
+        <option value="2" ${Number(row.status ?? 1) === 2 ? 'selected' : ''}>2</option>
+        <option value="0" ${Number(row.status ?? 1) === 0 ? 'selected' : ''}>0</option>
+        <option value="3" ${Number(row.status ?? 1) === 3 ? 'selected' : ''}>3</option>
+      </select>
+    </div>
+    <div class="crud-field"><label>Active</label>
+      <select id="crud_is_active">
+        <option value="1" ${row.is_active ? 'selected' : ''}>1</option>
+        <option value="0" ${row.is_active ? '' : 'selected'}>0</option>
+      </select>
+    </div>
     <div class="crud-field"><label>${tc('login')}</label><input id="crud_login" value="${esc(row.login || '')}"></div>
     <div class="crud-field"><label>${tc('pass')}</label><input id="crud_pass" value="${esc(row.pass || '')}"></div>
     <div class="crud-field"><label>${tc('token')}</label><input id="crud_token" value="${esc(row.token || '')}"></div>
@@ -2354,6 +2531,7 @@ async function submitCrudModal(e) {
       const body = {
         name: crudValue('crud_name').trim(),
         shortname: crudValue('crud_shortname').trim(),
+        status: parseInt(crudValue('crud_status') || '1', 10),
         message: crudValue('crud_message').trim(),
         options: parsedOptions,
       };
@@ -2407,6 +2585,8 @@ async function submitCrudModal(e) {
       name: crudValue('crud_name').trim(),
       shortname: crudValue('crud_shortname').trim(),
       agent_id: parseInt(crudValue('crud_agent_id') || '0', 10),
+      status: parseInt(crudValue('crud_status') || '1', 10),
+      is_active: (crudValue('crud_is_active') || '0') === '1',
       login: crudValue('crud_login').trim() || null,
       pass: crudValue('crud_pass').trim() || null,
       token: crudValue('crud_token').trim() || null,
@@ -2455,7 +2635,6 @@ function renderProjectsCards(rows) {
             <span class="admin-mobile-chip">${esc(r.folder || '')}</span>
           </div>
         </div>
-        <span class="admin-mobile-chevron">${expanded ? '▴' : '▾'}</span>
       </div>
       <div class="admin-mobile-body">
         <div class="admin-mobile-kv"><b>Short:</b> ${esc(r.shortname || '')}</div>
@@ -2470,29 +2649,25 @@ function renderAgentsCards(rows) {
   const cards = document.getElementById('agentsCards');
   cards.innerHTML = rows.map(r => {
     const expanded = isAdminExpanded('agent', r.id);
-    const menuOpen = isAdminMenuOpen('agent', r.id);
+    const statusRaw = Number.isFinite(Number(r.status)) ? Number(r.status) : 0;
+    const status = [0, 1, 2, 3].includes(statusRaw) ? statusRaw : 0;
+    const title = [`#${r.id}`, esc(r.name || ''), esc(r.shortname || '')]
+      .filter(Boolean)
+      .join(' · ');
     return `
     <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
-      <div class="admin-mobile-menu-wrap">
-        <button class="admin-mobile-menu-btn" onclick="toggleAdminMenu(event, 'agent', ${r.id})">⋮</button>
-        ${menuOpen ? `<div class="admin-mobile-menu">
-          <button class="admin-mobile-menu-item" onclick="editAgentCrud(${r.id})">Edit</button>
-          <button class="admin-mobile-menu-item danger" onclick="deleteAgentCrud(${r.id})">Delete</button>
-        </div>` : ''}
-      </div>
       <div class="admin-mobile-head" onclick="toggleAdminCard('agent', ${r.id})">
-        <span class="admin-mobile-icon">🤖</span>
         <div class="admin-mobile-main">
-          <div class="admin-mobile-title">#${r.id} · ${esc(r.name || '')}</div>
-          <div class="admin-mobile-sub">
-            <span class="admin-mobile-chip">${esc(r.shortname || '')}</span>
-            <span class="admin-mobile-chip">P${r.priority ?? 0}</span>
-            <span class="admin-mobile-chip">S${r.status ?? 1}</span>
-          </div>
+          <div class="admin-mobile-title">${title}</div>
         </div>
-        <span class="admin-mobile-chevron">${expanded ? '▴' : '▾'}</span>
+        <div class="prompt-mobile-inline-actions">
+          <span class="status-dot s${status}" title="status ${status}"></span>
+          <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit agent" onclick="event.stopPropagation(); editAgentCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" aria-label="Delete agent" onclick="event.stopPropagation(); deleteAgentCrud(${r.id})">🗑</button>
+        </div>
       </div>
       <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Short:</b> ${esc(r.shortname || '')}</div>
         <div class="admin-mobile-kv"><b>Email:</b> ${esc(r.email || '')}</div>
         <div class="admin-mobile-kv"><b>Priority:</b> ${r.priority ?? 0}</div>
         <div class="admin-mobile-kv"><b>Status:</b> ${r.status ?? 1}</div>
@@ -2505,29 +2680,33 @@ function renderAccountsCards(rows) {
   const cards = document.getElementById('accountsCards');
   cards.innerHTML = rows.map(r => {
     const expanded = isAdminExpanded('account', r.id);
-    const menuOpen = isAdminMenuOpen('account', r.id);
+    const statusRaw = Number.isFinite(Number(r.status)) ? Number(r.status) : 0;
+    const status = [0, 1, 2, 3].includes(statusRaw) ? statusRaw : 0;
+    const title = [`#${r.id}`, esc(r.name || '')]
+      .filter(Boolean)
+      .join(' · ');
     return `
-    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
-      <div class="admin-mobile-menu-wrap">
-        <button class="admin-mobile-menu-btn" onclick="toggleAdminMenu(event, 'account', ${r.id})">⋮</button>
-        ${menuOpen ? `<div class="admin-mobile-menu">
-          <button class="admin-mobile-menu-item" onclick="editAccountCrud(${r.id})">Edit</button>
-          <button class="admin-mobile-menu-item danger" onclick="deleteAccountCrud(${r.id})">Delete</button>
-        </div>` : ''}
-      </div>
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}${r.is_active ? ' active-account-card' : ''}">
       <div class="admin-mobile-head" onclick="toggleAdminCard('account', ${r.id})">
-        <span class="admin-mobile-icon">🔐</span>
         <div class="admin-mobile-main">
-          <div class="admin-mobile-title">#${r.id} · ${esc(r.name || '')}</div>
-          <div class="admin-mobile-sub">
-            <span class="admin-mobile-chip">${esc(r.shortname || '')}</span>
-            <span class="admin-mobile-chip">${esc(r.agent_name || String(r.agent_id || ''))}</span>
-          </div>
+          <div class="admin-mobile-title">${title}</div>
         </div>
-        <span class="admin-mobile-chevron">${expanded ? '▴' : '▾'}</span>
+        <div class="prompt-mobile-inline-actions">
+          <span class="status-dot s${status}" title="status ${status}"></span>
+          ${r.is_active ? '' : `<button class="prompt-mobile-icon-btn login" type="button" aria-label="${tc('relogin')}" title="${tc('relogin')}" onclick="event.stopPropagation(); reloginAccountCrud(${r.id})">🔑</button>`}
+          <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit account" onclick="event.stopPropagation(); editAccountCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" aria-label="Delete account" onclick="event.stopPropagation(); deleteAccountCrud(${r.id})">🗑</button>
+        </div>
       </div>
       <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Short:</b> ${esc(r.shortname || '')}</div>
+        <div class="admin-mobile-kv"><b>Active:</b> ${r.is_active ? '1' : '0'}</div>
         <div class="admin-mobile-kv"><b>Agent:</b> ${esc(r.agent_name || String(r.agent_id || ''))}</div>
+        <div class="admin-mobile-kv"><b>Status:</b> ${r.status ?? ''}</div>
+        <div class="admin-mobile-kv"><b>Limits:</b> 5h=${limitValueHtml(r.percent_5h)} · 7d=${limitValueHtml(r.percent_7d)}</div>
+        <div class="admin-mobile-kv"><b>Balance tokens:</b> ${r.balance_tokens ?? '—'}</div>
+        <div class="admin-mobile-kv"><b>Reset 5h:</b> ${humanReset(r.reset_5h)}</div>
+        <div class="admin-mobile-kv"><b>Reset 7d:</b> ${humanReset(r.reset_7d)}</div>
         <div class="admin-mobile-kv"><b>Login:</b> ${esc(r.login || '')}</div>
         <div class="admin-mobile-kv"><b>Mode:</b> ${esc(r.login_mode || '')}</div>
       </div>
@@ -2558,7 +2737,6 @@ function renderPromptsCards(rows) {
           <span class="status-dot s${status}" title="status ${status}"></span>
           <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit prompt" onclick="event.stopPropagation(); editPromptCrud(${r.id})">✎</button>
           <button class="prompt-mobile-icon-btn danger" type="button" aria-label="Delete prompt" onclick="event.stopPropagation(); deletePromptCrud(${r.id})">🗑</button>
-          <span class="admin-mobile-chevron">${expanded ? '▴' : '▾'}</span>
         </div>
       </div>
       <div class="admin-mobile-body">
@@ -2659,14 +2837,22 @@ async function loadAccountsCrud() {
   adminAccountsRows = rows;
   const tbody = document.getElementById('accountsTbody');
   tbody.innerHTML = rows.map(r => `
-    <tr>
+    <tr class="${r.is_active ? 'active-account-row' : ''}">
       <td>${r.id}</td>
       <td>${esc(r.name || '')}</td>
       <td>${esc(r.shortname || '')}</td>
       <td>${esc(r.agent_name || String(r.agent_id || ''))}</td>
+      <td>${r.is_active ? 1 : 0}</td>
+      <td>${r.status ?? ''}</td>
+      <td>${limitValueHtml(r.percent_5h)}</td>
+      <td>${limitValueHtml(r.percent_7d)}</td>
+      <td>${r.balance_tokens ?? ''}</td>
+      <td>${humanReset(r.reset_5h)}</td>
+      <td>${humanReset(r.reset_7d)}</td>
       <td>${esc(r.login || '')}</td>
       <td>${esc(r.login_mode || '')}</td>
       <td class="admin-actions">
+        ${r.is_active ? '' : `<button class="btn btn-sm btn-ok" title="${tc('relogin')}" onclick="reloginAccountCrud(${r.id})">🔑</button>`}
         <button class="btn btn-sm btn-ghost" onclick="editAccountCrud(${r.id})">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteAccountCrud(${r.id})">Delete</button>
       </td>
@@ -2690,6 +2876,25 @@ async function deleteAccountCrud(id) {
     await loadAccountsCrud();
   } catch (e) {
     alert(`${tc('delete_failed')}: ${e.message}`);
+  }
+}
+
+async function reloginAccountCrud(id) {
+  if (window.__reloginBusy) return;
+  window.__reloginBusy = true;
+  try {
+    const started = await fetchJSON(`${API}/admin/agents-accounts/${id}/relogin/start`, { method: 'POST' });
+    if (!started || !started.ok) throw new Error('Relogin did not return ok=true');
+    window.location.reload();
+  } catch (e) {
+    const msg = String(e && e.message || '');
+    if (/Failed to fetch/i.test(msg)) {
+      alert('Не удалось связаться с сервером во время перелогина. Обновите страницу и проверьте, что сервер доступен.');
+    } else {
+      alert(`Relogin failed: ${msg}`);
+    }
+  } finally {
+    window.__reloginBusy = false;
   }
 }
 
@@ -2766,6 +2971,13 @@ async function loadVersion() {
   } catch (_) {}
 }
 
+async function loadAppConfig() {
+  try {
+    const cfg = await fetchJSON(`${API}/config`);
+    if (cfg && cfg.timezone) appTimezone = String(cfg.timezone);
+  } catch (_) {}
+}
+
 // --- Cost stats ---
 async function loadCosts() {
   try {
@@ -2806,6 +3018,7 @@ document.addEventListener('keydown', (e) => {
 // --- Init ---
 applyLanguage(localStorage.getItem('pp_lang') || 'ru');
 applyTheme(localStorage.getItem('pp_theme') || 'dark');
+loadAppConfig();
 setDefaultSchedule();
 loadProviders();
 loadProjects();

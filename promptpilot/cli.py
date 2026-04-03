@@ -228,6 +228,61 @@ def worker():
     run_worker()
 
 
+@cli.command("poll-limits")
+def poll_limits():
+    """Poll and refresh limits for agent accounts (for cron)."""
+    from .limits import refresh_limits_for_provider
+
+    rows = db.list_agent_accounts_for_limits(limit=5000)
+    if not rows:
+        click.echo("No agent accounts found.")
+        return
+
+    updated = 0
+    skipped_manual = 0
+    skipped_inactive = 0
+    skipped_unknown = 0
+
+    for row in rows:
+        account_id = int(row["id"])
+        status = int(row.get("status") or 0)
+        if status == 2:
+            skipped_manual += 1
+            continue
+        if not bool(row.get("is_active")):
+            skipped_inactive += 1
+            continue
+
+        agent_key = str(row.get("agent_shortname") or row.get("agent_name") or "").strip().lower()
+        provider = None
+        if "codex" in agent_key:
+            provider = "codex"
+        elif "claude" in agent_key:
+            provider = "claude"
+        if not provider:
+            skipped_unknown += 1
+            continue
+
+        limits = refresh_limits_for_provider(provider, token=row.get("token"))
+        if not limits:
+            continue
+
+        db.update_agent_account_limits(
+            account_id,
+            status=limits.get("status"),
+            percent_5h=limits.get("percent_5h"),
+            percent_7d=limits.get("percent_7d"),
+            balance_tokens=limits.get("balance_tokens"),
+            reset_5h=limits.get("reset_5h"),
+            reset_7d=limits.get("reset_7d"),
+        )
+        updated += 1
+
+    click.echo(
+        f"Limits polled: updated={updated}, skipped_manual_status2={skipped_manual}, skipped_inactive={skipped_inactive}, skipped_unknown_agent={skipped_unknown}"
+    )
+
+
 @cli.command()
 def bot():
     """Start the Telegram bot (requires PP_TG_TOKEN env var)."""

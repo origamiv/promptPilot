@@ -11,8 +11,9 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from . import db
-from .config import get_skills, load_providers, PROJECTS_ROOT
+from .config import APP_TIMEZONE, get_skills, load_providers, PROJECTS_ROOT
 from .models import CostStats, Stats, TaskCreate, TaskInDB, TaskStatus, TaskUpdate
+from . import relogin
 from .version import check_for_update
 
 app = FastAPI(title="PromptPilot", version="0.1.0")
@@ -105,6 +106,11 @@ def api_worker_resume():
 @app.get("/api/version")
 def api_version():
     return check_for_update()
+
+
+@app.get("/api/config")
+def api_config():
+    return {"timezone": APP_TIMEZONE}
 
 
 @app.get("/api/providers")
@@ -278,6 +284,14 @@ def api_admin_create_agents_account(payload: dict):
     required = ("name", "shortname", "agent_id")
     if any(str(payload.get(k, "")).strip() == "" for k in required):
         raise HTTPException(400, "name, shortname, agent_id are required")
+    status = payload.get("status", 1)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be integer 0..3")
+    if status not in (0, 1, 2, 3):
+        raise HTTPException(400, "status must be integer 0..3")
+    is_active = bool(payload.get("is_active", False))
     try:
         return db.create_agent_account(
             name=str(payload["name"]).strip(),
@@ -287,6 +301,8 @@ def api_admin_create_agents_account(payload: dict):
             password=(str(payload.get("pass")).strip() if payload.get("pass") is not None else None),
             token=(str(payload.get("token")).strip() if payload.get("token") is not None else None),
             login_mode=(str(payload.get("login_mode")).strip() if payload.get("login_mode") is not None else None),
+            status=status,
+            is_active=is_active,
         )
     except Exception as e:
         raise HTTPException(400, f"Create agent account failed: {e}")
@@ -297,6 +313,17 @@ def api_admin_update_agents_account(account_id: int, payload: dict):
     required = ("name", "shortname", "agent_id")
     if any(str(payload.get(k, "")).strip() == "" for k in required):
         raise HTTPException(400, "name, shortname, agent_id are required")
+    status = payload.get("status")
+    if status is not None:
+        try:
+            status = int(status)
+        except Exception:
+            raise HTTPException(400, "status must be integer 0..3")
+        if status not in (0, 1, 2, 3):
+            raise HTTPException(400, "status must be integer 0..3")
+    is_active = payload.get("is_active")
+    if is_active is not None:
+        is_active = bool(is_active)
     try:
         ok = db.update_agent_account(
             account_id=account_id,
@@ -307,6 +334,8 @@ def api_admin_update_agents_account(account_id: int, payload: dict):
             password=(str(payload.get("pass")).strip() if payload.get("pass") is not None else None),
             token=(str(payload.get("token")).strip() if payload.get("token") is not None else None),
             login_mode=(str(payload.get("login_mode")).strip() if payload.get("login_mode") is not None else None),
+            status=status,
+            is_active=is_active,
         )
         if not ok:
             raise HTTPException(404, "Agent account not found")
@@ -330,6 +359,42 @@ def api_admin_delete_agents_account(account_id: int):
         raise HTTPException(400, f"Delete agent account failed: {e}")
 
 
+@app.post("/api/admin/agents-accounts/{account_id}/relogin/start")
+def api_admin_start_relogin(account_id: int):
+    try:
+        return relogin.start_relogin(account_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Relogin start failed: {e}")
+
+
+@app.post("/api/admin/agents-accounts/{account_id}/relogin/finish")
+def api_admin_finish_relogin(account_id: int, payload: dict):
+    session_id = str(payload.get("session_id") or "").strip()
+    code = str(payload.get("code") or "").strip()
+    if not session_id:
+        raise HTTPException(400, "session_id is required")
+    account = db.get_agent_account(account_id)
+    if not account:
+        raise HTTPException(404, "Agent account not found")
+    try:
+        return relogin.finish_relogin(session_id=session_id, code=code, expected_account_id=account_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Relogin finish failed: {e}")
+
+
+@app.post("/api/admin/agents-accounts/{account_id}/relogin/cancel")
+def api_admin_cancel_relogin(account_id: int, payload: dict):
+    session_id = str(payload.get("session_id") or "").strip()
+    if not session_id:
+        raise HTTPException(400, "session_id is required")
+    ok = relogin.cancel_relogin(session_id)
+    return {"ok": ok}
+
+
 @app.get("/api/admin/prompts")
 def api_admin_prompts(q: Optional[str] = None):
     return db.list_prompts(search=q, limit=500)
@@ -343,12 +408,20 @@ def api_admin_create_prompt(payload: dict):
     options = payload.get("options")
     if options is not None and not isinstance(options, dict):
         raise HTTPException(400, "options must be an object or null")
+    status = payload.get("status", 1)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be integer 0..3")
+    if status not in (0, 1, 2, 3):
+        raise HTTPException(400, "status must be integer 0..3")
     try:
         return db.create_prompt(
             name=str(payload["name"]).strip(),
             shortname=str(payload["shortname"]).strip(),
             message=str(payload["message"]).strip(),
             options=options,
+            status=status,
         )
     except Exception as e:
         raise HTTPException(400, f"Create prompt failed: {e}")
@@ -362,6 +435,14 @@ def api_admin_update_prompt(prompt_id: int, payload: dict):
     options = payload.get("options")
     if options is not None and not isinstance(options, dict):
         raise HTTPException(400, "options must be an object or null")
+    status = payload.get("status")
+    if status is not None:
+        try:
+            status = int(status)
+        except Exception:
+            raise HTTPException(400, "status must be integer 0..3")
+        if status not in (0, 1, 2, 3):
+            raise HTTPException(400, "status must be integer 0..3")
     try:
         ok = db.update_prompt(
             prompt_id=prompt_id,
@@ -369,6 +450,7 @@ def api_admin_update_prompt(prompt_id: int, payload: dict):
             shortname=str(payload["shortname"]).strip(),
             message=str(payload["message"]).strip(),
             options=options,
+            status=status,
         )
         if not ok:
             raise HTTPException(404, "Prompt not found")
@@ -396,4 +478,11 @@ def api_admin_delete_prompt(prompt_id: int):
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
