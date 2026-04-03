@@ -639,6 +639,9 @@
     color: color-mix(in oklab, var(--green) 84%, white 16%);
     opacity: 1;
   }
+  .tasks-header {
+    margin-bottom: 16px;
+  }
   .admin-mobile-list {
     display: none;
   }
@@ -1067,6 +1070,12 @@
   .crud-mobile-body {
     padding: 12px;
   }
+  #taskFormScreen .add-form {
+    margin-bottom: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
 
   @media (max-width: 980px) {
     .app-layout { display: block; min-height: 100dvh; }
@@ -1138,11 +1147,10 @@
       justify-content: space-between;
       gap: 8px;
     }
-    .add-form {
+    #taskFormScreen .add-form {
       padding: 14px;
-      margin-bottom: 14px;
     }
-    .add-form textarea {
+    #taskFormScreen .add-form textarea {
       min-height: 106px;
       margin-bottom: 10px;
     }
@@ -1356,54 +1364,9 @@
 
     <div class="cost-bar" id="costBar"></div>
 
-    <div class="add-form" id="addForm">
-    <input type="text" id="subjectInput" placeholder="Тема (необязательно — возьмём из первой строки промпта)" style="width:100%;margin-bottom:8px">
-    <textarea id="promptInput" placeholder="Введите ваш промпт..."></textarea>
-    <div class="skills-toggle-row" id="skillsToggleRow">
-      <button type="button" class="btn-skills" id="skillsToggleBtn" onclick="toggleSkills()">⚡ Skills</button>
-      <span class="skills-hint" id="skillsHint">Только Claude Code · /skill-name [args]</span>
-    </div>
-    <div class="skills-panel" id="skillsPanel"></div>
-    <div class="form-row">
-      <label><span id="providerLabelText">Провайдер</span>
-        <select id="providerInput"></select>
-      </label>
-      <label id="modelLabel" style="display:none"><span id="modelLabelText">Модель</span>
-        <select id="modelInput"></select>
-      </label>
-      <label><span id="priorityLabelText">Приоритет</span>
-        <select id="priorityInput">
-          <option value="1">1 (highest)</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-          <option value="5" selected>5</option>
-          <option value="6">6</option>
-          <option value="7">7</option>
-          <option value="8">8</option>
-          <option value="9">9</option>
-          <option value="10">10 (lowest)</option>
-        </select>
-      </label>
-      <label><span id="scheduleLabelText">Расписание</span>
-        <input type="datetime-local" id="scheduleInput">
-      </label>
-      <label id="workdirLabel"><span id="dirLabelText">Папка</span>
-        <select id="workdirSelect" style="display:none" onchange="onProjectSelect()"></select>
-        <input type="text" id="workdirInput" placeholder="C:\Projects\MyApp" style="display:none">
-      </label>
-      <label><span id="recurLabelText">Повтор</span>
-        <input type="text" id="recurrenceInput" placeholder="6h / daily@09:00" style="width:140px">
-      </label>
-      <label><span id="promptListLabelText">Список промптов</span>
-        <input type="text" id="promptListInput" value="base, current, end" placeholder="base, current, end" style="width:220px">
-      </label>
-      <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
-        <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
-      </label>
-      <button class="btn btn-primary" id="addTaskBtn" onclick="addTask()">Добавить задачу</button>
-    </div>
+    <div class="admin-header tasks-header">
+      <div class="admin-title" id="tasksTitle">Задачи</div>
+      <button id="openTaskFormBtn" class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="openTaskFormScreen()">+</button>
     </div>
 
     <div class="filter-bar" id="filterBar">
@@ -1505,6 +1468,64 @@
     </form>
   </div>
 </div>
+<div id="taskFormScreen" class="crud-mobile-screen">
+  <div class="crud-mobile-head">
+    <button class="btn btn-ghost" type="button" onclick="closeTaskFormScreen()">←</button>
+    <div id="taskFormTitle" class="crud-mobile-title">Добавить задачу</div>
+    <button id="taskFormSaveTop" class="btn btn-primary" type="button" onclick="submitTaskFromScreen()">Добавить задачу</button>
+  </div>
+  <div class="crud-mobile-body">
+    <div class="add-form" id="addForm">
+      <input type="text" id="subjectInput" placeholder="Тема (необязательно — возьмём из первой строки промпта)" style="width:100%;margin-bottom:8px">
+      <textarea id="promptInput" placeholder="Введите ваш промпт..."></textarea>
+      <div class="skills-toggle-row" id="skillsToggleRow">
+        <button type="button" class="btn-skills" id="skillsToggleBtn" onclick="toggleSkills()">⚡ Skills</button>
+        <span class="skills-hint" id="skillsHint">Только Claude Code · /skill-name [args]</span>
+      </div>
+      <div class="skills-panel" id="skillsPanel"></div>
+      <div class="form-row">
+        <label><span id="providerLabelText">Провайдер</span>
+          <select id="providerInput"></select>
+        </label>
+        <label id="modelLabel" style="display:none"><span id="modelLabelText">Модель</span>
+          <select id="modelInput"></select>
+        </label>
+        <label><span id="priorityLabelText">Приоритет</span>
+          <select id="priorityInput">
+            <option value="1">1 (highest)</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10 (lowest)</option>
+          </select>
+        </label>
+        <label><span id="scheduleLabelText">Расписание</span>
+          <input type="datetime-local" id="scheduleInput">
+        </label>
+        <label id="workdirLabel"><span id="dirLabelText">Папка</span>
+          <select id="workdirSelect" style="display:none" onchange="onProjectSelect()"></select>
+          <input type="text" id="workdirInput" placeholder="C:\Projects\MyApp" style="display:none">
+        </label>
+        <label><span id="recurLabelText">Повтор</span>
+          <input type="text" id="recurrenceInput" placeholder="6h / daily@09:00" style="width:140px">
+        </label>
+        <label><span id="promptListLabelText">Список промптов</span>
+          <input type="text" id="promptListInput" value="base, current, end" placeholder="base, current, end" style="width:220px">
+        </label>
+        <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
+          <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
+        </label>
+        <button class="btn btn-primary" id="addTaskBtn" onclick="addTask()">Добавить задачу</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -1529,6 +1550,7 @@ let crudState = { entity: null, mode: 'create', id: null };
 
 const I18N = {
   ru: {
+    tasks: 'Задачи',
     light: 'Светлая',
     dark: 'Тёмная',
     prompt_placeholder: 'Введите ваш промпт...',
@@ -1598,6 +1620,7 @@ const I18N = {
     prompts_not_found: 'Не найдены промпты: {names}',
   },
   en: {
+    tasks: 'Tasks',
     light: 'Light',
     dark: 'Dark',
     prompt_placeholder: 'Enter your prompt here...',
@@ -1697,6 +1720,7 @@ function applyLanguage(lang) {
   if (themeBtn) themeBtn.textContent = currentTheme === 'light' ? tr('dark') : tr('light');
 
   document.getElementById('promptInput').placeholder = tr('prompt_placeholder');
+  document.getElementById('tasksTitle').textContent = tr('tasks');
   document.getElementById('providerLabelText').textContent = tr('provider');
   document.getElementById('modelLabelText').textContent = tr('model');
   document.getElementById('priorityLabelText').textContent = tr('priority');
@@ -1706,6 +1730,10 @@ function applyLanguage(lang) {
   document.getElementById('promptListLabelText').textContent = tr('prompt_list');
   document.getElementById('promptListInput').placeholder = tr('prompt_list_placeholder');
   document.getElementById('addTaskBtn').textContent = tr('add_task');
+  document.getElementById('taskFormTitle').textContent = tr('add_task');
+  document.getElementById('taskFormSaveTop').textContent = tr('add_task');
+  document.getElementById('openTaskFormBtn').title = tr('add_task');
+  document.getElementById('openTaskFormBtn').setAttribute('aria-label', tr('add_task'));
   document.getElementById('skillsHint').textContent = tr('skills_hint');
 
   document.getElementById('filterAllBtn').textContent = tr('all');
@@ -2007,7 +2035,10 @@ async function loadTasks() {
 
 async function addTask() {
   const currentPrompt = document.getElementById('promptInput').value.trim();
-  if (!currentPrompt) return;
+  if (!currentPrompt) {
+    document.getElementById('promptInput').focus();
+    return;
+  }
   const subject = document.getElementById('subjectInput').value.trim() || null;
   const promptListRaw = document.getElementById('promptListInput').value.trim();
   const priority = parseInt(document.getElementById('priorityInput').value);
@@ -2045,6 +2076,8 @@ async function addTask() {
     document.getElementById('promptInput').value = '';
     document.getElementById('subjectInput').value = '';
     document.getElementById('recurrenceInput').value = '';
+    setDefaultSchedule();
+    closeTaskFormScreen();
     refresh();
   } catch (err) {
     alert(err.message);
@@ -2420,6 +2453,7 @@ function switchView(view, opts = {}) {
   }
 
   const isTasks = view === 'tasks';
+  if (!isTasks) closeTaskFormScreen();
   document.getElementById('tasksView').style.display = isTasks ? '' : 'none';
   document.getElementById('projectsView').style.display = view === 'projects' ? 'block' : 'none';
   document.getElementById('agentsView').style.display = view === 'agents' ? 'block' : 'none';
@@ -2438,6 +2472,29 @@ function switchView(view, opts = {}) {
   if (view === 'prompts') loadPromptsCrud();
   adminCardMenuKey = null;
   closeMobileMenu();
+}
+
+function openTaskFormScreen() {
+  const screen = document.getElementById('taskFormScreen');
+  if (!screen) return;
+  screen.classList.add('open');
+  setDefaultSchedule();
+  initProjectSelect2();
+  setTimeout(() => {
+    const first = screen.querySelector('textarea,input,select,button');
+    if (first) first.focus();
+  }, 0);
+}
+
+function closeTaskFormScreen() {
+  const screen = document.getElementById('taskFormScreen');
+  if (!screen || !screen.classList.contains('open')) return;
+  screen.classList.remove('open');
+  closeSkillsPanel();
+}
+
+function submitTaskFromScreen() {
+  addTask();
 }
 
 function adminKey(entity, id) {
@@ -2823,6 +2880,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (document.getElementById('crudModal').classList.contains('open')) closeCrudModal();
     if (document.getElementById('crudMobileScreen').classList.contains('open')) closeCrudScreen();
+    if (document.getElementById('taskFormScreen').classList.contains('open')) closeTaskFormScreen();
   }
 });
 
