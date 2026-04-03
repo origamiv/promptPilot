@@ -67,6 +67,7 @@ TASK_TIMEOUT = int(os.environ.get("PP_TASK_TIMEOUT", "300"))
 BASE_DELAY = int(os.environ.get("PP_BASE_DELAY", "60"))
 MAX_DELAY = int(os.environ.get("PP_MAX_DELAY", "3600"))
 MAX_RETRIES = int(os.environ.get("PP_MAX_RETRIES", "5"))
+AGENT_USER = os.environ.get("AGENT_USER", "").strip()
 
 # Default CLI command
 DEFAULT_CLI = os.environ.get("PP_DEFAULT_CLI", "claude")

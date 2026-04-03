@@ -1,6 +1,8 @@
 """Worker — executes tasks from the queue."""
 
 import json
+import os
+import pwd
 import random
 import re
 import shutil
@@ -11,7 +13,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from . import db
-from .config import BASE_DELAY, DEFAULT_CLI, MAX_DELAY, POLL_INTERVAL, TASK_TIMEOUT, build_cmd, get_provider_env
+from .config import AGENT_USER, BASE_DELAY, DEFAULT_CLI, MAX_DELAY, POLL_INTERVAL, TASK_TIMEOUT, build_cmd, get_provider_env
 from .limits import refresh_limits_for_provider
 
 RATE_LIMIT_PATTERNS = [
@@ -256,6 +258,34 @@ def execute_task(task):
     cmd = build_cmd(provider, task.prompt, skip_permissions=task.skip_permissions, session_id=task.session_id, model=task.model)
 
     env = get_provider_env(provider)
+    preexec_fn = None
+
+    # Optional per-task user switch (Linux): run agent CLI as AGENT_USER from .env.
+    if AGENT_USER and os.name != "nt":
+        if os.geteuid() == 0:
+            try:
+                pw = pwd.getpwnam(AGENT_USER)
+            except KeyError:
+                db.mark_failed(task.id, f"Configured AGENT_USER '{AGENT_USER}' does not exist", exit_code=-1)
+                _refresh_limits()
+                return
+
+            target_uid = pw.pw_uid
+            target_gid = pw.pw_gid
+            target_home = pw.pw_dir or f"/home/{AGENT_USER}"
+
+            def _drop_privileges():
+                os.initgroups(AGENT_USER, target_gid)
+                os.setgid(target_gid)
+                os.setuid(target_uid)
+
+            preexec_fn = _drop_privileges
+            env["HOME"] = target_home
+            env["USER"] = AGENT_USER
+            env["LOGNAME"] = AGENT_USER
+        else:
+            # Not fatal: keep current user if worker isn't running as root.
+            print(f"  -> AGENT_USER={AGENT_USER} ignored (worker uid={os.geteuid()}, root required for setuid)")
 
     # On Windows, .cmd/.bat wrappers (e.g. npm-installed CLIs like qwen) are
     # invisible to subprocess without shell=True.  shutil.which() resolves the
@@ -275,6 +305,7 @@ def execute_task(task):
             cwd=task.working_dir,
             stdin=subprocess.DEVNULL,
             env=env,
+            preexec_fn=preexec_fn,
         )
 
     try:
