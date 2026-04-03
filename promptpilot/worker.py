@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from . import db
+from . import relogin
 from .config import (
     AGENT_TIMEOUT,
     AGENT_USER,
@@ -271,24 +272,47 @@ def build_src_payload(provider: str, stdout: str, stderr: str) -> dict:
 def execute_task(task):
     """Run CLI with the task's prompt."""
     provider = task.provider or DEFAULT_CLI
-    account = db.pick_available_agent_account(provider)
+    provider_key = provider.strip().lower()
+
+    account = None
+    if task.agent_account_id:
+        account = db.get_agent_account(int(task.agent_account_id))
+    if not account:
+        account = db.pick_available_agent_account(provider)
     if account:
         try:
             db.set_task_agent_account(task.id, int(account["id"]))
         except Exception:
             pass
 
-    def _refresh_limits(exhausted_hint: bool = False):
-        if not account:
-            return
+    def _is_exhausted_status(acc: dict) -> bool:
+        status = acc.get("status")
         try:
-            limits = refresh_limits_for_provider(provider, token=account.get("token"))
+            if status is not None and int(status) == 3:
+                return True
+        except Exception:
+            pass
+        for key in ("percent_5h", "percent_7d"):
+            val = acc.get(key)
+            try:
+                if val is not None and float(val) >= 100.0:
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def _refresh_limits_for(acc: dict, exhausted_hint: bool = False) -> dict:
+        if not acc:
+            return acc
+        acc = dict(acc)
+        try:
+            limits = refresh_limits_for_provider(provider, token=acc.get("token"))
             if limits:
                 status = limits.get("status")
                 if exhausted_hint and status == 1:
                     status = 3
                 db.update_agent_account_limits(
-                    int(account["id"]),
+                    int(acc["id"]),
                     status=status,
                     percent_5h=limits.get("percent_5h"),
                     percent_7d=limits.get("percent_7d"),
@@ -296,10 +320,83 @@ def execute_task(task):
                     reset_5h=limits.get("reset_5h"),
                     reset_7d=limits.get("reset_7d"),
                 )
+                acc.update(
+                    {
+                        "status": status if status is not None else acc.get("status"),
+                        "percent_5h": limits.get("percent_5h"),
+                        "percent_7d": limits.get("percent_7d"),
+                        "balance_tokens": limits.get("balance_tokens"),
+                        "reset_5h": limits.get("reset_5h"),
+                        "reset_7d": limits.get("reset_7d"),
+                    }
+                )
             elif exhausted_hint:
-                db.update_agent_account_limits(int(account["id"]), status=3)
+                db.update_agent_account_limits(int(acc["id"]), status=3)
+                acc["status"] = 3
         except Exception as e:
             print(f"  -> Limits refresh failed: {e}")
+        return acc
+
+    def _refresh_limits(exhausted_hint: bool = False):
+        nonlocal account
+        if not account:
+            return
+        account = _refresh_limits_for(account, exhausted_hint=exhausted_hint)
+
+    def _switch_account_if_exhausted() -> bool:
+        nonlocal account
+        if not account:
+            return False
+        account = _refresh_limits_for(account)
+        if not _is_exhausted_status(account):
+            return True
+
+        agent_id = account.get("agent_id")
+        if not agent_id:
+            print("  -> Active account is exhausted, but agent_id is missing")
+            return False
+        current_id = int(account["id"])
+        candidates = db.list_agent_accounts_for_relogin(int(agent_id), exclude_account_id=current_id, limit=20)
+        if not candidates:
+            print("  -> Active account exhausted and no other accounts with credentials found")
+            return False
+
+        for cand in candidates:
+            cand_id = int(cand["id"])
+            try:
+                if provider_key.startswith("claude"):
+                    relogin.start_relogin(cand_id)
+                else:
+                    # For non-Claude providers we can at least switch active account marker.
+                    db.set_agent_account_active(cand_id, True)
+            except Exception as e:
+                print(f"  -> Account switch failed for #{cand_id}: {e}")
+                continue
+
+            switched = db.get_agent_account(cand_id) or cand
+            switched = _refresh_limits_for(switched)
+            if _is_exhausted_status(switched):
+                print(f"  -> Account #{cand_id} is also exhausted")
+                continue
+
+            account = switched
+            db.set_task_agent_account(task.id, cand_id)
+            print(f"  -> Switched to account #{cand_id} for agent #{agent_id}")
+            return True
+
+        print("  -> All candidate accounts are exhausted or switch failed")
+        return False
+
+    if account and not _switch_account_if_exhausted():
+        next_run = account.get("reset_5h") if isinstance(account, dict) else None
+        if not isinstance(next_run, datetime):
+            next_run = compute_next_run(task.retry_count)
+        db.mark_rate_limited(
+            task.id,
+            next_run,
+            error="Active agent account limits are exhausted; no alternative account with valid credentials",
+        )
+        return
 
     base_prompt = task.agent_prompt or task.prompt
     # Guardrail: allow restarting only the web server, never the worker process.

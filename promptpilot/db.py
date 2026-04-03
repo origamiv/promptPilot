@@ -1100,6 +1100,34 @@ def get_agent_account(account_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
+def list_agent_accounts_for_relogin(agent_id: int, exclude_account_id: Optional[int] = None, limit: int = 50) -> list[dict]:
+    """List candidate accounts of the same agent that have stored credentials."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT aa.id, aa.name, aa.shortname, aa.agent_id,
+                       aa.status, aa.is_active,
+                       aa.percent_5h, aa.percent_7d, aa.balance_tokens, aa.reset_5h, aa.reset_7d,
+                       aa.login, aa.pass, aa.token, aa.login_mode, aa.claude_credentials, aa.updated_at
+                FROM {}.agents_accounts aa
+                WHERE aa.agent_id = %s
+                  AND aa.id <> COALESCE(%s, -1)
+                  AND aa.status <> 2
+                  AND (
+                    aa.claude_credentials IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(aa.token, '')), '') IS NOT NULL
+                    OR NULLIF(TRIM(COALESCE(aa.pass, '')), '') IS NOT NULL
+                  )
+                ORDER BY aa.is_active DESC, aa.updated_at DESC NULLS LAST, aa.id DESC
+                LIMIT %s
+                """
+            ).format(sql.Identifier(SCHEMA_NAME)),
+            (agent_id, exclude_account_id, limit),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
 def set_agent_account_active(account_id: int, active: bool = True) -> bool:
     now = datetime.utcnow().replace(microsecond=0)
     with _connect() as conn, conn.cursor() as cur:
