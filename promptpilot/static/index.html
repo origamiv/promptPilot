@@ -328,6 +328,20 @@
     line-height: 1;
     flex: 0 0 20px;
   }
+  #taskMobileList .task-mobile-head-meta .task-mobile-minutes-badge {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    background: var(--surface2);
+    color: var(--yellow);
+    font-size: 11px;
+    line-height: 1.2;
+    font-family: var(--mono);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .task-project-badge {
     border: 1px solid var(--border);
     border-radius: 999px;
@@ -355,6 +369,13 @@
     font-size: 12px;
     line-height: 1;
     flex: 0 0 22px;
+  }
+  .task-agent-icon svg,
+  .task-mobile-agent-icon svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+    fill: currentColor;
   }
 
   .task-row {
@@ -2041,12 +2062,12 @@ function projectBadgeStyleAttr(project) {
 
 function taskCardTitle(t) {
   const subject = String(t.subject || '').trim();
-  if (subject) return subject;
+  if (subject) return truncateTaskTitle(subject);
   const firstPromptLine = String(t.prompt || '')
     .split(/\r?\n/)
     .map(x => x.trim())
     .find(Boolean);
-  return firstPromptLine || `#${t.id}`;
+  return truncateTaskTitle(firstPromptLine || `#${t.id}`);
 }
 
 function taskAgentName(t) {
@@ -2057,14 +2078,20 @@ function taskAgentAccountName(t) {
   return String(t.agent_account_name || t.agent_account_shortname || '').trim();
 }
 
+function truncateTaskTitle(value, maxLen = 30) {
+  const chars = Array.from(String(value || '').trim());
+  if (chars.length <= maxLen) return chars.join('');
+  return `${chars.slice(0, maxLen).join('')}...`;
+}
+
 function providerIcon(providerName) {
   const key = String(providerName || '').trim().toLowerCase();
-  if (!key) return '🤖';
-  if (key.includes('claude')) return '✶';
-  if (key.includes('codex')) return '⌘';
-  if (key.includes('qwen')) return '◈';
-  if (key.includes('cursor')) return '▣';
-  return '🤖';
+  if (!key) return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v2h2a2 2 0 0 1 2 2v5a5 5 0 0 1-4 4.9V20a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-3.1A5 5 0 0 1 5 12V7a2 2 0 0 1 2-2h2V3Zm-2 4v5a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3V7H7Zm2 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm6 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z"/></svg>';
+  if (key.includes('claude')) return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 9.6 8.2 3 9.5l5 4.4L6.7 20 12 16.8 17.3 20 16 13.9l5-4.4-6.6-1.3L12 2Z"/></svg>';
+  if (key.includes('codex') || key.includes('openai') || key.includes('gpt')) return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m11.9 2 3.2 1.8v3.1l2.7 1.6 2.7-1.6v3.7l-2.7 1.6v3.6l2.7 1.6v3.7l-2.7-1.6-2.7 1.6v-3.1L12 17.1l-3.2 1.8v3.1L6 20.4v-3.6l-2.7-1.6v-3.7L6 13.1V9.5L3.3 7.9V4.2L6 5.8l2.7-1.6V7.3L12 9.1l3.2-1.8V4.2L12 2Zm0 9.4-2.7 1.6v3.1l2.7 1.6 2.7-1.6V13l-2.7-1.6Z"/></svg>';
+  if (key.includes('qwen')) return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 4.6v10.8L12 22 4 17.4V6.6L12 2Zm0 2.3L6 7.8v8.4l6 3.5 6-3.5V7.8l-6-3.5Zm0 2.9 3.9 2.3v4.6L12 16.4l-3.9-2.3V9.5L12 7.2Z"/></svg>';
+  if (key.includes('cursor')) return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h7v7H4V3Zm9 0h7v7h-7V3ZM4 14h7v7H4v-7Zm11 0h5v5h-5v-5Z"/></svg>';
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v2h2a2 2 0 0 1 2 2v5a5 5 0 0 1-4 4.9V20a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-3.1A5 5 0 0 1 5 12V7a2 2 0 0 1 2-2h2V3Zm-2 4v5a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3V7H7Zm2 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm6 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z"/></svg>';
 }
 
 function taskAgentIconInfo(t) {
@@ -2103,6 +2130,11 @@ function taskWorkedMinutes(t) {
 
   const diffMs = Math.max(0, completed - started);
   return Math.floor(diffMs / 60000);
+}
+
+function taskWorkedMinutesLabel(t) {
+  const workedMinutes = taskWorkedMinutes(t);
+  return tr('worked_minutes', { n: workedMinutes ?? 0 });
 }
 
 function buildTaskResultHTML(t, parsed) {
@@ -2197,7 +2229,7 @@ async function loadTasks() {
         <span class="task-id">#${t.id}</span>
         <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
         ${agentIconInfo ? `<span class="task-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
-        <span class="task-prompt">${esc(t.subject || t.prompt)}</span>
+        <span class="task-prompt">${esc(taskCardTitle(t))}</span>
         <span class="task-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
         <span class="task-meta">${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
@@ -2220,7 +2252,7 @@ async function loadTasks() {
     const resultHTML = buildTaskResultHTML(t, parsed);
     const agentAccountName = taskAgentAccountName(t);
     const agentIconInfo = taskAgentIconInfo(t);
-    const workedMinutes = taskWorkedMinutes(t);
+    const workedMinutesLabel = taskWorkedMinutesLabel(t);
 
     return `
     <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
@@ -2235,6 +2267,7 @@ async function loadTasks() {
           <div class="task-mobile-head-meta">
             <span class="task-mobile-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
             <span class="task-mobile-account-badge" title="${esc(tr('task_account'))}: ${esc(agentAccountName || '—')}">${esc(agentAccountName || '—')}</span>
+            <span class="task-mobile-minutes-badge">${esc(workedMinutesLabel)}</span>
           </div>
         </div>
       </div>
@@ -2243,7 +2276,6 @@ async function loadTasks() {
           <span class="admin-mobile-chip">${statusLabel(t.status)}</span>
           <span class="admin-mobile-chip">P${t.priority}</span>
           <span class="admin-mobile-chip">${time}</span>
-          <span class="admin-mobile-chip">${tr('worked_minutes', { n: workedMinutes ?? 0 })}</span>
           ${scheduleInfo(t)}
         </div>
         <div class="admin-mobile-kv"><b>${tr('prompt')}:</b></div>
