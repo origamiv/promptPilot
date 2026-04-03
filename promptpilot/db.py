@@ -1,89 +1,91 @@
-"""SQLite database layer."""
+"""PostgreSQL database layer."""
 
 import re
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from .config import DB_DIR, DB_PATH
+import psycopg
+from psycopg.errors import UndefinedTable
+from psycopg import sql
+from psycopg.rows import dict_row
+
+from .config import (
+    PG_DATABASE,
+    PG_DSN,
+    PG_HOST,
+    PG_PASSWORD,
+    PG_PORT,
+    PG_SCHEMA,
+    PG_SETTINGS_TABLE,
+    PG_SSLMODE,
+    PG_TASKS_TABLE,
+    PG_USER,
+)
 from .models import Stats, TaskCreate, TaskInDB, TaskStatus
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    prompt TEXT NOT NULL,
-    working_dir TEXT,
-    provider TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',
-    priority INTEGER NOT NULL DEFAULT 5,
-    scheduled_at TEXT,
-    next_run_at TEXT,
-    created_at TEXT NOT NULL,
-    started_at TEXT,
-    completed_at TEXT,
-    result TEXT,
-    error TEXT,
-    retry_count INTEGER NOT NULL DEFAULT 0,
-    max_retries INTEGER NOT NULL DEFAULT 5,
-    exit_code INTEGER,
-    model_used TEXT,
-    skip_permissions INTEGER DEFAULT 0,
-    model TEXT,
-    session_id TEXT,
-    parent_task_id INTEGER,
-    tg_chat_id INTEGER,
-    notified_at TEXT,
-    recurrence TEXT
-);
 
-CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_runnable ON tasks(status, priority, next_run_at);
-"""
-
-MIGRATIONS = [
-    "ALTER TABLE tasks ADD COLUMN provider TEXT",
-    "ALTER TABLE tasks ADD COLUMN model_used TEXT",
-    "ALTER TABLE tasks ADD COLUMN skip_permissions INTEGER DEFAULT 0",
-    "ALTER TABLE tasks ADD COLUMN session_id TEXT",
-    "ALTER TABLE tasks ADD COLUMN parent_task_id INTEGER",
-    "ALTER TABLE tasks ADD COLUMN model TEXT",
-    "ALTER TABLE tasks ADD COLUMN tg_chat_id INTEGER",
-    "ALTER TABLE tasks ADD COLUMN notified_at TEXT",
-    "ALTER TABLE tasks ADD COLUMN recurrence TEXT",
-    "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-]
+def _validate_ident(name: str, what: str) -> str:
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name or ""):
+        raise ValueError(f"Invalid {what}: {name!r}")
+    return name
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+SCHEMA_NAME = _validate_ident(PG_SCHEMA, "schema")
+TASKS_TABLE = _validate_ident(PG_TASKS_TABLE, "tasks table")
+SETTINGS_TABLE = _validate_ident(PG_SETTINGS_TABLE, "settings table")
 
 
-def _parse_dt(val: Optional[str]) -> Optional[datetime]:
+def _tasks_ref():
+    return sql.SQL("{}.{}").format(sql.Identifier(SCHEMA_NAME), sql.Identifier(TASKS_TABLE))
+
+
+def _settings_ref():
+    return sql.SQL("{}.{}").format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SETTINGS_TABLE))
+
+
+def _db_kwargs() -> dict:
+    if PG_DSN:
+        return {"conninfo": PG_DSN, "row_factory": dict_row}
+    return {
+        "host": PG_HOST,
+        "port": PG_PORT,
+        "dbname": PG_DATABASE,
+        "user": PG_USER,
+        "password": PG_PASSWORD,
+        "sslmode": PG_SSLMODE,
+        "row_factory": dict_row,
+    }
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_dt(val) -> Optional[datetime]:
     if val is None:
         return None
-    return datetime.fromisoformat(val)
+    if isinstance(val, datetime):
+        if val.tzinfo is None:
+            return val.replace(tzinfo=timezone.utc)
+        return val
+    if isinstance(val, str):
+        return datetime.fromisoformat(val)
+    return None
 
 
-def _row_to_task(row: sqlite3.Row) -> TaskInDB:
+def _row_to_task(row: dict) -> TaskInDB:
     d = dict(row)
-    for field in ("scheduled_at", "next_run_at", "created_at", "started_at", "completed_at"):
-        d[field] = _parse_dt(d[field])
+    for field in ("scheduled_at", "next_run_at", "created_at", "started_at", "completed_at", "notified_at"):
+        if field in d:
+            d[field] = _parse_dt(d[field])
+    # PostgreSQL bool -> bool; Pydantic handles this for bool field.
     return TaskInDB(**d)
 
 
 @contextmanager
 def _connect():
-    DB_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH), timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
+    conn = psycopg.connect(**_db_kwargs())
     try:
         yield conn
         conn.commit()
@@ -95,30 +97,102 @@ def _connect():
 
 
 def init_db():
-    with _connect() as conn:
-        conn.executescript(SCHEMA)
-        # Run migrations for existing databases
-        for migration in MIGRATIONS:
-            try:
-                conn.execute(migration)
-            except sqlite3.OperationalError:
-                pass  # Column already exists
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(SCHEMA_NAME)))
+
+        cur.execute(
+            sql.SQL(
+                """
+                CREATE TABLE IF NOT EXISTS {} (
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    prompt TEXT NOT NULL,
+                    working_dir TEXT,
+                    provider TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    priority INTEGER NOT NULL DEFAULT 5,
+                    scheduled_at TIMESTAMPTZ,
+                    next_run_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL,
+                    started_at TIMESTAMPTZ,
+                    completed_at TIMESTAMPTZ,
+                    result TEXT,
+                    error TEXT,
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    max_retries INTEGER NOT NULL DEFAULT 5,
+                    exit_code INTEGER,
+                    model_used TEXT,
+                    skip_permissions BOOLEAN DEFAULT FALSE,
+                    model TEXT,
+                    session_id TEXT,
+                    parent_task_id BIGINT,
+                    tg_chat_id BIGINT,
+                    notified_at TIMESTAMPTZ,
+                    recurrence TEXT
+                )
+                """
+            ).format(_tasks_ref())
+        )
+
+        cur.execute(
+            sql.SQL(
+                """
+                CREATE TABLE IF NOT EXISTS {} (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+                """
+            ).format(_settings_ref())
+        )
+
+        # Non-destructive migrations for existing tables.
+        for col_sql in [
+            "ADD COLUMN IF NOT EXISTS provider TEXT",
+            "ADD COLUMN IF NOT EXISTS model_used TEXT",
+            "ADD COLUMN IF NOT EXISTS skip_permissions BOOLEAN DEFAULT FALSE",
+            "ADD COLUMN IF NOT EXISTS session_id TEXT",
+            "ADD COLUMN IF NOT EXISTS parent_task_id BIGINT",
+            "ADD COLUMN IF NOT EXISTS model TEXT",
+            "ADD COLUMN IF NOT EXISTS tg_chat_id BIGINT",
+            "ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ",
+            "ADD COLUMN IF NOT EXISTS recurrence TEXT",
+        ]:
+            cur.execute(sql.SQL("ALTER TABLE {} {}").format(_tasks_ref(), sql.SQL(col_sql)))
+
+        idx_status = sql.Identifier(f"idx_{TASKS_TABLE}_status")
+        idx_runnable = sql.Identifier(f"idx_{TASKS_TABLE}_runnable")
+        cur.execute(
+            sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} (status)").format(idx_status, _tasks_ref())
+        )
+        cur.execute(
+            sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} (status, priority, next_run_at)").format(
+                idx_runnable, _tasks_ref()
+            )
+        )
 
 
 def create_task(task: TaskCreate) -> TaskInDB:
-    with _connect() as conn:
-        cur = conn.execute(
-            """INSERT INTO tasks (prompt, working_dir, provider, status, priority, scheduled_at, created_at, max_retries, skip_permissions, model, session_id, parent_task_id, tg_chat_id, recurrence)
-               VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                INSERT INTO {} (
+                    prompt, working_dir, provider, status, priority,
+                    scheduled_at, created_at, max_retries, skip_permissions,
+                    model, session_id, parent_task_id, tg_chat_id, recurrence
+                )
+                VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """
+            ).format(_tasks_ref()),
             (
                 task.prompt,
                 task.working_dir,
                 task.provider,
                 task.priority,
-                task.scheduled_at.isoformat() if task.scheduled_at else None,
+                task.scheduled_at,
                 _now(),
                 task.max_retries,
-                int(task.skip_permissions),
+                bool(task.skip_permissions),
                 task.model,
                 task.session_id,
                 task.parent_task_id,
@@ -126,13 +200,16 @@ def create_task(task: TaskCreate) -> TaskInDB:
                 task.recurrence,
             ),
         )
-        return get_task(cur.lastrowid, conn=conn)
+        task_id = cur.fetchone()["id"]
+        return get_task(task_id, conn=conn)
 
 
 def get_task(task_id: int, *, conn=None) -> Optional[TaskInDB]:
     def _query(c):
-        row = c.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        return _row_to_task(row) if row else None
+        with c.cursor() as cur:
+            cur.execute(sql.SQL("SELECT * FROM {} WHERE id = %s").format(_tasks_ref()), (task_id,))
+            row = cur.fetchone()
+            return _row_to_task(row) if row else None
 
     if conn:
         return _query(conn)
@@ -140,105 +217,130 @@ def get_task(task_id: int, *, conn=None) -> Optional[TaskInDB]:
         return _query(c)
 
 
-def list_tasks(
-    status: Optional[TaskStatus] = None,
-    limit: int = 50,
-    offset: int = 0,
-):
-    with _connect() as conn:
+def list_tasks(status: Optional[TaskStatus] = None, limit: int = 50, offset: int = 0):
+    with _connect() as conn, conn.cursor() as cur:
         if status:
-            rows = conn.execute(
-                "SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            cur.execute(
+                sql.SQL("SELECT * FROM {} WHERE status = %s ORDER BY created_at DESC LIMIT %s OFFSET %s").format(
+                    _tasks_ref()
+                ),
                 (status.value, limit, offset),
-            ).fetchall()
+            )
         else:
-            rows = conn.execute(
-                "SELECT * FROM tasks ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            cur.execute(
+                sql.SQL("SELECT * FROM {} ORDER BY created_at DESC LIMIT %s OFFSET %s").format(_tasks_ref()),
                 (limit, offset),
-            ).fetchall()
-        return [_row_to_task(r) for r in rows]
+            )
+        return [_row_to_task(r) for r in cur.fetchall()]
 
 
 def get_next_runnable() -> Optional[TaskInDB]:
     now = _now()
-    with _connect() as conn:
-        row = conn.execute(
-            """SELECT * FROM tasks
-               WHERE status IN ('pending', 'rate_limited')
-                 AND (scheduled_at IS NULL OR scheduled_at <= ?)
-                 AND (next_run_at IS NULL OR next_run_at <= ?)
-               ORDER BY priority ASC, created_at ASC
-               LIMIT 1""",
-            (now, now),
-        ).fetchone()
-        if row:
-            task = _row_to_task(row)
-            conn.execute(
-                "UPDATE tasks SET status = 'running', started_at = ? WHERE id = ?",
-                (_now(), task.id),
-            )
-            return task
-        return None
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                WITH next_task AS (
+                    SELECT id
+                    FROM {}
+                    WHERE status IN ('pending', 'rate_limited')
+                      AND (scheduled_at IS NULL OR scheduled_at <= %s)
+                      AND (next_run_at IS NULL OR next_run_at <= %s)
+                    ORDER BY priority ASC, created_at ASC
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                )
+                UPDATE {} t
+                SET status = 'running', started_at = %s
+                FROM next_task
+                WHERE t.id = next_task.id
+                RETURNING t.*
+                """
+            ).format(_tasks_ref(), _tasks_ref()),
+            (now, now, _now()),
+        )
+        row = cur.fetchone()
+        return _row_to_task(row) if row else None
 
 
 def mark_completed(task_id: int, result: str, exit_code: int = 0, model_used: str = None, session_id: str = None):
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE tasks SET status = 'completed', result = ?, exit_code = ?, completed_at = ?, model_used = ?, session_id = COALESCE(?, session_id) WHERE id = ?",
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                UPDATE {}
+                SET status = 'completed',
+                    result = %s,
+                    exit_code = %s,
+                    completed_at = %s,
+                    model_used = %s,
+                    session_id = COALESCE(%s, session_id)
+                WHERE id = %s
+                """
+            ).format(_tasks_ref()),
             (result, exit_code, _now(), model_used, session_id, task_id),
         )
 
 
 def mark_failed(task_id: int, error: str, exit_code: int = 1):
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE tasks SET status = 'failed', error = ?, exit_code = ?, completed_at = ? WHERE id = ?",
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("UPDATE {} SET status = 'failed', error = %s, exit_code = %s, completed_at = %s WHERE id = %s").format(
+                _tasks_ref()
+            ),
             (error, exit_code, _now(), task_id),
         )
 
 
 def mark_rate_limited(task_id: int, next_run_at: datetime, error: str = None):
-    with _connect() as conn:
-        conn.execute(
-            """UPDATE tasks
-               SET status = 'rate_limited',
-                   next_run_at = ?,
-                   retry_count = retry_count + 1,
-                   error = COALESCE(?, error)
-               WHERE id = ?""",
-            (next_run_at.isoformat(), error, task_id),
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                UPDATE {}
+                SET status = 'rate_limited',
+                    next_run_at = %s,
+                    retry_count = retry_count + 1,
+                    error = COALESCE(%s, error)
+                WHERE id = %s
+                """
+            ).format(_tasks_ref()),
+            (next_run_at, error, task_id),
         )
 
 
 def cancel_task(task_id: int) -> bool:
-    with _connect() as conn:
-        cur = conn.execute(
-            "UPDATE tasks SET status = 'cancelled', completed_at = ? WHERE id = ? AND status IN ('pending', 'rate_limited')",
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "UPDATE {} SET status = 'cancelled', completed_at = %s WHERE id = %s AND status IN ('pending', 'rate_limited')"
+            ).format(_tasks_ref()),
             (_now(), task_id),
         )
         return cur.rowcount > 0
 
 
 def update_priority(task_id: int, priority: int) -> bool:
-    with _connect() as conn:
-        cur = conn.execute(
-            "UPDATE tasks SET priority = ? WHERE id = ? AND status IN ('pending', 'rate_limited')",
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("UPDATE {} SET priority = %s WHERE id = %s AND status IN ('pending', 'rate_limited')").format(
+                _tasks_ref()
+            ),
             (priority, task_id),
         )
         return cur.rowcount > 0
 
 
 def delete_task(task_id: int) -> bool:
-    with _connect() as conn:
-        cur = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(sql.SQL("DELETE FROM {} WHERE id = %s").format(_tasks_ref()), (task_id,))
         return cur.rowcount > 0
 
 
 def get_stats() -> Stats:
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT status, COUNT(*) as cnt FROM tasks GROUP BY status"
-        ).fetchall()
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(sql.SQL("SELECT status, COUNT(*) AS cnt FROM {} GROUP BY status").format(_tasks_ref()))
+        rows = cur.fetchall()
         data = {row["status"]: row["cnt"] for row in rows}
         total = sum(data.values())
         return Stats(
@@ -253,14 +355,24 @@ def get_stats() -> Stats:
 
 
 def get_setting(key: str, default: str = None) -> Optional[str]:
-    with _connect() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(sql.SQL("SELECT value FROM {} WHERE key = %s").format(_settings_ref()), (key,))
+        row = cur.fetchone()
         return row["value"] if row else default
 
 
 def set_setting(key: str, value: str):
-    with _connect() as conn:
-        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                INSERT INTO {} (key, value)
+                VALUES (%s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                """
+            ).format(_settings_ref()),
+            (key, value),
+        )
 
 
 def is_paused() -> bool:
@@ -268,23 +380,15 @@ def is_paused() -> bool:
 
 
 def parse_recurrence(recurrence: str) -> Optional[datetime]:
-    """Parse recurrence string and return next run datetime (UTC).
-
-    Supported formats:
-      "30m"          — every 30 minutes
-      "6h"           — every 6 hours
-      "daily@09:00"  — every day at 09:00 UTC
-    """
+    """Parse recurrence string and return next run datetime (UTC)."""
     if not recurrence:
         return None
     s = recurrence.strip().lower()
-    # Nh or Nm
     m = re.fullmatch(r"(\d+)([mh])", s)
     if m:
         n, unit = int(m.group(1)), m.group(2)
         delta = timedelta(minutes=n) if unit == "m" else timedelta(hours=n)
         return datetime.now(timezone.utc) + delta
-    # daily@HH:MM
     m = re.fullmatch(r"daily@(\d{1,2}):(\d{2})", s)
     if m:
         hour, minute = int(m.group(1)), int(m.group(2))
@@ -298,14 +402,18 @@ def parse_recurrence(recurrence: str) -> Optional[datetime]:
 
 def get_cost_stats() -> dict:
     """Parse Cost lines from completed task results and aggregate."""
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT result, provider, completed_at FROM tasks WHERE status='completed' AND result LIKE '%Cost: $%' AND completed_at IS NOT NULL"
-        ).fetchall()
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "SELECT result, provider, completed_at FROM {} WHERE status='completed' AND result LIKE %s AND completed_at IS NOT NULL"
+            ).format(_tasks_ref()),
+            ("%Cost: $%",),
+        )
+        rows = cur.fetchall()
 
     now = datetime.now(timezone.utc)
     today_str = now.date().isoformat()
-    week_ago = (now - timedelta(days=7)).isoformat()
+    week_ago = now - timedelta(days=7)
 
     total = today = week = 0.0
     by_provider: dict = {}
@@ -315,14 +423,14 @@ def get_cost_stats() -> dict:
         if not m:
             continue
         cost = float(m.group(1))
-        completed = row["completed_at"] or ""
+        completed = _parse_dt(row["completed_at"])
         provider = row["provider"] or "claude"
 
         total += cost
         by_provider[provider] = round(by_provider.get(provider, 0.0) + cost, 6)
-        if completed[:10] == today_str:
+        if completed and completed.date().isoformat() == today_str:
             today += cost
-        if completed >= week_ago:
+        if completed and completed >= week_ago:
             week += cost
 
     return {"today": round(today, 6), "week": round(week, 6), "total": round(total, 6), "by_provider": by_provider}
@@ -330,52 +438,103 @@ def get_cost_stats() -> dict:
 
 def get_pending_notifications() -> list:
     """Return completed/failed tasks with a tg_chat_id that haven't been notified yet."""
-    with _connect() as conn:
-        rows = conn.execute(
-            """SELECT * FROM tasks
-               WHERE tg_chat_id IS NOT NULL
-                 AND notified_at IS NULL
-                 AND status IN ('completed', 'failed')""",
-        ).fetchall()
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT *
+                FROM {}
+                WHERE tg_chat_id IS NOT NULL
+                  AND notified_at IS NULL
+                  AND status IN ('completed', 'failed')
+                """
+            ).format(_tasks_ref())
+        )
+        rows = cur.fetchall()
         return [_row_to_task(r) for r in rows]
 
 
 def mark_notified(task_id: int):
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE tasks SET notified_at = ? WHERE id = ?",
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("UPDATE {} SET notified_at = %s WHERE id = %s").format(_tasks_ref()),
             (_now(), task_id),
         )
 
 
 def recover_running():
     """Reset any 'running' tasks back to 'pending' (crash recovery)."""
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE tasks SET status = 'pending', started_at = NULL WHERE status = 'running'"
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("UPDATE {} SET status = 'pending', started_at = NULL WHERE status = 'running'").format(
+                _tasks_ref()
+            )
         )
 
 
 def reset_task(task_id: int) -> bool:
     """Reset a single stuck 'running' task back to 'pending'."""
-    with _connect() as conn:
-        cur = conn.execute(
-            "UPDATE tasks SET status = 'pending', started_at = NULL WHERE id = ? AND status = 'running'",
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("UPDATE {} SET status = 'pending', started_at = NULL WHERE id = %s AND status = 'running'").format(
+                _tasks_ref()
+            ),
             (task_id,),
         )
         return cur.rowcount > 0
 
 
 def purge_old(before_days: int = 7) -> int:
-    with _connect() as conn:
-        cutoff = datetime.now(timezone.utc)
-        from datetime import timedelta
-        cutoff = (cutoff - timedelta(days=before_days)).isoformat()
-        cur = conn.execute(
-            "DELETE FROM tasks WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < ?",
+    with _connect() as conn, conn.cursor() as cur:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=before_days)
+        cur.execute(
+            sql.SQL(
+                "DELETE FROM {} WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < %s"
+            ).format(_tasks_ref()),
             (cutoff,),
         )
         return cur.rowcount
+
+
+def list_projects(search: Optional[str] = None, limit: int = 200) -> list[dict]:
+    """Return projects from {schema}.projects with fields id/name/folder."""
+    try:
+        with _connect() as conn, conn.cursor() as cur:
+            if search:
+                like = f"%{search.strip()}%"
+                cur.execute(
+                    sql.SQL(
+                        """
+                        SELECT id, name, folder
+                        FROM {}.projects
+                        WHERE deleted_at IS NULL
+                          AND folder IS NOT NULL
+                          AND folder <> ''
+                          AND (name ILIKE %s OR folder ILIKE %s)
+                        ORDER BY name ASC, id ASC
+                        LIMIT %s
+                        """
+                    ).format(sql.Identifier(SCHEMA_NAME)),
+                    (like, like, limit),
+                )
+            else:
+                cur.execute(
+                    sql.SQL(
+                        """
+                        SELECT id, name, folder
+                        FROM {}.projects
+                        WHERE deleted_at IS NULL
+                          AND folder IS NOT NULL
+                          AND folder <> ''
+                        ORDER BY name ASC, id ASC
+                        LIMIT %s
+                        """
+                    ).format(sql.Identifier(SCHEMA_NAME)),
+                    (limit,),
+                )
+            return [dict(r) for r in cur.fetchall()]
+    except UndefinedTable:
+        return []
 
 
 # Auto-init on import

@@ -132,19 +132,25 @@ def api_skills(provider: Optional[str] = None, workdir: Optional[str] = None):
 
 
 @app.get("/api/projects")
-def api_projects():
-    """Return sorted list of {name, path} for subdirs under PP_PROJECTS_ROOT."""
-    if not PROJECTS_ROOT:
-        return []
-    try:
-        entries = []
-        for d in sorted(os.listdir(PROJECTS_ROOT)):
-            full = os.path.join(PROJECTS_ROOT, d)
-            if os.path.isdir(full) and not d.startswith("."):
-                entries.append({"name": d, "path": full})
-        return entries
-    except OSError:
-        return []
+def api_projects(q: Optional[str] = None):
+    """Return list of projects from DB table {schema}.projects."""
+    rows = db.list_projects(search=q, limit=400)
+    base_root = PROJECTS_ROOT or "/www/wwwroot"
+    entries = []
+    for r in rows:
+        folder = (r.get("folder") or "").strip()
+        if not folder:
+            continue
+        path = folder if os.path.isabs(folder) else os.path.join(base_root, folder)
+        entries.append(
+            {
+                "id": r.get("id"),
+                "name": r.get("name") or folder,
+                "folder": folder,
+                "path": path,
+            }
+        )
+    return entries
 
 
 # --- Frontend ---

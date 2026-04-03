@@ -49,6 +49,18 @@ _load_dotenv()
 DB_DIR = Path(os.environ.get("PP_DATA_DIR", Path.home() / ".promptpilot"))
 DB_PATH = DB_DIR / "promptpilot.db"
 
+# PostgreSQL
+PG_DSN = os.environ.get("PP_DB_DSN", "")
+PG_HOST = os.environ.get("PP_DB_HOST", os.environ.get("DB_HOST", "127.0.0.1"))
+PG_PORT = int(os.environ.get("PP_DB_PORT", os.environ.get("DB_PORT", "5432")))
+PG_DATABASE = os.environ.get("PP_DB_DATABASE", os.environ.get("DB_DATABASE", "postgres"))
+PG_USER = os.environ.get("PP_DB_USER", os.environ.get("DB_USERNAME", "postgres"))
+PG_PASSWORD = os.environ.get("PP_DB_PASSWORD", os.environ.get("DB_PASSWORD", ""))
+PG_SSLMODE = os.environ.get("PP_DB_SSLMODE", "prefer")
+PG_SCHEMA = os.environ.get("PP_DB_SCHEMA", "hubstaff")
+PG_TASKS_TABLE = os.environ.get("PP_DB_TASKS_TABLE", "promptpilot_tasks")
+PG_SETTINGS_TABLE = os.environ.get("PP_DB_SETTINGS_TABLE", "promptpilot_settings")
+
 # Worker
 POLL_INTERVAL = int(os.environ.get("PP_POLL_INTERVAL", "5"))
 TASK_TIMEOUT = int(os.environ.get("PP_TASK_TIMEOUT", "300"))

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PromptPilot</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
   :root {
     --bg: #0f1117;
@@ -167,6 +168,17 @@
     transition: all .15s;
   }
   .btn-theme:hover { border-color: var(--accent); color: var(--text); }
+  .btn-lang {
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: transparent;
+    color: var(--text2);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-lang:hover { border-color: var(--accent); color: var(--text); }
 
   /* Task list */
   .task-list { display: flex; flex-direction: column; gap: 6px; }
@@ -439,6 +451,37 @@
   .skill-name { font-family: var(--mono); font-size: 12px; color: var(--accent2); min-width: 120px; }
   .skill-arghint { font-size: 11px; color: var(--yellow); }
   .skill-desc { font-size: 11px; color: var(--text2); }
+
+  /* Select2 project select */
+  #workdirSelect + .select2-container { min-width: 260px; }
+  .select2-container--default .select2-selection--single {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    height: 32px;
+  }
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--text);
+    line-height: 30px;
+  }
+  .select2-container--default .select2-selection--single .select2-selection__arrow b {
+    border-color: var(--text2) transparent transparent transparent;
+  }
+  .select2-dropdown {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .select2-container--default .select2-search--dropdown .select2-search__field {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .select2-results__option { color: var(--text); }
+  .select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+    background: var(--accent);
+    color: #fff;
+  }
 </style>
 </head>
 <body>
@@ -446,6 +489,7 @@
   <header>
     <div class="logo">Prompt<span>Pilot</span></div>
     <div class="header-right">
+      <button id="langBtn" class="btn-lang" onclick="toggleLanguage()">RU</button>
       <button id="themeBtn" class="btn-theme" onclick="toggleTheme()">Light</button>
       <div class="badges" id="badges"></div>
     </div>
@@ -459,20 +503,20 @@
   <div class="cost-bar" id="costBar"></div>
 
   <div class="add-form">
-    <textarea id="promptInput" placeholder="Enter your prompt here..."></textarea>
+    <textarea id="promptInput" placeholder="Введите ваш промпт..."></textarea>
     <div class="skills-toggle-row" id="skillsToggleRow">
       <button type="button" class="btn-skills" id="skillsToggleBtn" onclick="toggleSkills()">⚡ Skills</button>
-      <span class="skills-hint">Claude Code only · /skill-name [args]</span>
+      <span class="skills-hint" id="skillsHint">Только Claude Code · /skill-name [args]</span>
     </div>
     <div class="skills-panel" id="skillsPanel"></div>
     <div class="form-row">
-      <label>Provider
+      <label><span id="providerLabelText">Провайдер</span>
         <select id="providerInput"></select>
       </label>
-      <label id="modelLabel" style="display:none">Model
+      <label id="modelLabel" style="display:none"><span id="modelLabelText">Модель</span>
         <select id="modelInput"></select>
       </label>
-      <label>Priority
+      <label><span id="priorityLabelText">Приоритет</span>
         <select id="priorityInput">
           <option value="1">1 (highest)</option>
           <option value="2">2</option>
@@ -486,37 +530,39 @@
           <option value="10">10 (lowest)</option>
         </select>
       </label>
-      <label>Schedule
+      <label><span id="scheduleLabelText">Расписание</span>
         <input type="datetime-local" id="scheduleInput">
       </label>
-      <label id="workdirLabel">Dir
+      <label id="workdirLabel"><span id="dirLabelText">Папка</span>
         <select id="workdirSelect" style="display:none" onchange="onProjectSelect()"></select>
-        <input type="text" id="workdirInput" placeholder="C:\Projects\MyApp">
+        <input type="text" id="workdirInput" placeholder="C:\Projects\MyApp" style="display:none">
       </label>
-      <label>Recur
+      <label><span id="recurLabelText">Повтор</span>
         <input type="text" id="recurrenceInput" placeholder="6h / daily@09:00" style="width:140px">
       </label>
       <label style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
         <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
       </label>
-      <button class="btn btn-primary" onclick="addTask()">Add Task</button>
+      <button class="btn btn-primary" id="addTaskBtn" onclick="addTask()">Добавить задачу</button>
     </div>
   </div>
 
   <div class="filter-bar" id="filterBar">
-    <button class="filter-btn active" data-filter="">All</button>
-    <button class="filter-btn" data-filter="pending">Pending</button>
-    <button class="filter-btn" data-filter="running">Running</button>
-    <button class="filter-btn" data-filter="completed">Completed</button>
-    <button class="filter-btn" data-filter="failed">Failed</button>
-    <button class="filter-btn" data-filter="rate_limited">Rate Limited</button>
-    <button id="pauseBtn" class="btn-pause" onclick="toggleWorkerPause()" style="margin-left:auto">⏸ Pause</button>
+    <button class="filter-btn active" data-filter="" id="filterAllBtn">Все</button>
+    <button class="filter-btn" data-filter="pending" id="filterPendingBtn">В очереди</button>
+    <button class="filter-btn" data-filter="running" id="filterRunningBtn">В работе</button>
+    <button class="filter-btn" data-filter="completed" id="filterCompletedBtn">Завершено</button>
+    <button class="filter-btn" data-filter="failed" id="filterFailedBtn">Ошибка</button>
+    <button class="filter-btn" data-filter="rate_limited" id="filterRateBtn">Лимит</button>
+    <button id="pauseBtn" class="btn-pause" onclick="toggleWorkerPause()" style="margin-left:auto">⏸ Пауза</button>
   </div>
 
   <div class="task-list" id="taskList"></div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 const API = '/api';
 let currentFilter = '';
@@ -525,12 +571,200 @@ let providersData = {};
 let skillsCache = {};
 let skillsPanelOpen = false;
 let currentTheme = 'dark';
+let currentLang = 'ru';
+let projectsCache = [];
+
+const I18N = {
+  ru: {
+    light: 'Светлая',
+    dark: 'Тёмная',
+    prompt_placeholder: 'Введите ваш промпт...',
+    provider: 'Провайдер',
+    model: 'Модель',
+    priority: 'Приоритет',
+    schedule: 'Расписание',
+    dir: 'Папка',
+    recur: 'Повтор',
+    add_task: 'Добавить задачу',
+    all: 'Все',
+    pending: 'В очереди',
+    running: 'В работе',
+    completed: 'Завершено',
+    failed: 'Ошибка',
+    rate_limited: 'Лимит',
+    paused: 'Пауза',
+    resume: 'Продолжить',
+    running_now: 'выполняется',
+    retry: 'повтор',
+    queued: 'в очереди',
+    no_tasks: 'Нет задач',
+    no_tasks_with_status: 'Нет задач со статусом',
+    result: 'Результат',
+    task_completed_no_text: 'Задача завершена (без текстового ответа)',
+    prompt: 'Промпт',
+    error: 'Ошибка',
+    recurrence: 'Повтор',
+    scheduled: 'Запланировано',
+    started: 'Запущено',
+    completed_at: 'Завершено',
+    next_retry: 'Следующий повтор',
+    retries: 'Повторы',
+    exit: 'Код',
+    cancel: 'Отменить',
+    reset_to_pending: 'Вернуть в очередь',
+    delete: 'Удалить',
+    copy: 'Копировать',
+    copied: 'Скопировано',
+    loading: 'Загрузка...',
+    no_skills: 'Скилы не найдены в ~/.claude/commands/ или плагинах.',
+    skills_hint: 'Только Claude Code · /skill-name [args]',
+    select_project: '— Выберите проект —',
+    custom_path: '✏️ Свой путь...',
+    default_model: 'По умолчанию',
+    highest: 'высший',
+    lowest: 'низший',
+    update_available: 'Доступно обновление: v{current} → v{latest}',
+    today: 'Сегодня',
+    week: 'Неделя',
+    total: 'Всего',
+    cost: 'Стоимость',
+    time: 'Время',
+    tokens: 'Токены',
+    session: 'Сессия',
+    limit_resets: 'Сброс лимита',
+    now: 'сейчас',
+    in_lt_1m: 'через <1м',
+    in_m: 'через {n}м',
+    in_h: 'через {n}ч',
+    m_short: 'м',
+    h_short: 'ч',
+    d_short: 'д',
+  },
+  en: {
+    light: 'Light',
+    dark: 'Dark',
+    prompt_placeholder: 'Enter your prompt here...',
+    provider: 'Provider',
+    model: 'Model',
+    priority: 'Priority',
+    schedule: 'Schedule',
+    dir: 'Dir',
+    recur: 'Recur',
+    add_task: 'Add Task',
+    all: 'All',
+    pending: 'Pending',
+    running: 'Running',
+    completed: 'Completed',
+    failed: 'Failed',
+    rate_limited: 'Rate Limited',
+    paused: 'Pause',
+    resume: 'Resume',
+    running_now: 'running now',
+    retry: 'retry',
+    queued: 'queued',
+    no_tasks: 'No tasks',
+    no_tasks_with_status: 'No tasks with status',
+    result: 'Result',
+    task_completed_no_text: 'Task completed (no text output)',
+    prompt: 'Prompt',
+    error: 'Error',
+    recurrence: 'Recurrence',
+    scheduled: 'Scheduled',
+    started: 'Started',
+    completed_at: 'Completed',
+    next_retry: 'Next retry',
+    retries: 'Retries',
+    exit: 'Exit',
+    cancel: 'Cancel',
+    reset_to_pending: 'Reset to pending',
+    delete: 'Delete',
+    copy: 'Copy',
+    copied: 'Copied!',
+    loading: 'Loading...',
+    no_skills: 'No skills found in ~/.claude/commands/ or plugins.',
+    skills_hint: 'Claude Code only · /skill-name [args]',
+    select_project: '— Select project —',
+    custom_path: '✏️ Custom path...',
+    default_model: 'Default',
+    highest: 'highest',
+    lowest: 'lowest',
+    update_available: 'Update available: v{current} → v{latest}',
+    today: 'Today',
+    week: 'Week',
+    total: 'Total',
+    cost: 'Cost',
+    time: 'Time',
+    tokens: 'Tokens',
+    session: 'Session',
+    limit_resets: 'Limit resets',
+    now: 'now',
+    in_lt_1m: 'in <1m',
+    in_m: 'in {n}m',
+    in_h: 'in {n}h',
+    m_short: 'm',
+    h_short: 'h',
+    d_short: 'd',
+  }
+};
+
+function tr(key, vars = {}) {
+  const dict = I18N[currentLang] || I18N.ru;
+  let s = dict[key] || key;
+  for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
+  return s;
+}
+
+function statusLabel(status) {
+  if (status === 'rate_limited') return tr('rate_limited');
+  return tr(status) || status;
+}
+
+function applyLanguage(lang) {
+  currentLang = (lang === 'en') ? 'en' : 'ru';
+  document.documentElement.lang = currentLang === 'ru' ? 'ru' : 'en';
+  const langBtn = document.getElementById('langBtn');
+  if (langBtn) langBtn.textContent = currentLang.toUpperCase();
+  const themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) themeBtn.textContent = currentTheme === 'light' ? tr('dark') : tr('light');
+
+  document.getElementById('promptInput').placeholder = tr('prompt_placeholder');
+  document.getElementById('providerLabelText').textContent = tr('provider');
+  document.getElementById('modelLabelText').textContent = tr('model');
+  document.getElementById('priorityLabelText').textContent = tr('priority');
+  document.getElementById('scheduleLabelText').textContent = tr('schedule');
+  document.getElementById('dirLabelText').textContent = tr('dir');
+  document.getElementById('recurLabelText').textContent = tr('recur');
+  document.getElementById('addTaskBtn').textContent = tr('add_task');
+  document.getElementById('skillsHint').textContent = tr('skills_hint');
+
+  document.getElementById('filterAllBtn').textContent = tr('all');
+  document.getElementById('filterPendingBtn').textContent = tr('pending');
+  document.getElementById('filterRunningBtn').textContent = tr('running');
+  document.getElementById('filterCompletedBtn').textContent = tr('completed');
+  document.getElementById('filterFailedBtn').textContent = tr('failed');
+  document.getElementById('filterRateBtn').textContent = tr('rate_limited');
+  const p1 = document.querySelector('#priorityInput option[value=\"1\"]');
+  const p10 = document.querySelector('#priorityInput option[value=\"10\"]');
+  if (p1) p1.textContent = `1 (${tr('highest')})`;
+  if (p10) p10.textContent = `10 (${tr('lowest')})`;
+  if (projectsCache.length) renderProjectOptions();
+
+  loadWorkerStatus();
+  refresh();
+  loadCosts();
+}
+
+function toggleLanguage() {
+  const next = currentLang === 'ru' ? 'en' : 'ru';
+  applyLanguage(next);
+  localStorage.setItem('pp_lang', next);
+}
 
 function applyTheme(theme) {
   currentTheme = theme === 'light' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', currentTheme);
   const btn = document.getElementById('themeBtn');
-  if (btn) btn.textContent = currentTheme === 'light' ? 'Dark' : 'Light';
+  if (btn) btn.textContent = currentTheme === 'light' ? tr('dark') : tr('light');
 }
 
 function toggleTheme() {
@@ -555,7 +789,7 @@ async function loadStats() {
     ['completed', s.completed],
     ['failed', s.failed],
   ].filter(([, n]) => n > 0)
-   .map(([status, n]) => `<span class="badge" data-status="${status}">${n} ${status.replace('_', ' ')}</span>`)
+   .map(([status, n]) => `<span class="badge" data-status="${status}">${n} ${statusLabel(status)}</span>`)
    .join('');
 }
 
@@ -590,12 +824,12 @@ function renderResultMeta(parsed) {
   if (!parsed || !parsed.metaBlock) return '';
   const m = parsed.meta;
   const cards = [];
-  if (m.model) cards.push(`<div class="meta-card"><span class="label">Model </span><span class="value">${esc(m.model)}</span></div>`);
-  if (m.cost) cards.push(`<div class="meta-card"><span class="label">Cost </span><span class="value cost">${esc(m.cost)}</span></div>`);
-  if (m.time) cards.push(`<div class="meta-card"><span class="label">Time </span><span class="value">${esc(m.time)}</span></div>`);
-  if (m.tokens) cards.push(`<div class="meta-card"><span class="label">Tokens </span><span class="value">${esc(m.tokens)}</span></div>`);
-  if (m.session) cards.push(`<div class="meta-card"><span class="label">Session </span><span class="value session">${esc(m.session.slice(0, 12))}...</span></div>`);
-  if (m['rate limit resets']) cards.push(`<div class="meta-card"><span class="label">Limit resets </span><span class="value cost">${esc(m['rate limit resets'])}</span></div>`);
+  if (m.model) cards.push(`<div class="meta-card"><span class="label">${tr('model')} </span><span class="value">${esc(m.model)}</span></div>`);
+  if (m.cost) cards.push(`<div class="meta-card"><span class="label">${tr('cost')} </span><span class="value cost">${esc(m.cost)}</span></div>`);
+  if (m.time) cards.push(`<div class="meta-card"><span class="label">${tr('time')} </span><span class="value">${esc(m.time)}</span></div>`);
+  if (m.tokens) cards.push(`<div class="meta-card"><span class="label">${tr('tokens')} </span><span class="value">${esc(m.tokens)}</span></div>`);
+  if (m.session) cards.push(`<div class="meta-card"><span class="label">${tr('session')} </span><span class="value session">${esc(m.session.slice(0, 12))}...</span></div>`);
+  if (m['rate limit resets']) cards.push(`<div class="meta-card"><span class="label">${tr('limit_resets')} </span><span class="value cost">${esc(m['rate limit resets'])}</span></div>`);
   if (!cards.length) return '';
   return `<div class="result-meta">${cards.join('')}</div>`;
 }
@@ -603,27 +837,28 @@ function renderResultMeta(parsed) {
 // --- Schedule display ---
 function scheduleInfo(t) {
   if (t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled') return '';
-  if (t.status === 'running') return '<span class="task-schedule">running now</span>';
+  if (t.status === 'running') return `<span class="task-schedule">${tr('running_now')}</span>`;
   if (t.next_run_at) {
-    return `<span class="task-schedule">retry ${formatTime(t.next_run_at)}</span>`;
+    return `<span class="task-schedule">${tr('retry')} ${formatTime(t.next_run_at)}</span>`;
   }
   if (t.scheduled_at) {
     const d = new Date(t.scheduled_at);
-    if (d <= new Date()) return '<span class="task-schedule">queued</span>';
+    if (d <= new Date()) return `<span class="task-schedule">${tr('queued')}</span>`;
     return `<span class="task-schedule">${formatTime(t.scheduled_at)}</span>`;
   }
-  return '<span class="task-schedule">queued</span>';
+  return `<span class="task-schedule">${tr('queued')}</span>`;
 }
 
 function formatTime(iso) {
   const d = new Date(iso);
   const now = new Date();
   const diff = d - now;
-  if (diff < 0) return 'now';
-  if (diff < 60000) return 'in <1m';
-  if (diff < 3600000) return `in ${Math.ceil(diff / 60000)}m`;
-  if (diff < 86400000) return `in ${Math.ceil(diff / 3600000)}h`;
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (diff < 0) return tr('now');
+  if (diff < 60000) return tr('in_lt_1m');
+  if (diff < 3600000) return tr('in_m', { n: Math.ceil(diff / 60000) });
+  if (diff < 86400000) return tr('in_h', { n: Math.ceil(diff / 3600000) });
+  const locale = currentLang === 'ru' ? 'ru-RU' : 'en-US';
+  return d.toLocaleDateString(locale) + ' ' + d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 async function loadTasks() {
@@ -634,7 +869,7 @@ async function loadTasks() {
   if (!tasks.length) {
     list.innerHTML = `<div class="empty">
       <div class="empty-icon">&#9744;</div>
-      <div>No tasks${currentFilter ? ' with status "' + currentFilter + '"' : ''}.</div>
+      <div>${tr('no_tasks')}${currentFilter ? `: "${statusLabel(currentFilter)}"` : ''}.</div>
     </div>`;
     return;
   }
@@ -647,22 +882,22 @@ async function loadTasks() {
     // Build result section
     let resultHTML = '';
     if (parsed) {
-      resultHTML += `<div class="detail-label">Result</div>`;
+      resultHTML += `<div class="detail-label">${tr('result')}</div>`;
       resultHTML += renderResultMeta(parsed);
 
-      const displayText = parsed.text || (parsed.metaBlock ? 'Task completed (no text output)' : '');
+      const displayText = parsed.text || (parsed.metaBlock ? tr('task_completed_no_text') : '');
       if (displayText) {
         const copyable = parsed.text || '';
         resultHTML += `<div class="result-block">
           <pre>${esc(displayText)}</pre>
-          ${copyable ? `<button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(copyable))})">Copy</button>` : ''}
+          ${copyable ? `<button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(copyable))})">${tr('copy')}</button>` : ''}
         </div>`;
       }
     } else if (t.result) {
-      resultHTML += `<div class="detail-label">Result</div>`;
+      resultHTML += `<div class="detail-label">${tr('result')}</div>`;
       resultHTML += `<div class="result-block">
         <pre>${esc(t.result)}</pre>
-        <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.result))})">Copy</button>
+        <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.result))})">${tr('copy')}</button>
       </div>`;
     }
 
@@ -670,7 +905,7 @@ async function loadTasks() {
     <div class="task-row${expanded ? ' expanded' : ''}">
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-id">#${t.id}</span>
-        <span class="task-status" data-s="${t.status}">${t.status.replace('_', ' ')}</span>
+        <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
         <span class="task-prompt">${esc(t.prompt)}</span>
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
         ${scheduleInfo(t)}
@@ -678,35 +913,35 @@ async function loadTasks() {
         <span class="task-meta">${time}</span>
       </div>
       <div class="task-detail">
-        <div class="detail-label">Prompt</div>
+        <div class="detail-label">${tr('prompt')}</div>
         <div class="result-block">
           <pre>${esc(t.prompt)}</pre>
-          <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.prompt))})">Copy</button>
+          <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.prompt))})">${tr('copy')}</button>
         </div>
 
-        ${t.working_dir ? `<div class="detail-info"><span class="label">Dir: </span><span>${esc(t.working_dir)}</span></div>` : ''}
+        ${t.working_dir ? `<div class="detail-info"><span class="label">${tr('dir')}: </span><span>${esc(t.working_dir)}</span></div>` : ''}
 
         ${resultHTML}
 
         ${t.error ? `
-          <div class="detail-label">Error</div>
+          <div class="detail-label">${tr('error')}</div>
           <div class="result-block">
             <pre>${esc(t.error)}</pre>
-            <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.error))})">Copy</button>
+            <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.error))})">${tr('copy')}</button>
           </div>
         ` : ''}
 
-        ${t.recurrence ? `<div class="detail-info"><span class="label">Recurrence: </span><span>${esc(t.recurrence)}</span></div>` : ''}
-        ${t.scheduled_at ? `<div class="detail-info"><span class="label">Scheduled: </span><span>${new Date(t.scheduled_at).toLocaleString()}</span></div>` : ''}
-        ${t.started_at ? `<div class="detail-info"><span class="label">Started: </span><span>${new Date(t.started_at).toLocaleString()}</span></div>` : ''}
-        ${t.completed_at ? `<div class="detail-info"><span class="label">Completed: </span><span>${new Date(t.completed_at).toLocaleString()}</span></div>` : ''}
-        ${t.next_run_at ? `<div class="detail-info"><span class="label">Next retry: </span><span>${new Date(t.next_run_at).toLocaleString()}</span></div>` : ''}
-        <div class="detail-info"><span class="label">Retries: </span><span>${t.retry_count}/${t.max_retries}</span>${t.exit_code !== null ? ` <span class="label">| Exit: </span><span>${t.exit_code}</span>` : ''}</div>
+        ${t.recurrence ? `<div class="detail-info"><span class="label">${tr('recurrence')}: </span><span>${esc(t.recurrence)}</span></div>` : ''}
+        ${t.scheduled_at ? `<div class="detail-info"><span class="label">${tr('scheduled')}: </span><span>${new Date(t.scheduled_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
+        ${t.started_at ? `<div class="detail-info"><span class="label">${tr('started')}: </span><span>${new Date(t.started_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
+        ${t.completed_at ? `<div class="detail-info"><span class="label">${tr('completed_at')}: </span><span>${new Date(t.completed_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
+        ${t.next_run_at ? `<div class="detail-info"><span class="label">${tr('next_retry')}: </span><span>${new Date(t.next_run_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
+        <div class="detail-info"><span class="label">${tr('retries')}: </span><span>${t.retry_count}/${t.max_retries}</span>${t.exit_code !== null ? ` <span class="label">| ${tr('exit')}: </span><span>${t.exit_code}</span>` : ''}</div>
 
         <div class="detail-actions">
-          ${['pending','rate_limited'].includes(t.status) ? `<button class="btn btn-sm btn-ghost" onclick="cancelTask(event,${t.id})">Cancel</button>` : ''}
-          ${t.status === 'running' ? `<button class="btn btn-sm btn-ghost" onclick="resetTask(event,${t.id})">Reset to pending</button>` : ''}
-          <button class="btn btn-sm btn-danger" onclick="deleteTask(event,${t.id})">Delete</button>
+          ${['pending','rate_limited'].includes(t.status) ? `<button class="btn btn-sm btn-ghost" onclick="cancelTask(event,${t.id})">${tr('cancel')}</button>` : ''}
+          ${t.status === 'running' ? `<button class="btn btn-sm btn-ghost" onclick="resetTask(event,${t.id})">${tr('reset_to_pending')}</button>` : ''}
+          <button class="btn btn-sm btn-danger" onclick="deleteTask(event,${t.id})">${tr('delete')}</button>
         </div>
       </div>
     </div>`;
@@ -778,8 +1013,8 @@ function copyText(e, text) {
   e.stopPropagation();
   navigator.clipboard.writeText(text).then(() => {
     const btn = e.target;
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = 'Copy', 1500);
+    btn.textContent = tr('copied');
+    setTimeout(() => btn.textContent = tr('copy'), 1500);
   });
 }
 
@@ -801,10 +1036,10 @@ function esc(s) {
 
 function timeAgo(iso) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'now';
-  if (diff < 3600) return Math.floor(diff / 60) + 'm';
-  if (diff < 86400) return Math.floor(diff / 3600) + 'h';
-  return Math.floor(diff / 86400) + 'd';
+  if (diff < 60) return tr('now');
+  if (diff < 3600) return Math.floor(diff / 60) + tr('m_short');
+  if (diff < 86400) return Math.floor(diff / 3600) + tr('h_short');
+  return Math.floor(diff / 86400) + tr('d_short');
 }
 
 function refresh() { loadStats(); loadTasks(); }
@@ -844,7 +1079,7 @@ function updateModelSelect() {
   const label = document.getElementById('modelLabel');
   const modelSel = document.getElementById('modelInput');
   if (models.length > 0) {
-    modelSel.innerHTML = '<option value="">Default</option>' +
+    modelSel.innerHTML = `<option value="">${tr('default_model')}</option>` +
       models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
     label.style.display = '';
   } else {
@@ -875,7 +1110,7 @@ async function toggleSkills() {
 
   const panel = document.getElementById('skillsPanel');
   const btn = document.getElementById('skillsToggleBtn');
-  panel.innerHTML = '<div style="padding:8px 12px;color:var(--text2)">Loading...</div>';
+  panel.innerHTML = `<div style="padding:8px 12px;color:var(--text2)">${tr('loading')}</div>`;
   panel.classList.add('open');
   btn.classList.add('open');
   skillsPanelOpen = true;
@@ -895,7 +1130,7 @@ async function toggleSkills() {
 
   const skills = skillsCache[cacheKey] || [];
   if (!skills.length) {
-    panel.innerHTML = '<div style="padding:8px 12px;color:var(--text2)">No skills found in ~/.claude/commands/ or plugins.</div>';
+    panel.innerHTML = `<div style="padding:8px 12px;color:var(--text2)">${tr('no_skills')}</div>`;
     return;
   }
 
@@ -921,17 +1156,38 @@ async function loadProjects() {
   const projects = await fetchJSON(`${API}/projects`);
   const sel = document.getElementById('workdirSelect');
   const inp = document.getElementById('workdirInput');
-  if (!projects || !projects.length) return;
-
-  sel.innerHTML = [
-    '<option value="">— Select project —</option>',
-    ...projects.map(p => `<option value="${esc(p.path)}">${esc(p.name)}</option>`),
-    '<option value="__custom__">✏️ Custom path...</option>',
-  ].join('');
+  projectsCache = projects || [];
+  renderProjectOptions();
 
   sel.style.display = '';
   inp.style.display = 'none';
   inp.placeholder = '';
+}
+
+function renderProjectOptions() {
+  const sel = document.getElementById('workdirSelect');
+  const current = sel.value;
+  sel.innerHTML = [
+    `<option value="">${tr('select_project')}</option>`,
+    ...projectsCache.map(p => `<option value="${esc(p.path)}">${esc(p.name)} — ${esc(p.folder || p.path)}</option>`),
+    `<option value="__custom__">${tr('custom_path')}</option>`,
+  ].join('');
+  if (current) sel.value = Array.from(sel.options).some(o => o.value === current) ? current : '';
+  initProjectSelect2();
+}
+
+function initProjectSelect2() {
+  if (!window.jQuery || !window.jQuery.fn || !window.jQuery.fn.select2) return;
+  const $sel = window.jQuery('#workdirSelect');
+  if ($sel.hasClass('select2-hidden-accessible')) {
+    $sel.off('change.select2proj');
+    $sel.select2('destroy');
+  }
+  $sel.select2({
+    width: '260px',
+    placeholder: tr('select_project'),
+  });
+  $sel.on('change.select2proj', () => onProjectSelect());
 }
 
 function onProjectSelect() {
@@ -953,10 +1209,10 @@ async function loadWorkerStatus() {
   const s = await fetchJSON(`${API}/worker/status`);
   const btn = document.getElementById('pauseBtn');
   if (s.paused) {
-    btn.textContent = '▶ Resume';
+    btn.textContent = `▶ ${tr('resume')}`;
     btn.classList.add('paused');
   } else {
-    btn.textContent = '⏸ Pause';
+    btn.textContent = `⏸ ${tr('paused')}`;
     btn.classList.remove('paused');
   }
 }
@@ -975,7 +1231,7 @@ async function loadVersion() {
     if (v.update_available) {
       const banner = document.getElementById('updateBanner');
       document.getElementById('updateMsg').textContent =
-        `Update available: v${v.current} → v${v.latest}`;
+        tr('update_available', { current: v.current, latest: v.latest });
       banner.classList.remove('hidden');
     }
   } catch (_) {}
@@ -988,9 +1244,9 @@ async function loadCosts() {
     if (c.total <= 0) return;
     const bar = document.getElementById('costBar');
     bar.innerHTML = [
-      `<div class="cost-item">Today: <span>$${c.today.toFixed(4)}</span></div>`,
-      `<div class="cost-item">Week: <span>$${c.week.toFixed(4)}</span></div>`,
-      `<div class="cost-item">Total: <span>$${c.total.toFixed(4)}</span></div>`,
+      `<div class="cost-item">${tr('today')}: <span>$${c.today.toFixed(4)}</span></div>`,
+      `<div class="cost-item">${tr('week')}: <span>$${c.week.toFixed(4)}</span></div>`,
+      `<div class="cost-item">${tr('total')}: <span>$${c.total.toFixed(4)}</span></div>`,
       ...Object.entries(c.by_provider).map(([p, v]) =>
         `<div class="cost-item">${esc(p)}: <span>$${v.toFixed(4)}</span></div>`),
     ].join('');
@@ -999,6 +1255,7 @@ async function loadCosts() {
 }
 
 // --- Init ---
+applyLanguage(localStorage.getItem('pp_lang') || 'ru');
 applyTheme(localStorage.getItem('pp_theme') || 'dark');
 setDefaultSchedule();
 loadProviders();
