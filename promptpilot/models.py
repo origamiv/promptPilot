@@ -18,6 +18,7 @@ class TaskStatus(str, Enum):
 
 class TaskCreate(BaseModel):
     prompt: str
+    subject: Optional[str] = None  # Short title; auto-filled from first line of prompt if absent
     agent_prompt: Optional[str] = None  # Combined prompt passed to the agent CLI (if differs from prompt)
     working_dir: Optional[str] = None
     provider: Optional[str] = None  # e.g. "claude", "claude-z", or raw command
@@ -40,6 +41,7 @@ class TaskUpdate(BaseModel):
 class TaskInDB(BaseModel):
     id: int
     prompt: str
+    subject: Optional[str] = None
     agent_prompt: Optional[str] = None
     working_dir: Optional[str] = None
     provider: Optional[str] = None

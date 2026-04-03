@@ -1267,6 +1267,7 @@
     <div class="cost-bar" id="costBar"></div>
 
     <div class="add-form" id="addForm">
+    <input type="text" id="subjectInput" placeholder="Тема (необязательно — возьмём из первой строки промпта)" style="width:100%;margin-bottom:8px">
     <textarea id="promptInput" placeholder="Введите ваш промпт..."></textarea>
     <div class="skills-toggle-row" id="skillsToggleRow">
       <button type="button" class="btn-skills" id="skillsToggleBtn" onclick="toggleSkills()">⚡ Skills</button>
@@ -1805,7 +1806,7 @@ async function loadTasks() {
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-id">#${t.id}</span>
         <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
-        <span class="task-prompt">${esc(t.prompt)}</span>
+        <span class="task-prompt">${esc(t.subject || t.prompt)}</span>
         ${projectName ? `<span class="task-meta">${tr('project')}: ${esc(projectName)}</span>` : ''}
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
         ${scheduleInfo(t)}
@@ -1813,6 +1814,7 @@ async function loadTasks() {
         <span class="task-meta">${time}</span>
       </div>
       <div class="task-detail">
+        ${t.subject ? `<div class="detail-info"><span class="label">Тема: </span><span>${esc(t.subject)}</span></div>` : ''}
         <div class="detail-label">${tr('prompt')}</div>
         <div class="result-block">
           <pre>${esc(t.prompt)}</pre>
@@ -1851,6 +1853,7 @@ async function loadTasks() {
 async function addTask() {
   const currentPrompt = document.getElementById('promptInput').value.trim();
   if (!currentPrompt) return;
+  const subject = document.getElementById('subjectInput').value.trim() || null;
   const promptListRaw = document.getElementById('promptListInput').value.trim();
   const priority = parseInt(document.getElementById('priorityInput').value);
   const schedule = document.getElementById('scheduleInput').value || null;
@@ -1866,6 +1869,7 @@ async function addTask() {
     const agentPrompt = await buildPromptFromList(currentPrompt, promptListRaw);
     const body = {
       prompt: currentPrompt,
+      subject,
       provider,
       model,
       priority,
@@ -1884,6 +1888,7 @@ async function addTask() {
     });
 
     document.getElementById('promptInput').value = '';
+    document.getElementById('subjectInput').value = '';
     document.getElementById('recurrenceInput').value = '';
     refresh();
   } catch (err) {
@@ -2177,7 +2182,11 @@ function renderProjectOptions() {
     ...projectsCache.map(p => `<option value="${esc(p.path)}">${esc(p.name)} — ${esc(p.folder || p.path)}</option>`),
     `<option value="__custom__">${tr('custom_path')}</option>`,
   ].join('');
-  if (current) sel.value = Array.from(sel.options).some(o => o.value === current) ? current : '';
+  if (current && Array.from(sel.options).some(o => o.value === current)) {
+    sel.value = current;
+  } else if (projectsCache.length > 0) {
+    sel.value = projectsCache[0].path;
+  }
   initProjectSelect2();
 }
 
