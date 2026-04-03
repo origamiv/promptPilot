@@ -1837,14 +1837,14 @@ function buildTaskResultHTML(t, parsed) {
       const copyable = parsed.text || '';
       resultHTML += `<div class="result-block">
         <pre>${esc(displayText)}</pre>
-        ${copyable ? `<button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(copyable))})">${tr('copy')}</button>` : ''}
+        ${copyable ? `<button class="copy-btn" data-copy="${encCopy(copyable)}" onclick="copyTextFromBtn(event, this)">${tr('copy')}</button>` : ''}
       </div>`;
     }
   } else if (t.result) {
     resultHTML += `<div class="detail-label">${tr('result')}</div>`;
     resultHTML += `<div class="result-block">
       <pre>${esc(t.result)}</pre>
-      <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.result))})">${tr('copy')}</button>
+      <button class="copy-btn" data-copy="${encCopy(t.result)}" onclick="copyTextFromBtn(event, this)">${tr('copy')}</button>
     </div>`;
   }
   return resultHTML;
@@ -1859,7 +1859,7 @@ function buildTaskDetailHTML(t, resultHTML, opts = {}) {
       <div class="detail-label">${tr('prompt')}</div>
       <div class="result-block">
         <pre>${esc(t.prompt)}</pre>
-        <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.prompt))})">${tr('copy')}</button>
+        <button class="copy-btn" data-copy="${encCopy(t.prompt)}" onclick="copyTextFromBtn(event, this)">${tr('copy')}</button>
       </div>
     ` : ''}
     ${t.working_dir ? `<div class="detail-info"><span class="label">${tr('dir')}: </span><span>${esc(t.working_dir)}</span></div>` : ''}
@@ -1868,7 +1868,7 @@ function buildTaskDetailHTML(t, resultHTML, opts = {}) {
       <div class="detail-label">${tr('error')}</div>
       <div class="result-block">
         <pre>${esc(t.error)}</pre>
-        <button class="copy-btn" onclick="copyText(event, ${JSON.stringify(JSON.stringify(t.error))})">${tr('copy')}</button>
+        <button class="copy-btn" data-copy="${encCopy(t.error)}" onclick="copyTextFromBtn(event, this)">${tr('copy')}</button>
       </div>
     ` : ''}
     ${t.recurrence ? `<div class="detail-info"><span class="label">${tr('recurrence')}: </span><span>${esc(t.recurrence)}</span></div>` : ''}
@@ -2081,6 +2081,15 @@ function copyText(e, text) {
     btn.textContent = tr('copied');
     setTimeout(() => btn.textContent = tr('copy'), 1500);
   });
+}
+
+function encCopy(s) {
+  return encodeURIComponent(String(s ?? ''));
+}
+
+function copyTextFromBtn(e, btn) {
+  const text = decodeURIComponent(btn?.dataset?.copy || '');
+  copyText(e, text);
 }
 
 // --- Filters ---
