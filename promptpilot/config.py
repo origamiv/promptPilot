@@ -64,6 +64,7 @@ PG_SETTINGS_TABLE = os.environ.get("PP_DB_SETTINGS_TABLE", "promptpilot_settings
 # Worker
 POLL_INTERVAL = int(os.environ.get("PP_POLL_INTERVAL", "5"))
 TASK_TIMEOUT = int(os.environ.get("PP_TASK_TIMEOUT", "300"))
+CLAUDE_TASK_TIMEOUT = int(os.environ.get("PP_CLAUDE_TASK_TIMEOUT", "900"))
 BASE_DELAY = int(os.environ.get("PP_BASE_DELAY", "60"))
 MAX_DELAY = int(os.environ.get("PP_MAX_DELAY", "3600"))
 MAX_RETRIES = int(os.environ.get("PP_MAX_RETRIES", "5"))

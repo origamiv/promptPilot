@@ -13,7 +13,17 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from . import db
-from .config import AGENT_USER, BASE_DELAY, DEFAULT_CLI, MAX_DELAY, POLL_INTERVAL, TASK_TIMEOUT, build_cmd, get_provider_env
+from .config import (
+    AGENT_USER,
+    BASE_DELAY,
+    CLAUDE_TASK_TIMEOUT,
+    DEFAULT_CLI,
+    MAX_DELAY,
+    POLL_INTERVAL,
+    TASK_TIMEOUT,
+    build_cmd,
+    get_provider_env,
+)
 from .limits import refresh_limits_for_provider
 
 RATE_LIMIT_PATTERNS = [
@@ -339,6 +349,8 @@ def execute_task(task):
     if resolved:
         cmd[0] = resolved
 
+    task_timeout = CLAUDE_TASK_TIMEOUT if provider.startswith("claude") else TASK_TIMEOUT
+
     def _run_once(command):
         return subprocess.run(
             command,
@@ -346,7 +358,7 @@ def execute_task(task):
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=TASK_TIMEOUT,
+            timeout=task_timeout,
             cwd=task.working_dir,
             stdin=subprocess.DEVNULL,
             env=env,
@@ -355,8 +367,15 @@ def execute_task(task):
 
     try:
         result = _run_once(cmd)
-    except subprocess.TimeoutExpired:
-        db.mark_failed(task.id, "Execution timed out", exit_code=-1)
+    except subprocess.TimeoutExpired as e:
+        stdout = e.stdout if isinstance(e.stdout, str) else ""
+        stderr = e.stderr if isinstance(e.stderr, str) else ""
+        db.mark_failed(
+            task.id,
+            f"Execution timed out ({task_timeout}s)",
+            exit_code=-1,
+            src=build_src_payload(provider, stdout, stderr),
+        )
         _refresh_limits()
         return
     except FileNotFoundError:
