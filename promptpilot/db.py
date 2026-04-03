@@ -46,6 +46,21 @@ def _settings_ref():
     return sql.SQL("{}.{}").format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SETTINGS_TABLE))
 
 
+def _tasks_with_agent_select():
+    return sql.SQL(
+        """
+        SELECT
+            t.*,
+            aa.name AS agent_account_name,
+            aa.shortname AS agent_account_shortname,
+            COALESCE(a.name, aa.name, aa.shortname) AS agent_name
+        FROM {} t
+        LEFT JOIN {}.agents_accounts aa ON aa.id = t.agent_account_id
+        LEFT JOIN {}.agents a ON a.id = aa.agent_id
+        """
+    ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME))
+
+
 def _db_kwargs() -> dict:
     if PG_DSN:
         return {"conninfo": PG_DSN, "row_factory": dict_row}
@@ -322,7 +337,10 @@ def create_task(task: TaskCreate) -> TaskInDB:
 def get_task(task_id: int, *, conn=None) -> Optional[TaskInDB]:
     def _query(c):
         with c.cursor() as cur:
-            cur.execute(sql.SQL("SELECT * FROM {} WHERE id = %s").format(_tasks_ref()), (task_id,))
+            cur.execute(
+                sql.SQL("{} WHERE t.id = %s").format(_tasks_with_agent_select()),
+                (task_id,),
+            )
             row = cur.fetchone()
             return _row_to_task(row) if row else None
 
@@ -336,14 +354,14 @@ def list_tasks(status: Optional[TaskStatus] = None, limit: int = 50, offset: int
     with _connect() as conn, conn.cursor() as cur:
         if status:
             cur.execute(
-                sql.SQL("SELECT * FROM {} WHERE status = %s ORDER BY created_at DESC LIMIT %s OFFSET %s").format(
-                    _tasks_ref()
+                sql.SQL("{} WHERE t.status = %s ORDER BY t.created_at DESC LIMIT %s OFFSET %s").format(
+                    _tasks_with_agent_select()
                 ),
                 (status.value, limit, offset),
             )
         else:
             cur.execute(
-                sql.SQL("SELECT * FROM {} ORDER BY created_at DESC LIMIT %s OFFSET %s").format(_tasks_ref()),
+                sql.SQL("{} ORDER BY t.created_at DESC LIMIT %s OFFSET %s").format(_tasks_with_agent_select()),
                 (limit, offset),
             )
         return [_row_to_task(r) for r in cur.fetchall()]
@@ -610,13 +628,12 @@ def get_pending_notifications() -> list:
         cur.execute(
             sql.SQL(
                 """
-                SELECT *
-                FROM {}
-                WHERE tg_chat_id IS NOT NULL
-                  AND notified_at IS NULL
-                  AND status IN ('completed', 'failed')
+                {}
+                WHERE t.tg_chat_id IS NOT NULL
+                  AND t.notified_at IS NULL
+                  AND t.status IN ('completed', 'failed')
                 """
-            ).format(_tasks_ref())
+            ).format(_tasks_with_agent_select())
         )
         rows = cur.fetchall()
         return [_row_to_task(r) for r in rows]

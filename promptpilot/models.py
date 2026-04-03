@@ -43,6 +43,10 @@ class TaskInDB(BaseModel):
     prompt: str
     subject: Optional[str] = None
     agent_prompt: Optional[str] = None
+    agent_account_id: Optional[int] = None
+    agent_name: Optional[str] = None
+    agent_account_name: Optional[str] = None
+    agent_account_shortname: Optional[str] = None
     working_dir: Optional[str] = None
     provider: Optional[str] = None
     status: TaskStatus = TaskStatus.PENDING

@@ -260,6 +260,20 @@
     margin-bottom: 0;
     font-size: 12px;
   }
+  #taskMobileList .task-mobile-head-meta {
+    margin-top: 3px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--text2);
+    line-height: 1.2;
+  }
+  #taskMobileList .task-mobile-head-meta span {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+  }
 
   .task-row {
     background: var(--surface);
@@ -1618,6 +1632,8 @@ const I18N = {
     h_short: 'ч',
     d_short: 'д',
     prompts_not_found: 'Не найдены промпты: {names}',
+    task_agent: 'Агент',
+    worked_minutes: '{n} мин',
   },
   en: {
     tasks: 'Tasks',
@@ -1688,6 +1704,8 @@ const I18N = {
     h_short: 'h',
     d_short: 'd',
     prompts_not_found: 'Prompts not found: {names}',
+    task_agent: 'Agent',
+    worked_minutes: '{n} min',
   }
 };
 
@@ -1897,6 +1915,22 @@ function taskCardTitle(t) {
   return firstPromptLine || `#${t.id}`;
 }
 
+function taskAgentName(t) {
+  return String(t.agent_name || t.agent_account_name || t.agent_account_shortname || '').trim();
+}
+
+function taskWorkedMinutes(t) {
+  if (!t.started_at) return null;
+  const started = new Date(t.started_at);
+  if (Number.isNaN(started.getTime())) return null;
+
+  const completed = t.completed_at ? new Date(t.completed_at) : new Date();
+  if (Number.isNaN(completed.getTime())) return null;
+
+  const diffMs = Math.max(0, completed - started);
+  return Math.floor(diffMs / 60000);
+}
+
 function buildTaskResultHTML(t, parsed) {
   let resultHTML = '';
   if (parsed) {
@@ -2004,12 +2038,18 @@ async function loadTasks() {
     const parsed = parseResult(t.result);
     const projectName = projectNameByWorkingDir(t.working_dir);
     const resultHTML = buildTaskResultHTML(t, parsed);
+    const agentName = taskAgentName(t);
+    const workedMinutes = taskWorkedMinutes(t);
 
     return `
     <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
       <div class="admin-mobile-head" onclick="toggleTask(${t.id})">
         <div class="admin-mobile-main">
           <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
+          <div class="task-mobile-head-meta">
+            <span>${tr('task_agent')}: ${esc(agentName || '—')}</span>
+            <span>${tr('worked_minutes', { n: workedMinutes ?? 0 })}</span>
+          </div>
         </div>
         <div class="prompt-mobile-inline-actions">
           <span class="status-dot ${taskStatusDotClass(t.status)}" title="${esc(statusLabel(t.status))}"></span>
