@@ -314,14 +314,21 @@
   }
   #taskMobileList .admin-mobile-sub {
     margin-top: 6px;
+    min-width: 0;
+  }
+  #taskMobileList .admin-mobile-sub > * {
+    min-width: 0;
+    max-width: 100%;
   }
   #taskMobileList .admin-mobile-chip,
   #taskMobileList .task-schedule {
     display: inline-flex;
+    align-items: center;
+    min-width: 0;
     max-width: 100%;
-    overflow-wrap: anywhere;
-    white-space: normal;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   #taskMobileList .task-schedule {
     border: 1px solid var(--border);
