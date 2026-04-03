@@ -259,14 +259,32 @@
   #taskMobileList .admin-mobile-title {
     margin-bottom: 0;
     font-size: 12px;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #taskMobileList .task-mobile-head-line1 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  #taskMobileList .task-mobile-id {
+    color: var(--text2);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.1;
+    flex: 0 0 auto;
   }
   #taskMobileList .task-mobile-head-meta {
     margin-top: 3px;
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
     font-size: 11px;
-    color: var(--text2);
+    color: var(--text);
     line-height: 1.2;
   }
   #taskMobileList .task-mobile-head-meta span {
@@ -275,6 +293,17 @@
     min-width: 0;
   }
   #taskMobileList .task-mobile-head-meta .task-mobile-project-badge {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    background: var(--surface2);
+    color: var(--text);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #taskMobileList .task-mobile-head-meta .task-mobile-account-badge {
     border: 1px solid var(--border);
     border-radius: 999px;
     padding: 1px 8px;
@@ -2197,26 +2226,24 @@ async function loadTasks() {
     <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
       <div class="admin-mobile-head" onclick="toggleTask(${t.id})">
         <div class="admin-mobile-main">
-          <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
+          <div class="task-mobile-head-line1">
+            <span class="task-mobile-id">#${t.id}</span>
+            ${agentIconInfo ? `<span class="task-mobile-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
+            <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
+            <span class="status-dot ${taskStatusDotClass(t.status)}" title="${esc(statusLabel(t.status))}"></span>
+          </div>
           <div class="task-mobile-head-meta">
             <span class="task-mobile-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
-            <span>${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
-            ${agentIconInfo ? `<span class="task-mobile-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
-            <span>${tr('worked_minutes', { n: workedMinutes ?? 0 })}</span>
+            <span class="task-mobile-account-badge" title="${esc(tr('task_account'))}: ${esc(agentAccountName || '—')}">${esc(agentAccountName || '—')}</span>
           </div>
-        </div>
-        <div class="prompt-mobile-inline-actions">
-          <span class="status-dot ${taskStatusDotClass(t.status)}" title="${esc(statusLabel(t.status))}"></span>
         </div>
       </div>
       <div class="admin-mobile-body">
         <div class="admin-mobile-sub">
-          <span class="admin-mobile-chip">#${t.id}</span>
           <span class="admin-mobile-chip">${statusLabel(t.status)}</span>
           <span class="admin-mobile-chip">P${t.priority}</span>
           <span class="admin-mobile-chip">${time}</span>
-          ${agentIconInfo ? `<span class="admin-mobile-chip" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
-          ${projectName ? `<span class="admin-mobile-chip"${projectBadgeStyleAttr(project)}>${esc(projectName)}</span>` : ''}
+          <span class="admin-mobile-chip">${tr('worked_minutes', { n: workedMinutes ?? 0 })}</span>
           ${scheduleInfo(t)}
         </div>
         <div class="admin-mobile-kv"><b>${tr('prompt')}:</b></div>
