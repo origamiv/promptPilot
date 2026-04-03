@@ -26,6 +26,20 @@ from .config import (
 )
 from .models import Stats, TaskCreate, TaskInDB, TaskStatus
 
+PROJECT_PASTEL_COLORS = (
+    "#f8c8dc",
+    "#ffd9b3",
+    "#ffe9a8",
+    "#d4f0c0",
+    "#bdebdc",
+    "#c7e9ff",
+    "#d9d0ff",
+    "#fbd3e9",
+    "#cfe8ff",
+    "#fde2c5",
+)
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
 
 def _validate_ident(name: str, what: str) -> str:
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name or ""):
@@ -89,6 +103,26 @@ def _parse_dt(val) -> Optional[datetime]:
     if isinstance(val, str):
         return datetime.fromisoformat(val)
     return None
+
+
+def _normalize_project_color(color: Optional[str]) -> Optional[str]:
+    if color is None:
+        return None
+    value = str(color).strip()
+    if not value:
+        return None
+    if not HEX_COLOR_RE.fullmatch(value):
+        raise ValueError("Invalid color format, expected #RRGGBB")
+    return value.lower()
+
+
+def _pick_next_project_color(cur) -> str:
+    cur.execute(
+        sql.SQL("SELECT COUNT(*) AS cnt FROM {}.projects WHERE deleted_at IS NULL").format(sql.Identifier(SCHEMA_NAME))
+    )
+    row = cur.fetchone() or {"cnt": 0}
+    idx = int(row["cnt"] or 0) % len(PROJECT_PASTEL_COLORS)
+    return PROJECT_PASTEL_COLORS[idx]
 
 
 def _row_to_task(row: dict) -> TaskInDB:
@@ -262,6 +296,27 @@ def init_db():
                     "ALTER TABLE {}.projects ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ"
                 ).format(sql.Identifier(SCHEMA_NAME))
             )
+            cur.execute(
+                sql.SQL(
+                    "ALTER TABLE {}.projects ADD COLUMN IF NOT EXISTS color VARCHAR(7)"
+                ).format(sql.Identifier(SCHEMA_NAME))
+            )
+            cur.execute(
+                sql.SQL(
+                    """
+                    SELECT id
+                    FROM {}.projects
+                    WHERE COALESCE(TRIM(color), '') = ''
+                    ORDER BY id
+                    """
+                ).format(sql.Identifier(SCHEMA_NAME))
+            )
+            rows = cur.fetchall()
+            for idx, row in enumerate(rows):
+                cur.execute(
+                    sql.SQL("UPDATE {}.projects SET color = %s WHERE id = %s").format(sql.Identifier(SCHEMA_NAME)),
+                    (PROJECT_PASTEL_COLORS[idx % len(PROJECT_PASTEL_COLORS)], row["id"]),
+                )
         except UndefinedTable:
             pass
 
@@ -690,7 +745,7 @@ def list_projects(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                 cur.execute(
                     sql.SQL(
                         """
-                        SELECT id, name, folder
+                        SELECT id, name, folder, color
                         FROM {}.projects
                         WHERE deleted_at IS NULL
                           AND folder IS NOT NULL
@@ -706,7 +761,7 @@ def list_projects(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                 cur.execute(
                     sql.SQL(
                         """
-                        SELECT id, name, folder
+                        SELECT id, name, folder, color
                         FROM {}.projects
                         WHERE deleted_at IS NULL
                           AND folder IS NOT NULL
@@ -729,7 +784,7 @@ def list_projects_admin(search: Optional[str] = None, limit: int = 200) -> list[
             cur.execute(
                 sql.SQL(
                     """
-                    SELECT id, name, shortname, folder, comment, last_used_at, created_at, updated_at
+                    SELECT id, name, shortname, folder, color, comment, last_used_at, created_at, updated_at
                     FROM {}.projects
                     WHERE deleted_at IS NULL
                       AND (name ILIKE %s OR shortname ILIKE %s OR folder ILIKE %s)
@@ -743,7 +798,7 @@ def list_projects_admin(search: Optional[str] = None, limit: int = 200) -> list[
             cur.execute(
                 sql.SQL(
                     """
-                    SELECT id, name, shortname, folder, comment, last_used_at, created_at, updated_at
+                    SELECT id, name, shortname, folder, color, comment, last_used_at, created_at, updated_at
                     FROM {}.projects
                     WHERE deleted_at IS NULL
                     ORDER BY last_used_at DESC NULLS LAST, id DESC
@@ -755,25 +810,42 @@ def list_projects_admin(search: Optional[str] = None, limit: int = 200) -> list[
         return [dict(r) for r in cur.fetchall()]
 
 
-def create_project(name: str, shortname: str, folder: str, comment: Optional[str] = None) -> dict:
+def create_project(
+    name: str,
+    shortname: str,
+    folder: str,
+    comment: Optional[str] = None,
+    color: Optional[str] = None,
+) -> dict:
     now = datetime.utcnow().replace(microsecond=0)
+    normalized_color = _normalize_project_color(color)
     with _connect() as conn, conn.cursor() as cur:
+        if normalized_color is None:
+            normalized_color = _pick_next_project_color(cur)
         cur.execute(
             sql.SQL(
                 """
                 INSERT INTO {}.projects
-                    (name, shortname, folder, comment, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING id, name, shortname, folder, comment, created_at, updated_at
+                    (name, shortname, folder, color, comment, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, name, shortname, folder, color, comment, created_at, updated_at
                 """
             ).format(sql.Identifier(SCHEMA_NAME)),
-            (name, shortname, folder, comment, now, now),
+            (name, shortname, folder, normalized_color, comment, now, now),
         )
         return dict(cur.fetchone())
 
 
-def update_project(project_id: int, name: str, shortname: str, folder: str, comment: Optional[str] = None) -> bool:
+def update_project(
+    project_id: int,
+    name: str,
+    shortname: str,
+    folder: str,
+    comment: Optional[str] = None,
+    color: Optional[str] = None,
+) -> bool:
     now = datetime.utcnow().replace(microsecond=0)
+    normalized_color = _normalize_project_color(color)
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
@@ -782,12 +854,13 @@ def update_project(project_id: int, name: str, shortname: str, folder: str, comm
                 SET name = %s,
                     shortname = %s,
                     folder = %s,
+                    color = %s,
                     comment = %s,
                     updated_at = %s
                 WHERE id = %s
                 """
             ).format(sql.Identifier(SCHEMA_NAME)),
-            (name, shortname, folder, comment, now, project_id),
+            (name, shortname, folder, normalized_color, comment, now, project_id),
         )
         return cur.rowcount > 0
 

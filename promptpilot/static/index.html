@@ -299,6 +299,34 @@
     line-height: 1;
     flex: 0 0 20px;
   }
+  .task-project-badge {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 10px;
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1.2;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
+  }
+  .task-agent-icon {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: 22px;
+    height: 22px;
+    background: var(--surface2);
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+    flex: 0 0 22px;
+  }
 
   .task-row {
     background: var(--surface);
@@ -1440,7 +1468,7 @@
     </div>
     <div class="admin-mobile-list" id="projectsCards"></div>
     <table class="admin-table">
-      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Folder</th><th>Comment</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Folder</th><th>Color</th><th>Comment</th><th></th></tr></thead>
       <tbody id="projectsTbody"></tbody>
     </table>
   </div>
@@ -1929,16 +1957,57 @@ function normalizePathForMatch(path) {
   return String(path || '').trim().replace(/[\\/]+$/, '').toLowerCase();
 }
 
-function projectNameByWorkingDir(workingDir) {
-  if (!workingDir) return '';
+function normalizeHexColor(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw.toLowerCase() : '';
+}
+
+function hexToRgb(hex) {
+  const normalized = normalizeHexColor(hex);
+  if (!normalized) return null;
+  return {
+    r: parseInt(normalized.slice(1, 3), 16),
+    g: parseInt(normalized.slice(3, 5), 16),
+    b: parseInt(normalized.slice(5, 7), 16),
+  };
+}
+
+function rgbaFromHex(hex, alpha) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return '';
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
+
+function readableTextColorForBg(hex) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return '';
+  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  return luminance > 0.7 ? '#1f2937' : '#f8fafc';
+}
+
+function projectByWorkingDir(workingDir) {
+  if (!workingDir) return null;
   const wdNorm = normalizePathForMatch(workingDir);
-  if (!wdNorm) return '';
+  if (!wdNorm) return null;
 
   const matched = projectsCache.find(p => normalizePathForMatch(p.path) === wdNorm);
-  if (matched && matched.name) return matched.name;
+  if (matched) return matched;
 
   const parts = String(workingDir).split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] || String(workingDir);
+  return {
+    name: parts[parts.length - 1] || String(workingDir),
+    color: null,
+  };
+}
+
+function projectBadgeStyleAttr(project) {
+  const color = normalizeHexColor(project && project.color);
+  if (!color) return '';
+  const text = readableTextColorForBg(color);
+  const background = rgbaFromHex(color, 0.34);
+  const border = rgbaFromHex(color, 0.7);
+  return ` style="background:${background};border-color:${border};color:${text};"`;
 }
 
 function taskCardTitle(t) {
@@ -1974,7 +2043,25 @@ function taskAgentIconInfo(t) {
   const agent = taskAgentName(t);
   const source = provider || agent;
   if (!source) return null;
-  return { icon: providerIcon(source), label: source };
+  const key = source.toLowerCase();
+  let color = '#64748b';
+  if (key.includes('claude')) color = '#8b5cf6';
+  else if (key.includes('codex')) color = '#0ea5e9';
+  else if (key.includes('qwen')) color = '#f97316';
+  else if (key.includes('cursor')) color = '#14b8a6';
+  else if (key.includes('gpt') || key.includes('openai')) color = '#10b981';
+  return {
+    icon: providerIcon(source),
+    label: source,
+    color,
+    bg: rgbaFromHex(color, 0.22),
+    border: rgbaFromHex(color, 0.62),
+  };
+}
+
+function agentIconStyleAttr(info) {
+  if (!info) return '';
+  return ` style="color:${info.color};background:${info.bg};border-color:${info.border};"`;
 }
 
 function taskWorkedMinutes(t) {
@@ -2068,8 +2155,10 @@ async function loadTasks() {
     const expanded = t.id === expandedId;
     const time = timeAgo(t.created_at);
     const parsed = parseResult(t.result);
-    const projectName = projectNameByWorkingDir(t.working_dir);
+    const project = projectByWorkingDir(t.working_dir);
+    const projectName = project && project.name ? project.name : '';
     const agentAccountName = taskAgentAccountName(t);
+    const agentIconInfo = taskAgentIconInfo(t);
 
     const resultHTML = buildTaskResultHTML(t, parsed);
 
@@ -2078,8 +2167,9 @@ async function loadTasks() {
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-id">#${t.id}</span>
         <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
+        ${agentIconInfo ? `<span class="task-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
         <span class="task-prompt">${esc(t.subject || t.prompt)}</span>
-        <span class="task-meta">${tr('project')}: ${esc(projectName || '—')}</span>
+        <span class="task-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
         <span class="task-meta">${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
         ${scheduleInfo(t)}
@@ -2096,7 +2186,8 @@ async function loadTasks() {
     const expanded = t.id === expandedId;
     const time = timeAgo(t.created_at);
     const parsed = parseResult(t.result);
-    const projectName = projectNameByWorkingDir(t.working_dir);
+    const project = projectByWorkingDir(t.working_dir);
+    const projectName = project && project.name ? project.name : '';
     const resultHTML = buildTaskResultHTML(t, parsed);
     const agentAccountName = taskAgentAccountName(t);
     const agentIconInfo = taskAgentIconInfo(t);
@@ -2108,9 +2199,9 @@ async function loadTasks() {
         <div class="admin-mobile-main">
           <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
           <div class="task-mobile-head-meta">
-            <span class="task-mobile-project-badge">${esc(projectName || '—')}</span>
+            <span class="task-mobile-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
             <span>${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
-            ${agentIconInfo ? `<span class="task-mobile-agent-icon" title="${esc(agentIconInfo.label)}">${agentIconInfo.icon}</span>` : ''}
+            ${agentIconInfo ? `<span class="task-mobile-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
             <span>${tr('worked_minutes', { n: workedMinutes ?? 0 })}</span>
           </div>
         </div>
@@ -2124,8 +2215,8 @@ async function loadTasks() {
           <span class="admin-mobile-chip">${statusLabel(t.status)}</span>
           <span class="admin-mobile-chip">P${t.priority}</span>
           <span class="admin-mobile-chip">${time}</span>
-          ${agentIconInfo ? `<span class="admin-mobile-chip" title="${esc(agentIconInfo.label)}">${agentIconInfo.icon}</span>` : ''}
-          ${projectName ? `<span class="admin-mobile-chip">${esc(projectName)}</span>` : ''}
+          ${agentIconInfo ? `<span class="admin-mobile-chip" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
+          ${projectName ? `<span class="admin-mobile-chip"${projectBadgeStyleAttr(project)}>${esc(projectName)}</span>` : ''}
           ${scheduleInfo(t)}
         </div>
         <div class="admin-mobile-kv"><b>${tr('prompt')}:</b></div>
@@ -2662,6 +2753,7 @@ const CRUD_TX = {
     message: 'Сообщение',
     options: 'Опции (JSON)',
     folder: 'Папка',
+    color: 'Цвет',
     comment: 'Комментарий',
     email: 'Email',
     priority: 'Приоритет',
@@ -2681,6 +2773,7 @@ const CRUD_TX = {
     delete_account_confirm: 'Удалить аккаунт',
     delete_prompt_confirm: 'Удалить промпт',
     invalid_json: 'Некорректный JSON в options',
+    invalid_color: 'Некорректный цвет. Используйте формат #RRGGBB',
     relogin: 'Войти',
     relogin_code: 'Код авторизации',
     relogin_enter_code: 'Вставьте код из страницы авторизации',
@@ -2699,6 +2792,7 @@ const CRUD_TX = {
     message: 'Message',
     options: 'Options (JSON)',
     folder: 'Folder',
+    color: 'Color',
     comment: 'Comment',
     email: 'Email',
     priority: 'Priority',
@@ -2718,6 +2812,7 @@ const CRUD_TX = {
     delete_account_confirm: 'Delete account',
     delete_prompt_confirm: 'Delete prompt',
     invalid_json: 'Invalid JSON in options',
+    invalid_color: 'Invalid color. Use #RRGGBB format',
     relogin: 'Login',
     relogin_code: 'Authorization code',
     relogin_enter_code: 'Paste code from authorization page',
@@ -2809,10 +2904,12 @@ function renderCrudFields(entity, row = {}) {
     `;
   }
   if (entity === 'project') {
+    const projectColor = normalizeHexColor(row.color) || '#c7e9ff';
     return `
       <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
       <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
       <div class="crud-field"><label>${tc('folder')}</label><input id="crud_folder" required value="${esc(row.folder || '')}"></div>
+      <div class="crud-field"><label>${tc('color')}</label><input id="crud_color" required value="${esc(projectColor)}" placeholder="#c7e9ff"></div>
       <div class="crud-field"><label>${tc('comment')}</label><textarea id="crud_comment">${esc(row.comment || '')}</textarea></div>
     `;
   }
@@ -2926,10 +3023,17 @@ async function submitCrudModal(e) {
       return;
     }
     if (crudState.entity === 'project') {
+      const colorRaw = crudValue('crud_color').trim();
+      const color = normalizeHexColor(colorRaw);
+      if (!color) {
+        alert(tc('invalid_color'));
+        return;
+      }
       const body = {
         name: crudValue('crud_name').trim(),
         shortname: crudValue('crud_shortname').trim(),
         folder: crudValue('crud_folder').trim(),
+        color,
         comment: crudValue('crud_comment').trim() || null,
       };
       if (mode === 'create') {
@@ -2997,6 +3101,7 @@ function renderProjectsCards(rows) {
   const cards = document.getElementById('projectsCards');
   cards.innerHTML = rows.map(r => {
     const expanded = isAdminExpanded('project', r.id);
+    const project = { color: r.color };
     const title = [`#${r.id}`, esc(r.name || ''), esc(r.shortname || '')]
       .filter(Boolean)
       .join(' · ');
@@ -3005,6 +3110,9 @@ function renderProjectsCards(rows) {
       <div class="admin-mobile-head" onclick="toggleAdminCard('project', ${r.id})">
         <div class="admin-mobile-main">
           <div class="admin-mobile-title">${title}</div>
+          <div class="admin-mobile-sub">
+            <span class="admin-mobile-chip"${projectBadgeStyleAttr(project)}>${esc(r.color || '')}</span>
+          </div>
         </div>
         <div class="prompt-mobile-inline-actions">
           <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit project" onclick="event.stopPropagation(); editProjectCrud(${r.id})">✎</button>
@@ -3133,6 +3241,7 @@ async function loadProjectsCrud() {
       <td>${esc(r.name || '')}</td>
       <td>${esc(r.shortname || '')}</td>
       <td>${esc(r.folder || '')}</td>
+      <td><span class="admin-mobile-chip"${projectBadgeStyleAttr({ color: r.color })}>${esc(r.color || '')}</span></td>
       <td>${esc(r.comment || '')}</td>
       <td class="admin-actions">
         <button class="btn btn-sm btn-ghost" onclick="editProjectCrud(${r.id})">Edit</button>

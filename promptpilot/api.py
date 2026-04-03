@@ -154,6 +154,7 @@ def api_projects(q: Optional[str] = None):
                 "name": r.get("name") or folder,
                 "folder": folder,
                 "path": path,
+                "color": r.get("color"),
             }
         )
     return entries
@@ -174,6 +175,7 @@ def api_admin_create_project(payload: dict):
             name=str(payload["name"]).strip(),
             shortname=str(payload["shortname"]).strip(),
             folder=str(payload["folder"]).strip(),
+            color=(str(payload.get("color")).strip() if payload.get("color") is not None else None),
             comment=(str(payload.get("comment")).strip() if payload.get("comment") is not None else None),
         )
         return row
@@ -192,6 +194,7 @@ def api_admin_update_project(project_id: int, payload: dict):
             name=str(payload["name"]).strip(),
             shortname=str(payload["shortname"]).strip(),
             folder=str(payload["folder"]).strip(),
+            color=(str(payload.get("color")).strip() if payload.get("color") is not None else None),
             comment=(str(payload.get("comment")).strip() if payload.get("comment") is not None else None),
         )
         if not ok:
