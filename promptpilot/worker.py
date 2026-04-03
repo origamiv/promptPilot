@@ -27,6 +27,7 @@ from .config import (
     get_provider_env,
 )
 from .limits import refresh_limits_for_provider
+from .models import TaskCreate
 
 RATE_LIMIT_PATTERNS = [
     "rate limit",
@@ -387,6 +388,73 @@ def execute_task(task):
         print("  -> All candidate accounts are exhausted or switch failed")
         return False
 
+    def _failover_on_rate_limit(rate_error: str = "") -> bool:
+        nonlocal account
+        if not account:
+            print("  -> Rate limited, but task has no bound agent account for failover")
+            return False
+        agent_id = account.get("agent_id")
+        if not agent_id:
+            print("  -> Rate limited, but active account has no agent_id")
+            return False
+
+        current_id = int(account["id"])
+        candidates = db.list_agent_accounts_for_relogin(int(agent_id), exclude_account_id=current_id, limit=20)
+        if not candidates:
+            print("  -> No alternative accounts with credentials for rate-limit failover")
+            return False
+
+        for cand in candidates:
+            cand_id = int(cand["id"])
+            try:
+                if provider_key.startswith("claude"):
+                    relogin.start_relogin(cand_id)
+                else:
+                    db.set_agent_account_active(cand_id, True)
+            except Exception as e:
+                print(f"  -> Relogin failed for account #{cand_id}: {e}")
+                continue
+
+            switched = db.get_agent_account(cand_id) or cand
+            switched = _refresh_limits_for(switched)
+            if _is_exhausted_status(switched):
+                print(f"  -> Account #{cand_id} is exhausted after relogin")
+                continue
+
+            try:
+                cloned = db.create_task(
+                    TaskCreate(
+                        prompt=task.prompt,
+                        subject=task.subject,
+                        agent_prompt=task.agent_prompt or None,
+                        working_dir=task.working_dir,
+                        provider=task.provider,
+                        priority=task.priority,
+                        max_retries=task.max_retries,
+                        skip_permissions=task.skip_permissions,
+                        model=task.model,
+                        session_id=task.session_id,
+                        parent_task_id=task.id,
+                        tg_chat_id=task.tg_chat_id,
+                    )
+                )
+                db.set_task_agent_account(cloned.id, cand_id)
+            except Exception as e:
+                print(f"  -> Failed to create cloned task for account #{cand_id}: {e}")
+                continue
+
+            account = switched
+            err_txt = (rate_error or "").strip()
+            suffix = f" ({err_txt[:120]})" if err_txt else ""
+            print(
+                f"  -> Rate-limit failover: task #{task.id} cloned to #{cloned.id}, "
+                f"switched account #{current_id} -> #{cand_id}{suffix}"
+            )
+            return True
+
+        print("  -> Rate-limit failover failed: no account could accept cloned task")
+        return False
+
     if account and not _switch_account_if_exhausted():
         next_run = account.get("reset_5h") if isinstance(account, dict) else None
         if not isinstance(next_run, datetime):
@@ -511,18 +579,13 @@ def execute_task(task):
     readable_error = humanize_error(result.stdout, result.stderr)
     if not is_stream_json(result.stdout or "") and is_rate_limited(f"{err_text}\n{out_text}", result.returncode):
         src_payload = build_src_payload(provider, result.stdout or "", result.stderr or "")
-        if task.retry_count >= task.max_retries:
-            details = readable_error or "Rate limited"
-            db.mark_failed(
-                task.id,
-                f"Rate limited, max retries ({task.max_retries}) exceeded.\n{details}",
-                src=src_payload,
-            )
-            _refresh_limits(exhausted_hint=True)
-            return
         next_run = compute_next_run(task.retry_count)
-        db.mark_rate_limited(task.id, next_run, error=readable_error or "Rate limited")
+        details = readable_error or "Rate limited"
+        if task.retry_count >= task.max_retries:
+            details = f"Rate limited, max retries ({task.max_retries}) exceeded.\n{details}"
+        db.mark_rate_limited(task.id, next_run, error=details)
         _refresh_limits(exhausted_hint=True)
+        _failover_on_rate_limit(details)
         print(f"  -> Rate limited. Retry #{task.retry_count + 1} at {next_run.strftime('%H:%M:%S')}")
         return
 
@@ -577,13 +640,13 @@ def execute_task(task):
             return
         # Check for rate limit in stream events — only if no text was returned
         if stream_is_rate_limited(parsed):
-            if task.retry_count >= task.max_retries:
-                db.mark_failed(task.id, f"Rate limited.\n{output}", src=src_payload)
-                _refresh_limits(exhausted_hint=True)
-                return
             next_run = compute_next_run(task.retry_count)
-            db.mark_rate_limited(task.id, next_run, error=output or "Rate limited")
+            details = output or "Rate limited"
+            if task.retry_count >= task.max_retries:
+                details = f"Rate limited, max retries ({task.max_retries}) exceeded.\n{details}"
+            db.mark_rate_limited(task.id, next_run, error=details)
             _refresh_limits(exhausted_hint=True)
+            _failover_on_rate_limit(details)
             print(f"  -> Rate limited (stream event). Retry at {next_run.strftime('%H:%M:%S')}")
             return
     else:
