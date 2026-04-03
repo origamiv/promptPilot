@@ -53,6 +53,12 @@
     display: flex;
     min-height: 100vh;
   }
+  .mobile-topbar {
+    display: none;
+  }
+  .sidebar-backdrop {
+    display: none;
+  }
   .sidebar {
     width: 220px;
     border-right: 1px solid var(--border);
@@ -537,6 +543,212 @@
     display: flex;
     gap: 6px;
   }
+  .admin-mobile-list {
+    display: none;
+  }
+  .admin-mobile-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 10px 8px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .admin-mobile-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    padding-right: 36px;
+  }
+  .admin-mobile-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex: 0 0 28px;
+  }
+  .admin-mobile-main {
+    min-width: 0;
+    flex: 1;
+  }
+  .admin-mobile-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .admin-mobile-sub {
+    font-size: 11px;
+    color: var(--text2);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .admin-mobile-chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    background: var(--surface2);
+  }
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in oklab, var(--border) 65%, #000 35%);
+    display: inline-block;
+  }
+  .status-dot.s0 { background: #9ca3af; }
+  .status-dot.s1 { background: #22c55e; }
+  .status-dot.s2 { background: #ef4444; }
+  .status-dot.s3 { background: #f59e0b; }
+  .admin-mobile-chevron {
+    margin-left: auto;
+    color: var(--text2);
+    font-size: 14px;
+    line-height: 1;
+    align-self: center;
+  }
+  .admin-mobile-kv {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 3px;
+    word-break: break-word;
+  }
+  .admin-mobile-kv b {
+    color: var(--text);
+    font-weight: 600;
+  }
+  .admin-mobile-body {
+    display: none;
+    padding-top: 9px;
+    margin-top: 9px;
+    border-top: 1px solid var(--border);
+  }
+  .admin-mobile-card.expanded .admin-mobile-body {
+    display: block;
+  }
+  .admin-mobile-menu-wrap {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+  .admin-mobile-menu-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: pointer;
+  }
+  .admin-mobile-menu {
+    position: absolute;
+    right: 0;
+    top: 34px;
+    min-width: 122px;
+    z-index: 3;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+    padding: 4px;
+    display: grid;
+    gap: 4px;
+  }
+  .admin-mobile-menu-item {
+    text-align: left;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 12px;
+    padding: 6px 8px;
+    cursor: pointer;
+  }
+  .admin-mobile-menu-item.danger {
+    color: var(--red);
+  }
+  .admin-mobile-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .admin-mobile-actions .btn {
+    flex: 1 1 0;
+  }
+  #promptsCards .admin-mobile-card {
+    border-radius: 0;
+    margin-bottom: 0;
+    padding: 0;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  #promptsCards .admin-mobile-card + .admin-mobile-card {
+    border-top: 0;
+  }
+  #promptsCards .admin-mobile-card:first-child {
+    border-top: 1px solid var(--border);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+  }
+  #promptsCards .admin-mobile-card:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    margin-bottom: 10px;
+  }
+  #promptsCards .admin-mobile-head {
+    gap: 8px;
+    padding: 7px 8px;
+    align-items: center;
+  }
+  #promptsCards .admin-mobile-title {
+    margin-bottom: 0;
+    font-size: 12px;
+  }
+  .prompt-mobile-inline-actions {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+  }
+  .prompt-mobile-icon-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .prompt-mobile-icon-btn.danger {
+    color: var(--red);
+  }
+  #promptsCards .admin-mobile-chevron {
+    margin-left: 2px;
+    font-size: 12px;
+  }
+  #promptsCards .admin-mobile-body {
+    margin-top: 0;
+    padding: 8px;
+  }
   .crud-modal {
     position: fixed;
     inset: 0;
@@ -615,15 +827,244 @@
     justify-content: flex-end;
     gap: 8px;
   }
+  .crud-mobile-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1250;
+    background: var(--bg);
+    overflow: auto;
+  }
+  .crud-mobile-screen.open {
+    display: block;
+  }
+  .crud-mobile-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .crud-mobile-title {
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .crud-mobile-body {
+    padding: 12px;
+  }
 
   @media (max-width: 980px) {
-    .app-layout { display: block; }
-    .sidebar {
-      width: auto;
-      height: auto;
-      position: static;
-      border-right: none;
+    .app-layout { display: block; min-height: 100dvh; }
+    .mobile-topbar {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      position: sticky;
+      top: 0;
+      z-index: 1150;
+      background: var(--surface);
       border-bottom: 1px solid var(--border);
+    }
+    .mobile-brand {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+    .menu-toggle {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .sidebar-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 1090;
+    }
+    body.menu-open .sidebar-backdrop {
+      display: block;
+    }
+    .sidebar {
+      width: min(82vw, 320px);
+      height: 100dvh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      border-right: 1px solid var(--border);
+      border-bottom: none;
+      z-index: 1120;
+      transform: translateX(-105%);
+      transition: transform .2s ease;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+      overflow-y: auto;
+    }
+    body.menu-open .sidebar {
+      transform: translateX(0);
+    }
+    .container {
+      padding: 16px 12px 20px;
+    }
+    header {
+      margin-bottom: 16px;
+    }
+    .logo {
+      font-size: 18px;
+    }
+    .header-right {
+      width: 100%;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .add-form {
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .add-form textarea {
+      min-height: 106px;
+      margin-bottom: 10px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+    .form-row label {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+      min-width: 0;
+    }
+    .form-row select,
+    .form-row input,
+    .form-row input[type="text"] {
+      width: 100%;
+      min-width: 0;
+    }
+    .form-row .compact-check {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn.btn-primary {
+      margin-left: 0;
+    }
+    #addTaskBtn {
+      grid-column: 1 / -1;
+      width: 100%;
+      min-height: 40px;
+      margin-top: 2px;
+    }
+    #modelLabel,
+    #workdirLabel {
+      min-width: 0;
+    }
+    #workdirSelect + .select2-container {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+    .filter-bar {
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    #pauseBtn {
+      margin-left: 0 !important;
+      width: 100%;
+      text-align: center;
+    }
+    .task-list {
+      gap: 8px;
+    }
+    .task-row {
+      padding: 10px;
+    }
+    .task-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .task-id {
+      min-width: 0;
+      font-size: 11px;
+    }
+    .task-prompt {
+      order: 3;
+      flex-basis: 100%;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+    }
+    .task-meta,
+    .task-schedule {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px 8px;
+      white-space: nowrap;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+    .task-detail {
+      margin-top: 10px;
+      padding-top: 10px;
+    }
+    .detail-actions {
+      flex-wrap: wrap;
+    }
+    .detail-actions .btn {
+      flex: 1 1 auto;
+      min-height: 32px;
+    }
+    .result-block pre {
+      max-height: 280px;
+      font-size: 11px;
+      padding: 10px;
+      padding-right: 62px;
+    }
+    .admin-view {
+      padding: 12px;
+      overflow-x: auto;
+    }
+    .admin-table {
+      display: none;
+    }
+    .admin-mobile-list {
+      display: block;
+    }
+    .crud-dialog {
+      width: 100%;
+      max-height: 90dvh;
+      overflow: auto;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+    .filter-btn {
+      flex: 1 1 calc(50% - 8px);
+      text-align: center;
     }
   }
 
@@ -661,6 +1102,12 @@
 </head>
 <body>
 <div class="app-layout">
+  <div class="mobile-topbar">
+    <button class="menu-toggle" id="menuToggle" type="button" onclick="toggleMobileMenu()" aria-label="Open menu">☰</button>
+    <div class="mobile-brand">PromptPilot</div>
+    <div></div>
+  </div>
+  <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeMobileMenu()"></div>
   <aside class="sidebar">
     <div class="side-title">Меню</div>
     <button id="menuTasks" class="side-btn active" onclick="switchView('tasks')">Задачи</button>
@@ -728,7 +1175,7 @@
       <label><span id="promptListLabelText">Список промптов</span>
         <input type="text" id="promptListInput" value="base, current, end" placeholder="base, current, end" style="width:220px">
       </label>
-      <label style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
+      <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
         <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
       </label>
@@ -755,6 +1202,7 @@
       <input id="projectsSearch" placeholder="Поиск..." oninput="loadProjectsCrud()">
       <button class="btn btn-primary" onclick="createProjectCrud()">Добавить</button>
     </div>
+    <div class="admin-mobile-list" id="projectsCards"></div>
     <table class="admin-table">
       <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Folder</th><th>Comment</th><th></th></tr></thead>
       <tbody id="projectsTbody"></tbody>
@@ -767,6 +1215,7 @@
       <input id="agentsSearch" placeholder="Поиск..." oninput="loadAgentsCrud()">
       <button class="btn btn-primary" onclick="createAgentCrud()">Добавить</button>
     </div>
+    <div class="admin-mobile-list" id="agentsCards"></div>
     <table class="admin-table">
       <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Email</th><th>Priority</th><th>Status</th><th></th></tr></thead>
       <tbody id="agentsTbody"></tbody>
@@ -779,6 +1228,7 @@
       <input id="accountsSearch" placeholder="Поиск..." oninput="loadAccountsCrud()">
       <button class="btn btn-primary" onclick="createAccountCrud()">Добавить</button>
     </div>
+    <div class="admin-mobile-list" id="accountsCards"></div>
     <table class="admin-table">
       <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Agent</th><th>Login</th><th>Mode</th><th></th></tr></thead>
       <tbody id="accountsTbody"></tbody>
@@ -791,6 +1241,7 @@
       <input id="promptsSearch" placeholder="Поиск..." oninput="loadPromptsCrud()">
       <button class="btn btn-primary" onclick="createPromptCrud()">Добавить</button>
     </div>
+    <div class="admin-mobile-list" id="promptsCards"></div>
     <table class="admin-table">
       <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Message</th><th>Options</th><th></th></tr></thead>
       <tbody id="promptsTbody"></tbody>
@@ -814,6 +1265,22 @@
     </form>
   </div>
 </div>
+<div id="crudMobileScreen" class="crud-mobile-screen">
+  <div class="crud-mobile-head">
+    <button class="btn btn-ghost" type="button" onclick="closeCrudScreen()">←</button>
+    <div id="crudMobileTitle" class="crud-mobile-title"></div>
+    <button id="crudMobileSaveTop" class="btn btn-primary" type="button" onclick="submitCrudFromScreen()">Сохранить</button>
+  </div>
+  <div class="crud-mobile-body">
+    <form id="crudMobileForm" class="crud-form" onsubmit="submitCrudModal(event)">
+      <div id="crudMobileFields" class="crud-fields"></div>
+      <div class="crud-actions">
+        <button type="button" class="btn btn-ghost" onclick="closeCrudScreen()">Отмена</button>
+        <button type="submit" id="crudMobileSubmitBtn" class="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -831,6 +1298,8 @@ let adminProjectsRows = [];
 let adminAgentsRows = [];
 let adminAccountsRows = [];
 let adminPromptsRows = [];
+let adminCardExpanded = new Set();
+let adminCardMenuKey = null;
 let crudState = { entity: null, mode: 'create', id: null };
 
 const I18N = {
@@ -1554,6 +2023,24 @@ let currentView = 'tasks';
 
 const VIEW_NAMES = new Set(['tasks', 'projects', 'agents', 'accounts', 'prompts']);
 
+function isMobileLayout() {
+  return window.matchMedia('(max-width: 980px)').matches;
+}
+
+function openMobileMenu() {
+  if (!isMobileLayout()) return;
+  document.body.classList.add('menu-open');
+}
+
+function closeMobileMenu() {
+  document.body.classList.remove('menu-open');
+}
+
+function toggleMobileMenu() {
+  if (document.body.classList.contains('menu-open')) closeMobileMenu();
+  else openMobileMenu();
+}
+
 function parseViewFromHash() {
   const raw = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
   return VIEW_NAMES.has(raw) ? raw : 'tasks';
@@ -1586,6 +2073,49 @@ function switchView(view, opts = {}) {
   if (view === 'agents') loadAgentsCrud();
   if (view === 'accounts') loadAccountsCrud();
   if (view === 'prompts') loadPromptsCrud();
+  adminCardMenuKey = null;
+  closeMobileMenu();
+}
+
+function adminKey(entity, id) {
+  return `${entity}:${id}`;
+}
+
+function isAdminExpanded(entity, id) {
+  return adminCardExpanded.has(adminKey(entity, id));
+}
+
+function isAdminMenuOpen(entity, id) {
+  return adminCardMenuKey === adminKey(entity, id);
+}
+
+function toggleAdminCard(entity, id) {
+  const key = adminKey(entity, id);
+  if (adminCardExpanded.has(key)) adminCardExpanded.delete(key);
+  else adminCardExpanded.add(key);
+  adminCardMenuKey = null;
+  renderCurrentAdminCards();
+}
+
+function toggleAdminMenu(e, entity, id) {
+  e.stopPropagation();
+  const key = adminKey(entity, id);
+  adminCardMenuKey = adminCardMenuKey === key ? null : key;
+  renderCurrentAdminCards();
+}
+
+function closeAdminMenu() {
+  if (!adminCardMenuKey) return;
+  adminCardMenuKey = null;
+  renderCurrentAdminCards();
+}
+
+function renderCurrentAdminCards() {
+  if (!isMobileLayout()) return;
+  if (currentView === 'projects') renderProjectsCards(adminProjectsRows);
+  if (currentView === 'agents') renderAgentsCards(adminAgentsRows);
+  if (currentView === 'accounts') renderAccountsCards(adminAccountsRows);
+  if (currentView === 'prompts') renderPromptsCards(adminPromptsRows);
 }
 
 const CRUD_TX = {
@@ -1667,8 +2197,14 @@ function tc(key) {
 function setCrudActionLabels() {
   const cancelBtn = document.querySelector('#crudForm .crud-actions .btn-ghost');
   const submitBtn = document.getElementById('crudSubmitBtn');
+  const mobileCancelBtn = document.querySelector('#crudMobileForm .crud-actions .btn-ghost');
+  const mobileSubmitBtn = document.getElementById('crudMobileSubmitBtn');
+  const mobileTopSaveBtn = document.getElementById('crudMobileSaveTop');
   if (cancelBtn) cancelBtn.textContent = tc('cancel');
   if (submitBtn) submitBtn.textContent = tc('save');
+  if (mobileCancelBtn) mobileCancelBtn.textContent = tc('cancel');
+  if (mobileSubmitBtn) mobileSubmitBtn.textContent = tc('save');
+  if (mobileTopSaveBtn) mobileTopSaveBtn.textContent = tc('save');
 }
 
 function onCrudModalBackdrop(e) {
@@ -1679,6 +2215,33 @@ function closeCrudModal() {
   document.getElementById('crudModal').classList.remove('open');
   document.getElementById('crudFields').innerHTML = '';
   crudState = { entity: null, mode: 'create', id: null };
+}
+
+function openCrudScreen() {
+  document.getElementById('crudMobileScreen').classList.add('open');
+}
+
+function closeCrudScreen() {
+  document.getElementById('crudMobileScreen').classList.remove('open');
+  document.getElementById('crudMobileFields').innerHTML = '';
+  crudState = { entity: null, mode: 'create', id: null };
+}
+
+function submitCrudFromScreen() {
+  const form = document.getElementById('crudMobileForm');
+  if (form) form.requestSubmit();
+}
+
+function activeCrudRoot() {
+  const mobile = document.getElementById('crudMobileScreen').classList.contains('open');
+  if (mobile) return document.getElementById('crudMobileScreen');
+  return document.getElementById('crudModal');
+}
+
+function crudValue(id) {
+  const root = activeCrudRoot();
+  const el = root ? root.querySelector(`#${id}`) : null;
+  return el ? el.value : '';
 }
 
 async function ensureAgentsRows(force = false) {
@@ -1748,7 +2311,19 @@ async function openCrudModal(entity, mode, id = null) {
     if (entity === 'prompt') row = adminPromptsRows.find(x => x.id === id) || {};
   }
   crudState = { entity, mode, id };
-  document.getElementById('crudModalTitle').textContent = `${mode === 'create' ? tc('add') : tc('edit')} ${entityTitle(entity)}`;
+  const title = `${mode === 'create' ? tc('add') : tc('edit')} ${entityTitle(entity)}`;
+  document.getElementById('crudModalTitle').textContent = title;
+  document.getElementById('crudMobileTitle').textContent = title;
+  document.getElementById('crudFields').innerHTML = '';
+  document.getElementById('crudMobileFields').innerHTML = '';
+  if (isMobileLayout()) {
+    document.getElementById('crudMobileFields').innerHTML = renderCrudFields(entity, row);
+    setCrudActionLabels();
+    openCrudScreen();
+    const first = document.getElementById('crudMobileScreen').querySelector('input,select,textarea');
+    if (first) first.focus();
+    return;
+  }
   document.getElementById('crudFields').innerHTML = renderCrudFields(entity, row);
   setCrudActionLabels();
   const modal = document.getElementById('crudModal');
@@ -1763,7 +2338,7 @@ async function submitCrudModal(e) {
   const id = crudState.id;
   try {
     if (crudState.entity === 'prompt') {
-      const optionsRaw = document.getElementById('crud_options').value.trim();
+      const optionsRaw = crudValue('crud_options').trim();
       let parsedOptions = null;
       if (optionsRaw) {
         try {
@@ -1777,9 +2352,9 @@ async function submitCrudModal(e) {
         }
       }
       const body = {
-        name: document.getElementById('crud_name').value.trim(),
-        shortname: document.getElementById('crud_shortname').value.trim(),
-        message: document.getElementById('crud_message').value.trim(),
+        name: crudValue('crud_name').trim(),
+        shortname: crudValue('crud_shortname').trim(),
+        message: crudValue('crud_message').trim(),
         options: parsedOptions,
       };
       if (mode === 'create') {
@@ -1787,59 +2362,63 @@ async function submitCrudModal(e) {
       } else {
         await fetchJSON(`${API}/admin/prompts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       }
-      closeCrudModal();
+      if (isMobileLayout()) closeCrudScreen();
+      else closeCrudModal();
       await loadPromptsCrud();
       return;
     }
     if (crudState.entity === 'project') {
       const body = {
-        name: document.getElementById('crud_name').value.trim(),
-        shortname: document.getElementById('crud_shortname').value.trim(),
-        folder: document.getElementById('crud_folder').value.trim(),
-        comment: document.getElementById('crud_comment').value.trim() || null,
+        name: crudValue('crud_name').trim(),
+        shortname: crudValue('crud_shortname').trim(),
+        folder: crudValue('crud_folder').trim(),
+        comment: crudValue('crud_comment').trim() || null,
       };
       if (mode === 'create') {
         await fetchJSON(`${API}/admin/projects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       } else {
         await fetchJSON(`${API}/admin/projects/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       }
-      closeCrudModal();
+      if (isMobileLayout()) closeCrudScreen();
+      else closeCrudModal();
       await loadProjectsCrud();
       await loadProjects();
       return;
     }
     if (crudState.entity === 'agent') {
       const body = {
-        name: document.getElementById('crud_name').value.trim(),
-        shortname: document.getElementById('crud_shortname').value.trim(),
-        email: document.getElementById('crud_email').value.trim() || null,
-        priority: parseInt(document.getElementById('crud_priority').value || '0', 10),
-        status: parseInt(document.getElementById('crud_status').value || '1', 10),
+        name: crudValue('crud_name').trim(),
+        shortname: crudValue('crud_shortname').trim(),
+        email: crudValue('crud_email').trim() || null,
+        priority: parseInt(crudValue('crud_priority') || '0', 10),
+        status: parseInt(crudValue('crud_status') || '1', 10),
       };
       if (mode === 'create') {
         await fetchJSON(`${API}/admin/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       } else {
         await fetchJSON(`${API}/admin/agents/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       }
-      closeCrudModal();
+      if (isMobileLayout()) closeCrudScreen();
+      else closeCrudModal();
       await loadAgentsCrud();
       return;
     }
     const body = {
-      name: document.getElementById('crud_name').value.trim(),
-      shortname: document.getElementById('crud_shortname').value.trim(),
-      agent_id: parseInt(document.getElementById('crud_agent_id').value || '0', 10),
-      login: document.getElementById('crud_login').value.trim() || null,
-      pass: document.getElementById('crud_pass').value.trim() || null,
-      token: document.getElementById('crud_token').value.trim() || null,
-      login_mode: document.getElementById('crud_login_mode').value.trim() || null,
+      name: crudValue('crud_name').trim(),
+      shortname: crudValue('crud_shortname').trim(),
+      agent_id: parseInt(crudValue('crud_agent_id') || '0', 10),
+      login: crudValue('crud_login').trim() || null,
+      pass: crudValue('crud_pass').trim() || null,
+      token: crudValue('crud_token').trim() || null,
+      login_mode: crudValue('crud_login_mode').trim() || null,
     };
     if (mode === 'create') {
       await fetchJSON(`${API}/admin/agents-accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } else {
       await fetchJSON(`${API}/admin/agents-accounts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     }
-    closeCrudModal();
+    if (isMobileLayout()) closeCrudScreen();
+    else closeCrudModal();
     await loadAccountsCrud();
   } catch (err) {
     alert(`${tc('save_failed')}: ${err.message}`);
@@ -1847,10 +2426,148 @@ async function submitCrudModal(e) {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('crudModal').classList.contains('open')) {
-    closeCrudModal();
+  if (e.key === 'Escape') {
+    if (document.getElementById('crudModal').classList.contains('open')) closeCrudModal();
+    if (document.getElementById('crudMobileScreen').classList.contains('open')) closeCrudScreen();
   }
 });
+
+function renderProjectsCards(rows) {
+  const cards = document.getElementById('projectsCards');
+  cards.innerHTML = rows.map(r => {
+    const expanded = isAdminExpanded('project', r.id);
+    const menuOpen = isAdminMenuOpen('project', r.id);
+    return `
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+      <div class="admin-mobile-menu-wrap">
+        <button class="admin-mobile-menu-btn" onclick="toggleAdminMenu(event, 'project', ${r.id})">⋮</button>
+        ${menuOpen ? `<div class="admin-mobile-menu">
+          <button class="admin-mobile-menu-item" onclick="editProjectCrud(${r.id})">Edit</button>
+          <button class="admin-mobile-menu-item danger" onclick="deleteProjectCrud(${r.id})">Delete</button>
+        </div>` : ''}
+      </div>
+      <div class="admin-mobile-head" onclick="toggleAdminCard('project', ${r.id})">
+        <span class="admin-mobile-icon">📁</span>
+        <div class="admin-mobile-main">
+          <div class="admin-mobile-title">#${r.id} · ${esc(r.name || '')}</div>
+          <div class="admin-mobile-sub">
+            <span class="admin-mobile-chip">${esc(r.shortname || '')}</span>
+            <span class="admin-mobile-chip">${esc(r.folder || '')}</span>
+          </div>
+        </div>
+        <span class="admin-mobile-chevron">${expanded ? '▴' : '▾'}</span>
+      </div>
+      <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Short:</b> ${esc(r.shortname || '')}</div>
+        <div class="admin-mobile-kv"><b>Folder:</b> ${esc(r.folder || '')}</div>
+        ${r.comment ? `<div class="admin-mobile-kv"><b>Comment:</b> ${esc(r.comment)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAgentsCards(rows) {
+  const cards = document.getElementById('agentsCards');
+  cards.innerHTML = rows.map(r => {
+    const expanded = isAdminExpanded('agent', r.id);
+    const menuOpen = isAdminMenuOpen('agent', r.id);
+    return `
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+      <div class="admin-mobile-menu-wrap">
+        <button class="admin-mobile-menu-btn" onclick="toggleAdminMenu(event, 'agent', ${r.id})">⋮</button>
+        ${menuOpen ? `<div class="admin-mobile-menu">
+          <button class="admin-mobile-menu-item" onclick="editAgentCrud(${r.id})">Edit</button>
+          <button class="admin-mobile-menu-item danger" onclick="deleteAgentCrud(${r.id})">Delete</button>
+        </div>` : ''}
+      </div>
+      <div class="admin-mobile-head" onclick="toggleAdminCard('agent', ${r.id})">
+        <span class="admin-mobile-icon">🤖</span>
+        <div class="admin-mobile-main">
+          <div class="admin-mobile-title">#${r.id} · ${esc(r.name || '')}</div>
+          <div class="admin-mobile-sub">
+            <span class="admin-mobile-chip">${esc(r.shortname || '')}</span>
+            <span class="admin-mobile-chip">P${r.priority ?? 0}</span>
+            <span class="admin-mobile-chip">S${r.status ?? 1}</span>
+          </div>
+        </div>
+        <span class="admin-mobile-chevron">${expanded ? '▴' : '▾'}</span>
+      </div>
+      <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Email:</b> ${esc(r.email || '')}</div>
+        <div class="admin-mobile-kv"><b>Priority:</b> ${r.priority ?? 0}</div>
+        <div class="admin-mobile-kv"><b>Status:</b> ${r.status ?? 1}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAccountsCards(rows) {
+  const cards = document.getElementById('accountsCards');
+  cards.innerHTML = rows.map(r => {
+    const expanded = isAdminExpanded('account', r.id);
+    const menuOpen = isAdminMenuOpen('account', r.id);
+    return `
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+      <div class="admin-mobile-menu-wrap">
+        <button class="admin-mobile-menu-btn" onclick="toggleAdminMenu(event, 'account', ${r.id})">⋮</button>
+        ${menuOpen ? `<div class="admin-mobile-menu">
+          <button class="admin-mobile-menu-item" onclick="editAccountCrud(${r.id})">Edit</button>
+          <button class="admin-mobile-menu-item danger" onclick="deleteAccountCrud(${r.id})">Delete</button>
+        </div>` : ''}
+      </div>
+      <div class="admin-mobile-head" onclick="toggleAdminCard('account', ${r.id})">
+        <span class="admin-mobile-icon">🔐</span>
+        <div class="admin-mobile-main">
+          <div class="admin-mobile-title">#${r.id} · ${esc(r.name || '')}</div>
+          <div class="admin-mobile-sub">
+            <span class="admin-mobile-chip">${esc(r.shortname || '')}</span>
+            <span class="admin-mobile-chip">${esc(r.agent_name || String(r.agent_id || ''))}</span>
+          </div>
+        </div>
+        <span class="admin-mobile-chevron">${expanded ? '▴' : '▾'}</span>
+      </div>
+      <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Agent:</b> ${esc(r.agent_name || String(r.agent_id || ''))}</div>
+        <div class="admin-mobile-kv"><b>Login:</b> ${esc(r.login || '')}</div>
+        <div class="admin-mobile-kv"><b>Mode:</b> ${esc(r.login_mode || '')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderPromptsCards(rows) {
+  const cards = document.getElementById('promptsCards');
+  cards.innerHTML = rows.map(r => {
+    const expanded = isAdminExpanded('prompt', r.id);
+    const statusRaw = Number.isFinite(Number(r.status))
+      ? Number(r.status)
+      : Number.isFinite(Number(r.options && r.options.status))
+        ? Number(r.options.status)
+        : 0;
+    const status = [0, 1, 2, 3].includes(statusRaw) ? statusRaw : 0;
+    const title = [`#${r.id}`, esc(r.name || ''), esc(r.shortname || '')]
+      .filter(Boolean)
+      .join(' · ');
+    return `
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+      <div class="admin-mobile-head" onclick="toggleAdminCard('prompt', ${r.id})">
+        <div class="admin-mobile-main">
+          <div class="admin-mobile-title">${title}</div>
+        </div>
+        <div class="prompt-mobile-inline-actions">
+          <span class="status-dot s${status}" title="status ${status}"></span>
+          <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit prompt" onclick="event.stopPropagation(); editPromptCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" aria-label="Delete prompt" onclick="event.stopPropagation(); deletePromptCrud(${r.id})">🗑</button>
+          <span class="admin-mobile-chevron">${expanded ? '▴' : '▾'}</span>
+        </div>
+      </div>
+      <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Message:</b> ${esc(r.message || '')}</div>
+        <div class="admin-mobile-kv"><b>Options:</b> ${esc(r.options ? JSON.stringify(r.options) : '')}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
 
 // --- CRUD: Projects ---
 async function loadProjectsCrud() {
@@ -1871,6 +2588,7 @@ async function loadProjectsCrud() {
       </td>
     </tr>
   `).join('');
+  renderProjectsCards(rows);
 }
 
 async function createProjectCrud() {
@@ -1912,6 +2630,7 @@ async function loadAgentsCrud() {
       </td>
     </tr>
   `).join('');
+  renderAgentsCards(rows);
 }
 
 async function createAgentCrud() {
@@ -1953,6 +2672,7 @@ async function loadAccountsCrud() {
       </td>
     </tr>
   `).join('');
+  renderAccountsCards(rows);
 }
 
 async function createAccountCrud() {
@@ -1992,6 +2712,7 @@ async function loadPromptsCrud() {
       </td>
     </tr>
   `).join('');
+  renderPromptsCards(rows);
 }
 
 async function createPromptCrud() {
@@ -2065,6 +2786,21 @@ async function loadCosts() {
 window.addEventListener('hashchange', () => {
   const view = parseViewFromHash();
   if (view !== currentView) switchView(view, { syncUrl: false });
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.admin-mobile-menu-wrap')) closeAdminMenu();
+});
+
+window.addEventListener('resize', () => {
+  if (!isMobileLayout()) {
+    closeMobileMenu();
+    if (document.getElementById('crudMobileScreen').classList.contains('open')) closeCrudScreen();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMobileMenu();
 });
 
 // --- Init ---
