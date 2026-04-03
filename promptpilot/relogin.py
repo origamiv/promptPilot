@@ -239,9 +239,22 @@ def _write_claude_credentials(payload: dict) -> bool:
     try:
         CLAUDE_CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
         CLAUDE_CREDENTIALS_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        _ensure_runtime_owner(CLAUDE_CREDENTIALS_PATH.parent)
+        _ensure_runtime_owner(CLAUDE_CREDENTIALS_PATH)
         return True
     except Exception:
         return False
+
+
+def _ensure_runtime_owner(path: Path) -> None:
+    user = _claude_runtime_user()
+    if not user or os.name == "nt" or os.geteuid() != 0:
+        return
+    try:
+        pw = pwd.getpwnam(user)
+        os.chown(path, pw.pw_uid, pw.pw_gid)
+    except Exception:
+        pass
 
 
 def _run_claude_cmd(args: list[str], *, timeout: int = 8, capture_output: bool = True) -> subprocess.CompletedProcess:
@@ -307,6 +320,7 @@ def _reset_claude_runtime() -> None:
             if folder.exists():
                 shutil.rmtree(folder, ignore_errors=True)
             folder.mkdir(parents=True, exist_ok=True)
+            _ensure_runtime_owner(folder)
         except Exception:
             pass
 
