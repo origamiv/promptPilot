@@ -290,7 +290,16 @@ def execute_task(task):
         except Exception as e:
             print(f"  -> Limits refresh failed: {e}")
 
-    effective_prompt = task.agent_prompt or task.prompt
+    base_prompt = task.agent_prompt or task.prompt
+    # Guardrail: allow restarting only the web server, never the worker process.
+    runtime_guard = (
+        "\n\nОбязательное ограничение выполнения:\n"
+        "- Нельзя останавливать или перезапускать воркер PromptPilot "
+        "(`pp worker`, `promptpilot-worker`, `systemctl *worker*`, `pkill`/`kill` воркера).\n"
+        "- Если нужно перезапустить проект, перезапускай только веб-сервер "
+        "(`pp server` или `promptpilot-server`).\n"
+    )
+    effective_prompt = f"{base_prompt}{runtime_guard}"
     cmd = build_cmd(provider, effective_prompt, skip_permissions=task.skip_permissions, session_id=task.session_id, model=task.model)
 
     env = get_provider_env(provider)
