@@ -118,6 +118,7 @@ def init_db():
                     started_at TIMESTAMPTZ,
                     completed_at TIMESTAMPTZ,
                     result TEXT,
+                    src JSONB,
                     error TEXT,
                     retry_count INTEGER NOT NULL DEFAULT 0,
                     max_retries INTEGER NOT NULL DEFAULT 5,
@@ -260,6 +261,7 @@ def init_db():
             "ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ",
             "ADD COLUMN IF NOT EXISTS recurrence TEXT",
             "ADD COLUMN IF NOT EXISTS agent_account_id BIGINT",
+            "ADD COLUMN IF NOT EXISTS src JSONB",
         ]:
             cur.execute(sql.SQL("ALTER TABLE {} {}").format(_tasks_ref(), sql.SQL(col_sql)))
 
@@ -368,7 +370,15 @@ def get_next_runnable() -> Optional[TaskInDB]:
         return _row_to_task(row) if row else None
 
 
-def mark_completed(task_id: int, result: str, exit_code: int = 0, model_used: str = None, session_id: str = None):
+def mark_completed(
+    task_id: int,
+    result: str,
+    exit_code: int = 0,
+    model_used: str = None,
+    session_id: str = None,
+    src: Optional[dict] = None,
+):
+    src_payload = json.dumps(src, ensure_ascii=False) if src is not None else None
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
@@ -376,6 +386,7 @@ def mark_completed(task_id: int, result: str, exit_code: int = 0, model_used: st
                 UPDATE {}
                 SET status = 'completed',
                     result = %s,
+                    src = COALESCE(%s::jsonb, src),
                     exit_code = %s,
                     completed_at = %s,
                     model_used = %s,
@@ -383,18 +394,21 @@ def mark_completed(task_id: int, result: str, exit_code: int = 0, model_used: st
                 WHERE id = %s
                 """
             ).format(_tasks_ref()),
-            (result, exit_code, _now(), model_used, session_id, task_id),
+            (result, src_payload, exit_code, _now(), model_used, session_id, task_id),
         )
     touch_project_last_used_by_task(task_id)
 
 
-def mark_failed(task_id: int, error: str, exit_code: int = 1):
+def mark_failed(task_id: int, error: str, exit_code: int = 1, src: Optional[dict] = None):
+    src_payload = json.dumps(src, ensure_ascii=False) if src is not None else None
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
-            sql.SQL("UPDATE {} SET status = 'failed', error = %s, exit_code = %s, completed_at = %s WHERE id = %s").format(
+            sql.SQL(
+                "UPDATE {} SET status = 'failed', error = %s, src = COALESCE(%s::jsonb, src), exit_code = %s, completed_at = %s WHERE id = %s"
+            ).format(
                 _tasks_ref()
             ),
-            (error, exit_code, _now(), task_id),
+            (error, src_payload, exit_code, _now(), task_id),
         )
     touch_project_last_used_by_task(task_id)
 

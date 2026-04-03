@@ -222,6 +222,30 @@ def humanize_error(stdout: str, stderr: str) -> str:
     return (stderr or stdout or "Execution failed").strip()
 
 
+def build_src_payload(provider: str, stdout: str, stderr: str) -> dict:
+    stream = bool(stdout and is_stream_json(stdout))
+    payload = {
+        "provider": provider,
+        "format": "stream-json" if stream else "text",
+    }
+    if stream:
+        events = []
+        for line in (stdout or "").splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            try:
+                events.append(json.loads(s))
+            except json.JSONDecodeError:
+                events.append({"type": "raw_line", "line": s})
+        payload["events"] = events
+    else:
+        payload["stdout"] = stdout or ""
+    if stderr:
+        payload["stderr"] = stderr
+    return payload
+
+
 def execute_task(task):
     """Run CLI with the task's prompt."""
     provider = task.provider or DEFAULT_CLI
@@ -348,9 +372,14 @@ def execute_task(task):
     out_text = result.stdout or ""
     readable_error = humanize_error(result.stdout, result.stderr)
     if is_rate_limited(f"{err_text}\n{out_text}", result.returncode):
+        src_payload = build_src_payload(provider, result.stdout or "", result.stderr or "")
         if task.retry_count >= task.max_retries:
             details = readable_error or "Rate limited"
-            db.mark_failed(task.id, f"Rate limited, max retries ({task.max_retries}) exceeded.\n{details}")
+            db.mark_failed(
+                task.id,
+                f"Rate limited, max retries ({task.max_retries}) exceeded.\n{details}",
+                src=src_payload,
+            )
             _refresh_limits(exhausted_hint=True)
             return
         next_run = compute_next_run(task.retry_count)
@@ -360,7 +389,12 @@ def execute_task(task):
         return
 
     if result.returncode != 0:
-        db.mark_failed(task.id, readable_error, exit_code=result.returncode)
+        db.mark_failed(
+            task.id,
+            readable_error,
+            exit_code=result.returncode,
+            src=build_src_payload(provider, result.stdout or "", result.stderr or ""),
+        )
         _refresh_limits()
         print(f"  -> Failed (exit {result.returncode})")
         return
@@ -374,15 +408,30 @@ def execute_task(task):
             parsed,
             raw_stream=result.stdout,
             stderr=result.stderr,
-            include_raw_output=True,
+            include_raw_output=False,
         )
+        src_payload = build_src_payload(provider, result.stdout or "", result.stderr or "")
         model_used = parsed["meta"].get("model")
         session_id = parsed["meta"].get("session_id")
+        # If agent asked for approvals / had tool permission denials,
+        # task is considered incomplete and must be marked as failed.
+        denials = parsed["meta"].get("denials") or []
+        if denials:
+            details = "\n".join(str(d) for d in denials)
+            db.mark_failed(
+                task.id,
+                f"Task stopped due to permission denials.\n{details}",
+                exit_code=1,
+                src=src_payload,
+            )
+            _refresh_limits()
+            print("  -> Failed: permission denials")
+            return
         # Check for rate limit in stream events — only if no text was returned
         rl = parsed.get("rate_limit_info")
         if rl and not parsed["text"]:
             if task.retry_count >= task.max_retries:
-                db.mark_failed(task.id, f"Rate limited.\n{output}")
+                db.mark_failed(task.id, f"Rate limited.\n{output}", src=src_payload)
                 _refresh_limits(exhausted_hint=True)
                 return
             next_run = compute_next_run(task.retry_count)
@@ -399,8 +448,16 @@ def execute_task(task):
             if output:
                 output += "\n\n"
             output += f"--- Agent Output (stderr) ---\n{stderr}"
+        src_payload = build_src_payload(provider, result.stdout or "", result.stderr or "")
 
-    db.mark_completed(task.id, output, exit_code=0, model_used=model_used, session_id=session_id)
+    db.mark_completed(
+        task.id,
+        output,
+        exit_code=0,
+        model_used=model_used,
+        session_id=session_id,
+        src=src_payload,
+    )
     _refresh_limits()
     text_preview = output[:80].replace("\n", " ").strip()
     print(f"  -> Completed: {text_preview}")
