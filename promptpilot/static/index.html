@@ -228,6 +228,12 @@
   /* Task list */
   .task-list { display: flex; flex-direction: column; gap: 6px; }
   .task-mobile-list { display: none; }
+  #taskMobileList {
+    width: 100%;
+  }
+  #taskMobileList .admin-mobile-card {
+    margin-bottom: 0;
+  }
 
   .task-row {
     background: var(--surface);
@@ -1161,7 +1167,9 @@
       display: none;
     }
     .task-mobile-list {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
     .task-row {
       padding: 10px;
