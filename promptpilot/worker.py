@@ -121,12 +121,28 @@ def parse_stream_json(stdout: str) -> dict:
     return {"text": text, "meta": meta, "rate_limit_info": rate_limit_info}
 
 
-def format_result(parsed: dict) -> str:
-    """Format parsed result for storage — human-readable text + JSON meta."""
+def format_result(parsed: dict, raw_stream: str = "", stderr: str = "", include_raw_output: bool = False) -> str:
+    """Format parsed result for storage.
+
+    By default stores human-readable text + meta.
+    Optionally can append full raw agent output for complete task logs.
+    """
     parts = []
 
     if parsed["text"]:
         parts.append(parsed["text"])
+
+    if include_raw_output:
+        full_stdout = (raw_stream or "").strip()
+        full_stderr = (stderr or "").strip()
+        if full_stdout:
+            parts.append("")
+            parts.append("--- Agent Output (stdout) ---")
+            parts.append(full_stdout)
+        if full_stderr:
+            parts.append("")
+            parts.append("--- Agent Output (stderr) ---")
+            parts.append(full_stderr)
 
     meta = parsed["meta"]
     if meta:
@@ -285,7 +301,12 @@ def execute_task(task):
     session_id = None
     if is_stream_json(result.stdout):
         parsed = parse_stream_json(result.stdout)
-        output = format_result(parsed)
+        output = format_result(
+            parsed,
+            raw_stream=result.stdout,
+            stderr=result.stderr,
+            include_raw_output=True,
+        )
         model_used = parsed["meta"].get("model")
         session_id = parsed["meta"].get("session_id")
         # Check for rate limit in stream events — only if no text was returned
@@ -299,8 +320,14 @@ def execute_task(task):
             print(f"  -> Rate limited (stream event). Retry at {next_run.strftime('%H:%M:%S')}")
             return
     else:
-        # Plain text output (non-Claude CLIs)
-        output = result.stdout
+        # Plain text output (non-Claude CLIs): keep full stdout/stderr.
+        stdout = (result.stdout or "").strip()
+        stderr = (result.stderr or "").strip()
+        output = stdout
+        if stderr:
+            if output:
+                output += "\n\n"
+            output += f"--- Agent Output (stderr) ---\n{stderr}"
 
     db.mark_completed(task.id, output, exit_code=0, model_used=model_used, session_id=session_id)
     text_preview = output[:80].replace("\n", " ").strip()
