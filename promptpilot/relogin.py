@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import json
+import pwd
 import pty
 import re
 import secrets
@@ -22,7 +23,7 @@ from typing import Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, unquote
 
 from . import db
-from .config import CLAUDE_EXE
+from .config import AGENT_USER, CLAUDE_EXE
 from .limits import refresh_limits_for_provider
 
 
@@ -36,7 +37,22 @@ REL_LOGIN_OK_RE = re.compile(
     r"(authorized|authorised|logged in|login successful|successfully|setup complete|token created|auth complete|успеш|авторизац)",
     re.IGNORECASE,
 )
-CLAUDE_CREDENTIALS_PATH = Path("/root/.claude/.credentials.json")
+
+def _claude_runtime_user() -> str:
+    return (AGENT_USER or "").strip()
+
+
+def _claude_home() -> Path:
+    user = _claude_runtime_user()
+    if user and os.name != "nt":
+        try:
+            return Path(pwd.getpwnam(user).pw_dir)
+        except Exception:
+            pass
+    return Path.home()
+
+
+CLAUDE_CREDENTIALS_PATH = _claude_home() / ".claude" / ".credentials.json"
 DEVICE_CODE_RE = re.compile(
     r"(?:device\s*code|verification\s*code|код\s*устройства|код\s*подтверждения|code)\s*[:#]?\s*([A-Z0-9-]{4,})",
     re.IGNORECASE,
@@ -196,14 +212,7 @@ def _cleanup_expired() -> None:
 
 def _claude_auth_status() -> Optional[dict]:
     try:
-        proc = subprocess.run(
-            [CLAUDE_EXE, "auth", "status", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=8,
-            encoding="utf-8",
-            errors="replace",
-        )
+        proc = _run_claude_cmd(["auth", "status", "--json"], timeout=8, capture_output=True)
     except Exception:
         return None
     if proc.returncode != 0:
@@ -235,6 +244,42 @@ def _write_claude_credentials(payload: dict) -> bool:
         return False
 
 
+def _run_claude_cmd(args: list[str], *, timeout: int = 8, capture_output: bool = True) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    preexec_fn = None
+    user = _claude_runtime_user()
+    if user and os.name != "nt" and os.geteuid() == 0:
+        try:
+            pw = pwd.getpwnam(user)
+            env["HOME"] = pw.pw_dir
+            env["USER"] = user
+            env["LOGNAME"] = user
+
+            def _drop():
+                os.initgroups(user, pw.pw_gid)
+                os.setgid(pw.pw_gid)
+                os.setuid(pw.pw_uid)
+
+            preexec_fn = _drop
+        except Exception:
+            preexec_fn = None
+    kwargs = dict(
+        text=True,
+        timeout=timeout,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+    if capture_output:
+        kwargs["capture_output"] = True
+    else:
+        kwargs["stdout"] = subprocess.DEVNULL
+        kwargs["stderr"] = subprocess.DEVNULL
+    if preexec_fn is not None:
+        kwargs["preexec_fn"] = preexec_fn
+    return subprocess.run([CLAUDE_EXE, *args], **kwargs)
+
+
 def _reset_claude_runtime() -> None:
     # Stop any running Claude CLI processes so they cannot hold stale auth state.
     try:
@@ -251,18 +296,13 @@ def _reset_claude_runtime() -> None:
 
     # Best-effort logout to clear CLI-managed auth caches.
     try:
-        subprocess.run(
-            [CLAUDE_EXE, "auth", "logout"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=8,
-            check=False,
-        )
+        _run_claude_cmd(["auth", "logout"], timeout=8, capture_output=False)
     except Exception:
         pass
 
     # Remove runtime session folders that can keep prior account context.
-    for folder in (Path("/root/.claude/session-env"), Path("/root/.claude/sessions")):
+    claude_dir = CLAUDE_CREDENTIALS_PATH.parent
+    for folder in (claude_dir / "session-env", claude_dir / "sessions"):
         try:
             if folder.exists():
                 shutil.rmtree(folder, ignore_errors=True)
@@ -354,7 +394,7 @@ def start_relogin(account_id: int) -> dict:
 
     _reset_claude_runtime()
     if not _write_claude_credentials(creds):
-        raise RuntimeError("Failed to write /root/.claude/.credentials.json")
+        raise RuntimeError(f"Failed to write {CLAUDE_CREDENTIALS_PATH}")
 
     db.set_agent_account_active(account_id, True)
     token = ((creds.get("claudeAiOauth") or {}).get("accessToken") if isinstance(creds, dict) else None)

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import pwd
 import re
 import shutil
 import subprocess
@@ -11,6 +13,8 @@ from pathlib import Path
 from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from .config import AGENT_USER
 
 
 def _dt(value: Optional[str]) -> Optional[datetime]:
@@ -67,7 +71,15 @@ def _status_from_percents(p5: Optional[float], p7: Optional[float]) -> int:
 
 
 def _load_claude_token_from_credentials() -> Optional[str]:
-    cred_file = Path("/root/.claude/.credentials.json")
+    user = (AGENT_USER or "").strip()
+    if user and os.name != "nt":
+        try:
+            home = Path(pwd.getpwnam(user).pw_dir)
+        except Exception:
+            home = Path.home()
+    else:
+        home = Path.home()
+    cred_file = home / ".claude" / ".credentials.json"
     if not cred_file.exists():
         return None
     try:
