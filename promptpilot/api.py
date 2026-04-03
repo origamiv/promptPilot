@@ -330,6 +330,68 @@ def api_admin_delete_agents_account(account_id: int):
         raise HTTPException(400, f"Delete agent account failed: {e}")
 
 
+@app.get("/api/admin/prompts")
+def api_admin_prompts(q: Optional[str] = None):
+    return db.list_prompts(search=q, limit=500)
+
+
+@app.post("/api/admin/prompts")
+def api_admin_create_prompt(payload: dict):
+    required = ("name", "shortname", "message")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name, shortname, message are required")
+    options = payload.get("options")
+    if options is not None and not isinstance(options, dict):
+        raise HTTPException(400, "options must be an object or null")
+    try:
+        return db.create_prompt(
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            message=str(payload["message"]).strip(),
+            options=options,
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Create prompt failed: {e}")
+
+
+@app.patch("/api/admin/prompts/{prompt_id}")
+def api_admin_update_prompt(prompt_id: int, payload: dict):
+    required = ("name", "shortname", "message")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name, shortname, message are required")
+    options = payload.get("options")
+    if options is not None and not isinstance(options, dict):
+        raise HTTPException(400, "options must be an object or null")
+    try:
+        ok = db.update_prompt(
+            prompt_id=prompt_id,
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            message=str(payload["message"]).strip(),
+            options=options,
+        )
+        if not ok:
+            raise HTTPException(404, "Prompt not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Update prompt failed: {e}")
+
+
+@app.delete("/api/admin/prompts/{prompt_id}")
+def api_admin_delete_prompt(prompt_id: int):
+    try:
+        ok = db.delete_prompt(prompt_id)
+        if not ok:
+            raise HTTPException(404, "Prompt not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Delete prompt failed: {e}")
+
+
 # --- Frontend ---
 
 @app.get("/")

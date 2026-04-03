@@ -667,6 +667,7 @@
     <button id="menuProjects" class="side-btn" onclick="switchView('projects')">Проекты</button>
     <button id="menuAgents" class="side-btn" onclick="switchView('agents')">Агенты</button>
     <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Аккаунты агентов</button>
+    <button id="menuPrompts" class="side-btn" onclick="switchView('prompts')">Промпты</button>
   </aside>
 <div class="container">
   <header>
@@ -724,6 +725,9 @@
       <label><span id="recurLabelText">Повтор</span>
         <input type="text" id="recurrenceInput" placeholder="6h / daily@09:00" style="width:140px">
       </label>
+      <label><span id="promptListLabelText">Список промптов</span>
+        <input type="text" id="promptListInput" value="base, current, end" placeholder="base, current, end" style="width:220px">
+      </label>
       <label style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
         <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
@@ -780,6 +784,18 @@
       <tbody id="accountsTbody"></tbody>
     </table>
   </div>
+
+  <div class="admin-view" id="promptsView">
+    <div class="admin-header">
+      <div class="admin-title">Промпты</div>
+      <input id="promptsSearch" placeholder="Поиск..." oninput="loadPromptsCrud()">
+      <button class="btn btn-primary" onclick="createPromptCrud()">Добавить</button>
+    </div>
+    <table class="admin-table">
+      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Message</th><th>Options</th><th></th></tr></thead>
+      <tbody id="promptsTbody"></tbody>
+    </table>
+  </div>
 </div>
 </div>
 
@@ -814,6 +830,7 @@ let projectsCache = [];
 let adminProjectsRows = [];
 let adminAgentsRows = [];
 let adminAccountsRows = [];
+let adminPromptsRows = [];
 let crudState = { entity: null, mode: 'create', id: null };
 
 const I18N = {
@@ -826,7 +843,10 @@ const I18N = {
     priority: 'Приоритет',
     schedule: 'Расписание',
     dir: 'Папка',
+    project: 'Проект',
     recur: 'Повтор',
+    prompt_list: 'Список промптов',
+    prompt_list_placeholder: 'base, current, end',
     add_task: 'Добавить задачу',
     all: 'Все',
     pending: 'В очереди',
@@ -881,6 +901,7 @@ const I18N = {
     m_short: 'м',
     h_short: 'ч',
     d_short: 'д',
+    prompts_not_found: 'Не найдены промпты: {names}',
   },
   en: {
     light: 'Light',
@@ -891,7 +912,10 @@ const I18N = {
     priority: 'Priority',
     schedule: 'Schedule',
     dir: 'Dir',
+    project: 'Project',
     recur: 'Recur',
+    prompt_list: 'Prompt List',
+    prompt_list_placeholder: 'base, current, end',
     add_task: 'Add Task',
     all: 'All',
     pending: 'Pending',
@@ -946,6 +970,7 @@ const I18N = {
     m_short: 'm',
     h_short: 'h',
     d_short: 'd',
+    prompts_not_found: 'Prompts not found: {names}',
   }
 };
 
@@ -976,6 +1001,8 @@ function applyLanguage(lang) {
   document.getElementById('scheduleLabelText').textContent = tr('schedule');
   document.getElementById('dirLabelText').textContent = tr('dir');
   document.getElementById('recurLabelText').textContent = tr('recur');
+  document.getElementById('promptListLabelText').textContent = tr('prompt_list');
+  document.getElementById('promptListInput').placeholder = tr('prompt_list_placeholder');
   document.getElementById('addTaskBtn').textContent = tr('add_task');
   document.getElementById('skillsHint').textContent = tr('skills_hint');
 
@@ -1114,6 +1141,22 @@ function formatTime(iso) {
   return d.toLocaleDateString(locale) + ' ' + d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
+function normalizePathForMatch(path) {
+  return String(path || '').trim().replace(/[\\/]+$/, '').toLowerCase();
+}
+
+function projectNameByWorkingDir(workingDir) {
+  if (!workingDir) return '';
+  const wdNorm = normalizePathForMatch(workingDir);
+  if (!wdNorm) return '';
+
+  const matched = projectsCache.find(p => normalizePathForMatch(p.path) === wdNorm);
+  if (matched && matched.name) return matched.name;
+
+  const parts = String(workingDir).split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || String(workingDir);
+}
+
 async function loadTasks() {
   const params = currentFilter ? `?status=${currentFilter}&limit=100` : '?limit=100';
   const tasks = await fetchJSON(`${API}/tasks${params}`);
@@ -1131,6 +1174,7 @@ async function loadTasks() {
     const expanded = t.id === expandedId;
     const time = timeAgo(t.created_at);
     const parsed = parseResult(t.result);
+    const projectName = projectNameByWorkingDir(t.working_dir);
 
     // Build result section
     let resultHTML = '';
@@ -1160,6 +1204,7 @@ async function loadTasks() {
         <span class="task-id">#${t.id}</span>
         <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
         <span class="task-prompt">${esc(t.prompt)}</span>
+        ${projectName ? `<span class="task-meta">${tr('project')}: ${esc(projectName)}</span>` : ''}
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
         ${scheduleInfo(t)}
         <span class="task-meta">P${t.priority}</span>
@@ -1202,8 +1247,9 @@ async function loadTasks() {
 }
 
 async function addTask() {
-  const prompt = document.getElementById('promptInput').value.trim();
-  if (!prompt) return;
+  const currentPrompt = document.getElementById('promptInput').value.trim();
+  if (!currentPrompt) return;
+  const promptListRaw = document.getElementById('promptListInput').value.trim();
   const priority = parseInt(document.getElementById('priorityInput').value);
   const schedule = document.getElementById('scheduleInput').value || null;
   const provider = document.getElementById('providerInput').value || null;
@@ -1214,24 +1260,71 @@ async function addTask() {
   const skipPermissions = document.getElementById('skipPermissions').checked;
   const recurrence = document.getElementById('recurrenceInput').value.trim() || null;
 
-  await fetchJSON(`${API}/tasks`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt,
-      provider,
-      model,
-      priority,
-      working_dir: workdir,
-      skip_permissions: skipPermissions,
-      scheduled_at: schedule ? new Date(schedule).toISOString() : null,
-      recurrence,
-    }),
-  });
+  try {
+    const prompt = await buildPromptFromList(currentPrompt, promptListRaw);
+    await fetchJSON(`${API}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        provider,
+        model,
+        priority,
+        working_dir: workdir,
+        skip_permissions: skipPermissions,
+        scheduled_at: schedule ? new Date(schedule).toISOString() : null,
+        recurrence,
+      }),
+    });
 
-  document.getElementById('promptInput').value = '';
-  document.getElementById('recurrenceInput').value = '';
-  refresh();
+    document.getElementById('promptInput').value = '';
+    document.getElementById('recurrenceInput').value = '';
+    refresh();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function parsePromptList(raw) {
+  const tokens = String(raw || '')
+    .split(',')
+    .map(x => x.trim())
+    .filter(Boolean);
+  return tokens.length ? tokens : ['current'];
+}
+
+async function buildPromptFromList(currentPrompt, listRaw) {
+  const list = parsePromptList(listRaw);
+  const needsDbPrompts = list.some(x => x.toLowerCase() !== 'current');
+  let byShort = new Map();
+
+  if (needsDbPrompts) {
+    const rows = await fetchJSON(`${API}/admin/prompts`);
+    byShort = new Map(
+      rows
+        .filter(r => r && r.shortname)
+        .map(r => [String(r.shortname).trim().toLowerCase(), String(r.message || '')])
+    );
+  }
+
+  const parts = [];
+  const missing = [];
+  for (const item of list) {
+    const key = item.toLowerCase();
+    if (key === 'current') {
+      parts.push(currentPrompt);
+      continue;
+    }
+    if (!byShort.has(key)) {
+      missing.push(item);
+      continue;
+    }
+    parts.push(byShort.get(key));
+  }
+  if (missing.length) {
+    throw new Error(tr('prompts_not_found', { names: missing.join(', ') }));
+  }
+  return parts.join('\n\n');
 }
 
 async function resetTask(e, id) {
@@ -1459,22 +1552,40 @@ function onProjectSelect() {
 
 let currentView = 'tasks';
 
-function switchView(view) {
+const VIEW_NAMES = new Set(['tasks', 'projects', 'agents', 'accounts', 'prompts']);
+
+function parseViewFromHash() {
+  const raw = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+  return VIEW_NAMES.has(raw) ? raw : 'tasks';
+}
+
+function switchView(view, opts = {}) {
+  const { syncUrl = true } = opts;
+  if (!VIEW_NAMES.has(view)) view = 'tasks';
   currentView = view;
+
+  if (syncUrl) {
+    const targetHash = `#${view}`;
+    if (window.location.hash !== targetHash) window.location.hash = targetHash;
+  }
+
   const isTasks = view === 'tasks';
   document.getElementById('tasksView').style.display = isTasks ? '' : 'none';
   document.getElementById('projectsView').style.display = view === 'projects' ? 'block' : 'none';
   document.getElementById('agentsView').style.display = view === 'agents' ? 'block' : 'none';
   document.getElementById('accountsView').style.display = view === 'accounts' ? 'block' : 'none';
+  document.getElementById('promptsView').style.display = view === 'prompts' ? 'block' : 'none';
 
   document.getElementById('menuTasks').classList.toggle('active', view === 'tasks');
   document.getElementById('menuProjects').classList.toggle('active', view === 'projects');
   document.getElementById('menuAgents').classList.toggle('active', view === 'agents');
   document.getElementById('menuAccounts').classList.toggle('active', view === 'accounts');
+  document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
 
   if (view === 'projects') loadProjectsCrud();
   if (view === 'agents') loadAgentsCrud();
   if (view === 'accounts') loadAccountsCrud();
+  if (view === 'prompts') loadPromptsCrud();
 }
 
 const CRUD_TX = {
@@ -1486,8 +1597,11 @@ const CRUD_TX = {
     project: 'проект',
     agent: 'агента',
     account: 'аккаунт',
+    prompt: 'промпт',
     name: 'Название',
     shortname: 'Короткое имя',
+    message: 'Сообщение',
+    options: 'Опции (JSON)',
     folder: 'Папка',
     comment: 'Комментарий',
     email: 'Email',
@@ -1506,6 +1620,8 @@ const CRUD_TX = {
     delete_project_confirm: 'Удалить проект',
     delete_agent_confirm: 'Удалить агента',
     delete_account_confirm: 'Удалить аккаунт',
+    delete_prompt_confirm: 'Удалить промпт',
+    invalid_json: 'Некорректный JSON в options',
   },
   en: {
     add: 'Add',
@@ -1515,8 +1631,11 @@ const CRUD_TX = {
     project: 'project',
     agent: 'agent',
     account: 'account',
+    prompt: 'prompt',
     name: 'Name',
     shortname: 'Short name',
+    message: 'Message',
+    options: 'Options (JSON)',
     folder: 'Folder',
     comment: 'Comment',
     email: 'Email',
@@ -1535,6 +1654,8 @@ const CRUD_TX = {
     delete_project_confirm: 'Delete project',
     delete_agent_confirm: 'Delete agent',
     delete_account_confirm: 'Delete account',
+    delete_prompt_confirm: 'Delete prompt',
+    invalid_json: 'Invalid JSON in options',
   },
 };
 
@@ -1568,10 +1689,19 @@ async function ensureAgentsRows(force = false) {
 function entityTitle(entity) {
   if (entity === 'project') return tc('project');
   if (entity === 'agent') return tc('agent');
+  if (entity === 'prompt') return tc('prompt');
   return tc('account');
 }
 
 function renderCrudFields(entity, row = {}) {
+  if (entity === 'prompt') {
+    return `
+      <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
+      <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field"><label>${tc('message')}</label><textarea id="crud_message" required>${esc(row.message || '')}</textarea></div>
+      <div class="crud-field"><label>${tc('options')}</label><textarea id="crud_options">${esc(row.options ? JSON.stringify(row.options, null, 2) : '')}</textarea></div>
+    `;
+  }
   if (entity === 'project') {
     return `
       <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
@@ -1615,6 +1745,7 @@ async function openCrudModal(entity, mode, id = null) {
     if (entity === 'project') row = adminProjectsRows.find(x => x.id === id) || {};
     if (entity === 'agent') row = adminAgentsRows.find(x => x.id === id) || {};
     if (entity === 'account') row = adminAccountsRows.find(x => x.id === id) || {};
+    if (entity === 'prompt') row = adminPromptsRows.find(x => x.id === id) || {};
   }
   crudState = { entity, mode, id };
   document.getElementById('crudModalTitle').textContent = `${mode === 'create' ? tc('add') : tc('edit')} ${entityTitle(entity)}`;
@@ -1631,6 +1762,35 @@ async function submitCrudModal(e) {
   const mode = crudState.mode;
   const id = crudState.id;
   try {
+    if (crudState.entity === 'prompt') {
+      const optionsRaw = document.getElementById('crud_options').value.trim();
+      let parsedOptions = null;
+      if (optionsRaw) {
+        try {
+          parsedOptions = JSON.parse(optionsRaw);
+          if (parsedOptions === null || Array.isArray(parsedOptions) || typeof parsedOptions !== 'object') {
+            throw new Error('options must be object');
+          }
+        } catch (_) {
+          alert(tc('invalid_json'));
+          return;
+        }
+      }
+      const body = {
+        name: document.getElementById('crud_name').value.trim(),
+        shortname: document.getElementById('crud_shortname').value.trim(),
+        message: document.getElementById('crud_message').value.trim(),
+        options: parsedOptions,
+      };
+      if (mode === 'create') {
+        await fetchJSON(`${API}/admin/prompts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await fetchJSON(`${API}/admin/prompts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      closeCrudModal();
+      await loadPromptsCrud();
+      return;
+    }
     if (crudState.entity === 'project') {
       const body = {
         name: document.getElementById('crud_name').value.trim(),
@@ -1813,6 +1973,45 @@ async function deleteAccountCrud(id) {
   }
 }
 
+// --- CRUD: Prompts ---
+async function loadPromptsCrud() {
+  const q = document.getElementById('promptsSearch').value.trim();
+  const rows = await fetchJSON(`${API}/admin/prompts${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  adminPromptsRows = rows;
+  const tbody = document.getElementById('promptsTbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td>${esc(r.name || '')}</td>
+      <td>${esc(r.shortname || '')}</td>
+      <td>${esc(r.message || '')}</td>
+      <td>${esc(r.options ? JSON.stringify(r.options) : '')}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" onclick="editPromptCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deletePromptCrud(${r.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function createPromptCrud() {
+  await openCrudModal('prompt', 'create');
+}
+
+async function editPromptCrud(id) {
+  await openCrudModal('prompt', 'edit', id);
+}
+
+async function deletePromptCrud(id) {
+  if (!confirm(`${tc('delete_prompt_confirm')} #${id}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/prompts/${id}`, { method: 'DELETE' });
+    await loadPromptsCrud();
+  } catch (e) {
+    alert(`${tc('delete_failed')}: ${e.message}`);
+  }
+}
+
 // --- Worker pause ---
 async function loadWorkerStatus() {
   const s = await fetchJSON(`${API}/worker/status`);
@@ -1863,6 +2062,11 @@ async function loadCosts() {
   } catch (_) {}
 }
 
+window.addEventListener('hashchange', () => {
+  const view = parseViewFromHash();
+  if (view !== currentView) switchView(view, { syncUrl: false });
+});
+
 // --- Init ---
 applyLanguage(localStorage.getItem('pp_lang') || 'ru');
 applyTheme(localStorage.getItem('pp_theme') || 'dark');
@@ -1873,6 +2077,7 @@ loadWorkerStatus();
 loadVersion();
 loadCosts();
 refresh();
+switchView(parseViewFromHash(), { syncUrl: false });
 setInterval(refresh, 5000);
 setInterval(loadWorkerStatus, 10000);
 setInterval(loadCosts, 30000);
