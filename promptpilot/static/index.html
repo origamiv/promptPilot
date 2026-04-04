@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PromptPilot</title>
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
 <style>
   :root {
     --bg: #0f1117;
@@ -178,19 +179,22 @@
     background: #0a0f18;
     min-height: 360px;
     max-height: 62vh;
-    overflow: auto;
+    overflow: hidden;
     box-shadow: inset 0 0 0 1px #0f172a;
+    padding: 8px;
   }
   .interactive-terminal {
     margin: 0;
-    padding: 12px;
     min-height: 360px;
-    color: #9ef6bf;
-    font-family: var(--mono);
-    font-size: 12px;
-    line-height: 1.45;
-    white-space: pre-wrap;
-    word-break: break-word;
+    height: clamp(360px, 58vh, 760px);
+    width: 100%;
+  }
+  .interactive-terminal .xterm {
+    height: 100%;
+    border-radius: 6px;
+  }
+  .interactive-terminal .xterm-viewport {
+    overflow-y: auto !important;
   }
   .interactive-input-row {
     display: flex;
@@ -1650,7 +1654,7 @@
         <button class="btn btn-ghost" type="button" onclick="clearInteractiveTerminal()">Очистить</button>
       </div>
       <div class="interactive-terminal-wrap">
-        <pre id="interactiveTerminal" class="interactive-terminal"></pre>
+        <div id="interactiveTerminal" class="interactive-terminal"></div>
       </div>
       <div class="form-row interactive-input-row">
         <input type="text" id="interactiveInput" placeholder="Введите команду и нажмите Enter">
@@ -1807,6 +1811,8 @@
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script>
 const API = '/api';
 let currentFilter = '';
@@ -1826,6 +1832,11 @@ let adminCardMenuKey = null;
 let appTimezone = 'UTC';
 let crudState = { entity: null, mode: 'create', id: null };
 let interactiveState = { has_session: false, running: false, cursor: 0, pollTimer: null };
+let interactiveTerminal = null;
+let interactiveFitAddon = null;
+let interactiveOutboundBuffer = '';
+let interactiveFlushTimer = null;
+let interactiveSendChain = Promise.resolve();
 
 const I18N = {
   ru: {
@@ -2111,6 +2122,7 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', currentTheme);
   const btn = document.getElementById('themeBtn');
   if (btn) btn.textContent = currentTheme === 'light' ? tr('dark') : tr('light');
+  applyInteractiveTerminalTheme();
 }
 
 function toggleTheme() {
@@ -2971,13 +2983,70 @@ function updateInteractiveStatus(text, running) {
   document.getElementById('interactiveStopBtn').disabled = !running;
 }
 
+function interactiveTerminalTheme() {
+  if (currentTheme === 'light') {
+    return {
+      background: '#fdfefe',
+      foreground: '#1d2538',
+      cursor: '#3b5ed8',
+      cursorAccent: '#fdfefe',
+      selectionBackground: '#bdd0ff88',
+    };
+  }
+  return {
+    background: '#0b1220',
+    foreground: '#dbe6ff',
+    cursor: '#8b9cf7',
+    cursorAccent: '#0b1220',
+    selectionBackground: '#3b4b7f88',
+  };
+}
+
+function applyInteractiveTerminalTheme() {
+  if (!interactiveTerminal || !interactiveTerminal.options) return;
+  interactiveTerminal.options.theme = interactiveTerminalTheme();
+  interactiveTerminal.refresh(0, interactiveTerminal.rows - 1);
+}
+
+function fitInteractiveTerminal() {
+  if (!interactiveFitAddon) return;
+  try {
+    interactiveFitAddon.fit();
+  } catch (_) {
+  }
+}
+
+function ensureInteractiveTerminalReady() {
+  if (interactiveTerminal) return true;
+  if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) return false;
+  const mount = document.getElementById('interactiveTerminal');
+  if (!mount) return false;
+
+  interactiveTerminal = new window.Terminal({
+    convertEol: true,
+    cursorBlink: true,
+    fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
+    fontSize: 13,
+    lineHeight: 1.32,
+    scrollback: 5000,
+    theme: interactiveTerminalTheme(),
+  });
+  interactiveFitAddon = new window.FitAddon.FitAddon();
+  interactiveTerminal.loadAddon(interactiveFitAddon);
+  interactiveTerminal.open(mount);
+  fitInteractiveTerminal();
+
+  interactiveTerminal.onData((data) => {
+    if (!interactiveState.running) return;
+    queueInteractiveRawInput(data);
+  });
+  mount.addEventListener('click', () => interactiveTerminal.focus());
+  return true;
+}
+
 function normalizeInteractiveChunk(text) {
   if (!text) return '';
   return String(text)
-    .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '')
-    .replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
     .replace(/\u0000/g, '');
 }
 
@@ -2985,9 +3054,49 @@ function appendInteractiveTerminal(text) {
   if (!text) return;
   const normalized = normalizeInteractiveChunk(text);
   if (!normalized) return;
-  const pre = document.getElementById('interactiveTerminal');
-  pre.textContent += normalized;
-  pre.parentElement.scrollTop = pre.parentElement.scrollHeight;
+  if (ensureInteractiveTerminalReady()) {
+    interactiveTerminal.write(normalized);
+    interactiveTerminal.scrollToBottom();
+    return;
+  }
+  const fallback = document.getElementById('interactiveTerminal');
+  fallback.textContent += normalized;
+  fallback.parentElement.scrollTop = fallback.parentElement.scrollHeight;
+}
+
+function clearInteractiveTerminalView(opts = {}) {
+  const resetCursor = !!opts.resetCursor;
+  if (interactiveTerminal) {
+    interactiveTerminal.reset();
+    applyInteractiveTerminalTheme();
+    fitInteractiveTerminal();
+  } else {
+    const mount = document.getElementById('interactiveTerminal');
+    if (mount) mount.textContent = '';
+  }
+  if (resetCursor) interactiveState.cursor = 0;
+}
+
+function queueInteractiveRawInput(text) {
+  if (!text) return;
+  interactiveOutboundBuffer += String(text);
+  if (interactiveFlushTimer) return;
+  interactiveFlushTimer = setTimeout(flushInteractiveRawInput, 35);
+}
+
+function flushInteractiveRawInput() {
+  interactiveFlushTimer = null;
+  const chunk = interactiveOutboundBuffer;
+  interactiveOutboundBuffer = '';
+  if (!chunk) return;
+  interactiveSendChain = interactiveSendChain
+    .then(() => fetchJSON(`${API}/interactive/input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: chunk, append_newline: false }),
+    }))
+    .then(() => pollInteractiveOutput())
+    .catch(() => {});
 }
 
 function setInteractivePolling(active) {
@@ -2996,12 +3105,14 @@ function setInteractivePolling(active) {
     interactiveState.pollTimer = null;
   }
   if (active) {
-    interactiveState.pollTimer = setInterval(pollInteractiveOutput, 700);
+    interactiveState.pollTimer = setInterval(pollInteractiveOutput, 300);
   }
 }
 
 async function loadInteractiveState() {
   try {
+    ensureInteractiveTerminalReady();
+    fitInteractiveTerminal();
     const s = await fetchJSON(`${API}/interactive/state`);
     interactiveState.has_session = !!s.has_session;
     interactiveState.running = !!s.running;
@@ -3026,7 +3137,7 @@ async function loadInteractiveState() {
     );
     setInteractivePolling(!!s.running || !!s.has_session);
     if (s.has_session) {
-      document.getElementById('interactiveTerminal').textContent = '';
+      clearInteractiveTerminalView({ resetCursor: true });
       interactiveState.cursor = 0;
       await pollInteractiveOutput();
     }
@@ -3037,6 +3148,8 @@ async function loadInteractiveState() {
 
 async function startInteractiveSession() {
   try {
+    ensureInteractiveTerminalReady();
+    fitInteractiveTerminal();
     const provider = document.getElementById('interactiveProviderInput').value;
     const working_dir = getInteractiveWorkdir();
     const body = { provider, working_dir };
@@ -3048,10 +3161,11 @@ async function startInteractiveSession() {
     interactiveState.has_session = !!s.has_session;
     interactiveState.running = !!s.running;
     interactiveState.cursor = 0;
-    document.getElementById('interactiveTerminal').textContent = '';
+    clearInteractiveTerminalView({ resetCursor: true });
     updateInteractiveStatus(tr('interactive_status_running'), true);
     setInteractivePolling(true);
     await pollInteractiveOutput();
+    if (interactiveTerminal) interactiveTerminal.focus();
   } catch (e) {
     alert(e.message);
   }
@@ -3063,6 +3177,11 @@ async function stopInteractiveSession() {
     interactiveState.has_session = false;
     interactiveState.running = false;
     interactiveState.cursor = 0;
+    interactiveOutboundBuffer = '';
+    if (interactiveFlushTimer) {
+      clearTimeout(interactiveFlushTimer);
+      interactiveFlushTimer = null;
+    }
     setInteractivePolling(false);
     updateInteractiveStatus(tr('interactive_status_off'), false);
   } catch (e) {
@@ -3122,8 +3241,7 @@ async function pollInteractiveOutput() {
 }
 
 function clearInteractiveTerminal() {
-  document.getElementById('interactiveTerminal').textContent = '';
-  interactiveState.cursor = 0;
+  clearInteractiveTerminalView({ resetCursor: false });
 }
 
 let currentView = 'tasks';
@@ -3180,7 +3298,14 @@ function switchView(view, opts = {}) {
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
 
   if (view === 'projects') loadProjectsCrud();
-  if (view === 'interactive') loadInteractiveState();
+  if (view === 'interactive') {
+    ensureInteractiveTerminalReady();
+    setTimeout(() => {
+      fitInteractiveTerminal();
+      if (interactiveTerminal) interactiveTerminal.focus();
+    }, 0);
+    loadInteractiveState();
+  }
   if (view === 'agents') loadAgentsCrud();
   if (view === 'accounts') loadAccountsCrud();
   if (view === 'prompts') loadPromptsCrud();
@@ -4006,6 +4131,7 @@ document.addEventListener('click', (e) => {
 });
 
 window.addEventListener('resize', () => {
+  fitInteractiveTerminal();
   if (!isMobileLayout()) {
     closeMobileMenu();
     if (document.getElementById('crudMobileScreen').classList.contains('open')) closeCrudScreen();
