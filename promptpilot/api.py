@@ -1,13 +1,12 @@
 """FastAPI web API + static file serving."""
 
-import fcntl
 import os
 import pwd
-import pty
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import uuid
 from pathlib import Path
@@ -50,28 +49,27 @@ class InteractiveInputRequest(BaseModel):
 def _interactive_read_output_locked(session: dict):
     if not session:
         return
-    master_fd = session.get("master_fd")
-    proc = session.get("process")
-    if master_fd is None or proc is None:
+    output_path = session.get("output_path")
+    if not output_path:
         return
 
+    offset = int(session.get("output_offset") or 0)
     chunks = []
-    while True:
+    try:
+        with open(output_path, "rb") as f:
+            f.seek(offset)
+            data = f.read()
+    except OSError:
+        data = b""
+
+    if data:
+        session["output_offset"] = offset + len(data)
         try:
-            data = os.read(master_fd, 4096)
-        except BlockingIOError:
-            break
-        except OSError:
-            break
-        if not data:
-            break
-        chunks.append(data.decode("utf-8", errors="replace"))
+            chunks.append(data.decode("utf-8", errors="replace"))
+        except Exception:
+            chunks.append(str(data))
     if chunks:
         session["output"] += "".join(chunks)
-    if session.get("exit_code") is None:
-        code = proc.poll()
-        if code is not None:
-            session["exit_code"] = int(code)
 
 
 def _interactive_state_locked(session: Optional[dict]) -> dict:
@@ -81,14 +79,16 @@ def _interactive_state_locked(session: Optional[dict]) -> dict:
             "running": False,
         }
     _interactive_read_output_locked(session)
-    proc = session["process"]
+    running = _interactive_is_running_locked(session)
+    if not running and session.get("exit_code") is None:
+        session["exit_code"] = 0
     return {
         "has_session": True,
         "id": session["id"],
         "provider": session["provider"],
         "working_dir": session["working_dir"],
         "runtime_user": session.get("runtime_user"),
-        "running": proc.poll() is None,
+        "running": running,
         "exit_code": session.get("exit_code"),
         "cursor": len(session.get("output", "")),
     }
@@ -97,20 +97,24 @@ def _interactive_state_locked(session: Optional[dict]) -> dict:
 def _interactive_stop_locked(session: Optional[dict]):
     if not session:
         return
-    proc = session.get("process")
-    if proc and proc.poll() is None:
+    tmux_bin = session.get("tmux_bin") or "tmux"
+    tmux_session = session.get("tmux_session")
+    if tmux_session:
         try:
-            proc.terminate()
-            proc.wait(timeout=2)
+            subprocess.run(
+                [tmux_bin, "kill-session", "-t", tmux_session],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=session.get("env"),
+                preexec_fn=session.get("preexec_fn"),
+                close_fds=True,
+            )
         except Exception:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-    master_fd = session.get("master_fd")
-    if master_fd is not None:
+            pass
+    output_path = session.get("output_path")
+    if output_path:
         try:
-            os.close(master_fd)
+            os.remove(output_path)
         except OSError:
             pass
 
@@ -157,6 +161,100 @@ def _interactive_cmd_for_provider(provider: str) -> list[str]:
     if not template_parts:
         raise ValueError("Invalid provider command")
     return [template_parts[0]]
+
+
+def _interactive_tmux_target(session: dict) -> str:
+    return f"{session['tmux_session']}:0.0"
+
+
+def _interactive_tmux_exec(session: dict, args: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [session.get("tmux_bin") or "tmux", *args],
+        capture_output=True,
+        text=True,
+        env=session.get("env"),
+        preexec_fn=session.get("preexec_fn"),
+        close_fds=True,
+    )
+
+
+def _interactive_is_running_locked(session: Optional[dict]) -> bool:
+    if not session:
+        return False
+    tmux_session = session.get("tmux_session")
+    if not tmux_session:
+        return False
+    try:
+        result = _interactive_tmux_exec(session, ["has-session", "-t", tmux_session])
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _interactive_send_tmux_input_locked(session: dict, text: str):
+    target = _interactive_tmux_target(session)
+
+    def _run_send(extra: list[str]):
+        res = _interactive_tmux_exec(session, ["send-keys", "-t", target, *extra])
+        if res.returncode != 0:
+            err = (res.stderr or res.stdout or "").strip() or "tmux send-keys failed"
+            raise HTTPException(500, f"Interactive input failed: {err}")
+
+    i = 0
+    literal = []
+
+    def _flush_literal():
+        if not literal:
+            return
+        _run_send(["-l", "".join(literal)])
+        literal.clear()
+
+    while i < len(text):
+        if text.startswith("\x1b[A", i):
+            _flush_literal()
+            _run_send(["Up"])
+            i += 3
+            continue
+        if text.startswith("\x1b[B", i):
+            _flush_literal()
+            _run_send(["Down"])
+            i += 3
+            continue
+        if text.startswith("\x1b[C", i):
+            _flush_literal()
+            _run_send(["Right"])
+            i += 3
+            continue
+        if text.startswith("\x1b[D", i):
+            _flush_literal()
+            _run_send(["Left"])
+            i += 3
+            continue
+        if text.startswith("\x1b[3~", i):
+            _flush_literal()
+            _run_send(["Delete"])
+            i += 4
+            continue
+        ch = text[i]
+        if ch == "\x03":
+            _flush_literal()
+            _run_send(["C-c"])
+        elif ch in ("\r", "\n"):
+            _flush_literal()
+            _run_send(["Enter"])
+            if ch == "\r" and i + 1 < len(text) and text[i + 1] == "\n":
+                i += 1
+        elif ch in ("\x7f", "\b"):
+            _flush_literal()
+            _run_send(["BSpace"])
+        elif ch == "\t":
+            _flush_literal()
+            _run_send(["Tab"])
+        else:
+            literal.append(ch)
+        i += 1
+
+    _flush_literal()
 
 
 def _current_system_user() -> str:
@@ -358,51 +456,91 @@ def api_interactive_start(payload: InteractiveStartRequest):
     if working_dir and not os.path.isdir(working_dir):
         raise HTTPException(400, f"Working directory does not exist: {working_dir}")
 
-    cmd = _interactive_cmd_for_provider(provider)
-    env, preexec_fn, runtime_user, runtime_notice = _interactive_runtime_env(get_provider_env(provider))
-
-    try:
-        master_fd, slave_fd = pty.openpty()
-        flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
-        fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-        proc = subprocess.Popen(
-            cmd,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            cwd=working_dir,
-            env=env,
-            close_fds=True,
-            text=False,
-            preexec_fn=preexec_fn,
-        )
-        os.close(slave_fd)
-    except FileNotFoundError:
-        raise HTTPException(400, f"Command not found: {cmd[0]}")
-    except Exception as e:
-        raise HTTPException(500, f"Interactive start failed: {e}")
-
     with _interactive_guard:
         global _interactive_session
-        if _interactive_session and _interactive_session["process"].poll() is None:
-            try:
-                os.close(master_fd)
-            except OSError:
-                pass
-            try:
-                proc.terminate()
-            except Exception:
-                pass
+        if _interactive_session and _interactive_is_running_locked(_interactive_session):
             raise HTTPException(409, "Interactive session already running")
         if _interactive_session:
             _interactive_stop_locked(_interactive_session)
+
+        cmd = _interactive_cmd_for_provider(provider)
+        env, preexec_fn, runtime_user, runtime_notice = _interactive_runtime_env(get_provider_env(provider))
+        tmux_bin = shutil.which("tmux")
+        if not tmux_bin:
+            raise HTTPException(500, "tmux is required for interactive sessions")
+
+        tmux_session = f"pp_interactive_{uuid.uuid4().hex[:12]}"
+        output_path = os.path.join(tempfile.gettempdir(), f"{tmux_session}.log")
+        try:
+            with open(output_path, "wb"):
+                pass
+        except OSError as e:
+            raise HTTPException(500, f"Interactive start failed: cannot create log file: {e}")
+
+        pane_cmd = f"exec {shlex.quote(cmd[0])}"
+        start_args = [tmux_bin, "new-session", "-d", "-s", tmux_session]
+        if working_dir:
+            start_args += ["-c", working_dir]
+        start_args.append(pane_cmd)
+
+        try:
+            started = subprocess.run(
+                start_args,
+                capture_output=True,
+                text=True,
+                env=env,
+                preexec_fn=preexec_fn,
+                close_fds=True,
+            )
+        except FileNotFoundError:
+            raise HTTPException(500, "tmux is not available in runtime PATH")
+        except Exception as e:
+            raise HTTPException(500, f"Interactive start failed: {e}")
+
+        if started.returncode != 0:
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+            err = (started.stderr or started.stdout or "").strip()
+            raise HTTPException(500, f"Interactive start failed: {err or 'tmux new-session failed'}")
+
+        pipe_cmd = f"cat >> {shlex.quote(output_path)}"
+        pipe_res = subprocess.run(
+            [tmux_bin, "pipe-pane", "-o", "-t", f"{tmux_session}:0.0", pipe_cmd],
+            capture_output=True,
+            text=True,
+            env=env,
+            preexec_fn=preexec_fn,
+            close_fds=True,
+        )
+        if pipe_res.returncode != 0:
+            subprocess.run(
+                [tmux_bin, "kill-session", "-t", tmux_session],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=env,
+                preexec_fn=preexec_fn,
+                close_fds=True,
+            )
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+            err = (pipe_res.stderr or pipe_res.stdout or "").strip()
+            raise HTTPException(500, f"Interactive start failed: {err or 'tmux pipe-pane failed'}")
+
         _interactive_session = {
             "id": str(uuid.uuid4()),
             "provider": provider,
             "working_dir": working_dir,
             "runtime_user": runtime_user,
-            "process": proc,
-            "master_fd": master_fd,
+            "tmux_bin": tmux_bin,
+            "tmux_session": tmux_session,
+            "output_path": output_path,
+            "output_offset": 0,
+            "env": env,
+            "preexec_fn": preexec_fn,
             "output": (f"[system] {runtime_notice}\n" if runtime_notice else ""),
             "exit_code": None,
         }
@@ -415,14 +553,13 @@ def api_interactive_input(payload: InteractiveInputRequest):
         session = _interactive_session
         if not session:
             raise HTTPException(404, "Interactive session not found")
-        if session["process"].poll() is not None:
+        if not _interactive_is_running_locked(session):
             _interactive_read_output_locked(session)
+            if session.get("exit_code") is None:
+                session["exit_code"] = 0
             raise HTTPException(400, "Interactive session already stopped")
         data = payload.text + ("\n" if payload.append_newline else "")
-        try:
-            os.write(session["master_fd"], data.encode("utf-8", errors="replace"))
-        except OSError as e:
-            raise HTTPException(500, f"Interactive input failed: {e}")
+        _interactive_send_tmux_input_locked(session, data)
         _interactive_read_output_locked(session)
         return {"ok": True, "cursor": len(session["output"])}
 
@@ -440,11 +577,14 @@ def api_interactive_output(cursor: int = 0):
             }
         _interactive_read_output_locked(session)
         output = session["output"]
+        running = _interactive_is_running_locked(session)
+        if not running and session.get("exit_code") is None:
+            session["exit_code"] = 0
         safe_cursor = max(0, min(int(cursor), len(output)))
         chunk = output[safe_cursor:]
         return {
             "has_session": True,
-            "running": session["process"].poll() is None,
+            "running": running,
             "exit_code": session.get("exit_code"),
             "cursor": len(output),
             "chunk": chunk,
