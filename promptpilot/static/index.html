@@ -97,8 +97,7 @@
   body.interactive-fullscreen .container {
     max-width: none;
     width: 100%;
-    padding-left: 16px;
-    padding-right: 16px;
+    padding: 12px;
   }
 
   /* Header */
@@ -163,22 +162,48 @@
   .interactive-form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-bottom: 0;
   }
-  .interactive-config-row {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .interactive-actions-row {
+  .interactive-toolbar {
     display: flex;
     gap: 8px;
-    margin-left: auto;
-    flex-wrap: wrap;
+    align-items: center;
+    flex-wrap: nowrap;
   }
-  #interactiveView.interactive-config-collapsed .interactive-config-row {
-    display: none;
+  .interactive-toolbar label {
+    min-width: 0;
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .interactive-toolbar select {
+    width: 100%;
+    min-width: 0;
+  }
+  .interactive-toggle-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: color-mix(in oklab, var(--surface2) 80%, var(--bg));
+    color: var(--green);
+    font-size: 18px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .interactive-toggle-btn.running {
+    color: var(--red);
+    background: color-mix(in oklab, var(--red) 12%, var(--surface2));
+    border-color: color-mix(in oklab, var(--red) 42%, var(--border));
   }
   .interactive-status {
     font-size: 12px;
@@ -205,8 +230,8 @@
   }
   .interactive-terminal {
     margin: 0;
-    min-height: 360px;
-    height: clamp(360px, 58vh, 760px);
+    min-height: 320px;
+    height: calc(100dvh - 210px);
     width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
@@ -223,9 +248,7 @@
     outline: none;
   }
   .interactive-input-row {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 8px;
+    display: none;
   }
   .interactive-input-row input {
     flex: 1;
@@ -1602,19 +1625,30 @@
     color: #fff;
   }
   @media (max-width: 980px) {
-    .interactive-input-row {
-      flex-wrap: wrap;
+    body.interactive-fullscreen .container {
+      padding: 6px;
     }
-    .interactive-input-row button {
-      width: 100%;
+    #interactiveView.admin-view {
+      padding: 6px;
+    }
+    .interactive-toolbar {
+      gap: 6px;
+    }
+    .interactive-toolbar label span {
+      font-size: 11px;
+    }
+    .interactive-toggle-btn {
+      width: 42px;
+      height: 42px;
+      min-width: 42px;
+    }
+    .interactive-input-row {
+      display: none;
     }
     .interactive-terminal-wrap,
     .interactive-terminal {
-      min-height: 240px;
-    }
-    .interactive-actions-row {
-      width: 100%;
-      margin-left: 0;
+      min-height: 220px;
+      height: calc(100dvh - 168px);
     }
   }
 </style>
@@ -1676,26 +1710,17 @@
   <div class="admin-view" id="interactiveView">
     <div class="admin-header">
       <div class="admin-title" id="interactiveTitle">Интерактив</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-ghost btn-sm" type="button" id="interactiveConfigToggleBtn" onclick="toggleInteractiveConfigCollapsed()">Параметры</button>
-        <div class="interactive-status" id="interactiveStatus">Отключено</div>
-      </div>
+      <div class="interactive-status" id="interactiveStatus">Отключено</div>
     </div>
     <div class="add-form interactive-form">
-      <div class="form-row interactive-config-row" id="interactiveConfigRow">
+      <div class="interactive-toolbar" id="interactiveToolbar">
         <label><span id="interactiveAgentLabel">Агент кодинга</span>
           <select id="interactiveProviderInput"></select>
         </label>
         <label><span id="interactiveProjectLabel">Папка</span>
-          <select id="interactiveWorkdirSelect" style="display:none" onchange="onInteractiveProjectSelect()"></select>
-          <input type="text" id="interactiveWorkdirInput" placeholder="C:\Projects\MyApp" style="display:none">
+          <select id="interactiveWorkdirSelect"></select>
         </label>
-        <button class="btn btn-primary" type="button" id="interactiveStartBtn" onclick="startInteractiveSession()">Старт</button>
-        <div class="interactive-actions-row">
-          <button class="btn btn-danger" type="button" id="interactiveStopBtn" onclick="stopInteractiveSession()">Стоп</button>
-          <button class="btn btn-ghost" type="button" onclick="sendInteractiveCtrlC()">Ctrl+C</button>
-          <button class="btn btn-ghost" type="button" onclick="clearInteractiveTerminal()">Очистить</button>
-        </div>
+        <button class="interactive-toggle-btn" type="button" id="interactiveToggleBtn" onclick="toggleInteractiveSession()" title="Старт" aria-label="Старт">▶</button>
       </div>
       <div class="interactive-terminal-wrap">
         <div id="interactiveTerminal" class="interactive-terminal" tabindex="0"></div>
@@ -1877,7 +1902,6 @@ let crudState = { entity: null, mode: 'create', id: null };
 let interactiveState = { has_session: false, running: false, cursor: 0, pollTimer: null };
 let interactiveTerminal = null;
 let interactiveMobileKb = null;
-let interactiveConfigCollapsed = false;
 let interactiveOutboundBuffer = '';
 let interactiveFlushTimer = null;
 let interactiveSendChain = Promise.resolve();
@@ -1972,8 +1996,6 @@ const I18N = {
     interactive_status_stopped: 'Сессия завершена',
     interactive_start: 'Старт',
     interactive_stop: 'Стоп',
-    interactive_config_show: 'Показать форму',
-    interactive_config_hide: 'Свернуть форму',
     interactive_send: 'Отправить',
     interactive_input_placeholder: 'Введите команду и нажмите Enter',
   },
@@ -2065,8 +2087,6 @@ const I18N = {
     interactive_status_stopped: 'Session stopped',
     interactive_start: 'Start',
     interactive_stop: 'Stop',
-    interactive_config_show: 'Show start form',
-    interactive_config_hide: 'Hide start form',
     interactive_send: 'Send',
     interactive_input_placeholder: 'Type command and press Enter',
   }
@@ -2136,9 +2156,7 @@ function applyLanguage(lang) {
   document.getElementById('skillsHint').textContent = tr('skills_hint');
   document.getElementById('interactiveAgentLabel').textContent = tr('coding_agent');
   document.getElementById('interactiveProjectLabel').textContent = tr('dir');
-  document.getElementById('interactiveStartBtn').textContent = tr('interactive_start');
-  document.getElementById('interactiveStopBtn').textContent = tr('interactive_stop');
-  updateInteractiveConfigToggleLabel();
+  updateInteractiveStatus(interactiveState.running ? tr('interactive_status_running') : tr('interactive_status_off'), interactiveState.running);
   document.querySelector('#interactiveInput + button').textContent = tr('interactive_send');
   document.getElementById('interactiveInput').placeholder = tr('interactive_input_placeholder');
 
@@ -2153,7 +2171,6 @@ function applyLanguage(lang) {
   if (p1) p1.textContent = `1 (${tr('highest')})`;
   if (p10) p10.textContent = `10 (${tr('lowest')})`;
   if (projectsCache.length) renderProjectOptions();
-  updateInteractiveStatus(interactiveState.running ? tr('interactive_status_running') : tr('interactive_status_off'), interactiveState.running);
   setCrudActionLabels();
 
   loadWorkerStatus();
@@ -2982,72 +2999,38 @@ function renderInteractiveProviders() {
 
 function renderInteractiveProjects() {
   const sel = document.getElementById('interactiveWorkdirSelect');
-  const inp = document.getElementById('interactiveWorkdirInput');
   const current = sel.value;
   sel.innerHTML = [
     `<option value="">${tr('select_project')}</option>`,
     ...projectsCache.map(p => `<option value="${esc(p.path)}">${esc(p.name)} — ${esc(p.folder || p.path)}</option>`),
-    `<option value="__custom__">${tr('custom_path')}</option>`,
   ].join('');
   if (current && Array.from(sel.options).some(o => o.value === current)) {
     sel.value = current;
   } else if (projectsCache.length) {
     sel.value = projectsCache[0].path;
   }
-  sel.style.display = '';
-  if (sel.value === '__custom__') {
-    inp.style.display = '';
-  } else {
-    inp.style.display = 'none';
-    inp.value = '';
-  }
-}
-
-function onInteractiveProjectSelect() {
-  const sel = document.getElementById('interactiveWorkdirSelect');
-  const inp = document.getElementById('interactiveWorkdirInput');
-  if (sel.value === '__custom__') {
-    inp.style.display = '';
-    inp.placeholder = 'C:\\Projects\\MyApp';
-    inp.value = '';
-    inp.focus();
-  } else {
-    inp.style.display = 'none';
-    inp.value = '';
-  }
 }
 
 function getInteractiveWorkdir() {
   const sel = document.getElementById('interactiveWorkdirSelect');
-  const inp = document.getElementById('interactiveWorkdirInput');
-  const selected = sel.style.display !== 'none' && sel.value && sel.value !== '__custom__' ? sel.value : '';
-  const custom = inp.style.display !== 'none' ? inp.value.trim() : '';
-  return selected || custom || null;
+  return (sel && sel.value ? sel.value : null) || null;
 }
 
 function updateInteractiveStatus(text, running) {
   const status = document.getElementById('interactiveStatus');
+  const toggle = document.getElementById('interactiveToggleBtn');
   status.textContent = text;
   status.classList.toggle('running', !!running);
-  document.getElementById('interactiveStartBtn').disabled = !!running;
-  document.getElementById('interactiveStopBtn').disabled = !running;
+  if (!toggle) return;
+  toggle.classList.toggle('running', !!running);
+  toggle.textContent = running ? '■' : '▶';
+  toggle.title = running ? tr('interactive_stop') : tr('interactive_start');
+  toggle.setAttribute('aria-label', running ? tr('interactive_stop') : tr('interactive_start'));
 }
 
-function updateInteractiveConfigToggleLabel() {
-  const btn = document.getElementById('interactiveConfigToggleBtn');
-  if (!btn) return;
-  btn.textContent = interactiveConfigCollapsed ? tr('interactive_config_show') : tr('interactive_config_hide');
-}
-
-function setInteractiveConfigCollapsed(collapsed) {
-  interactiveConfigCollapsed = !!collapsed;
-  const view = document.getElementById('interactiveView');
-  if (view) view.classList.toggle('interactive-config-collapsed', interactiveConfigCollapsed);
-  updateInteractiveConfigToggleLabel();
-}
-
-function toggleInteractiveConfigCollapsed() {
-  setInteractiveConfigCollapsed(!interactiveConfigCollapsed);
+function toggleInteractiveSession() {
+  if (interactiveState.running) return stopInteractiveSession();
+  return startInteractiveSession();
 }
 
 function interactiveTerminalTheme() {
@@ -3218,32 +3201,19 @@ async function loadInteractiveState() {
     if (s.provider) document.getElementById('interactiveProviderInput').value = s.provider;
     if (s.working_dir) {
       const sel = document.getElementById('interactiveWorkdirSelect');
-      const inp = document.getElementById('interactiveWorkdirInput');
-      if (Array.from(sel.options).some(o => o.value === s.working_dir)) {
-        sel.value = s.working_dir;
-        inp.style.display = 'none';
-        inp.value = '';
-      } else {
-        sel.value = '__custom__';
-        inp.style.display = '';
-        inp.value = s.working_dir;
-      }
+      if (Array.from(sel.options).some(o => o.value === s.working_dir)) sel.value = s.working_dir;
     }
     updateInteractiveStatus(
       s.running ? tr('interactive_status_running') : (s.has_session ? tr('interactive_status_stopped') : tr('interactive_status_off')),
       !!s.running
     );
-    setInteractiveConfigCollapsed(!!s.has_session);
     setInteractivePolling(!!s.running || !!s.has_session);
     if (s.has_session) {
       clearInteractiveTerminalView({ resetCursor: true });
       interactiveState.cursor = 0;
       await pollInteractiveOutput();
     }
-  } catch (e) {
-    setInteractiveConfigCollapsed(false);
-    updateInteractiveStatus(tr('interactive_status_off'), false);
-  }
+  } catch (e) { updateInteractiveStatus(tr('interactive_status_off'), false); }
 }
 
 async function startInteractiveSession() {
@@ -3263,7 +3233,6 @@ async function startInteractiveSession() {
     interactiveState.cursor = 0;
     clearInteractiveTerminalView({ resetCursor: true });
     updateInteractiveStatus(tr('interactive_status_running'), true);
-    setInteractiveConfigCollapsed(true);
     setInteractivePolling(true);
     await pollInteractiveOutput();
     if (interactiveTerminal) interactiveTerminal.focus();
@@ -3285,7 +3254,6 @@ async function stopInteractiveSession() {
       interactiveFlushTimer = null;
     }
     setInteractivePolling(false);
-    setInteractiveConfigCollapsed(false);
     updateInteractiveStatus(tr('interactive_status_off'), false);
   } catch (e) {
     alert(e.message);
@@ -3330,7 +3298,6 @@ async function pollInteractiveOutput() {
       interactiveState.running = false;
       interactiveState.cursor = 0;
       setInteractivePolling(false);
-      setInteractiveConfigCollapsed(false);
       updateInteractiveStatus(tr('interactive_status_off'), false);
       return;
     }
@@ -3340,7 +3307,6 @@ async function pollInteractiveOutput() {
     interactiveState.running = !!o.running;
     interactiveState.has_session = true;
     if (!o.running) setInteractivePolling(false);
-    setInteractiveConfigCollapsed(true);
     updateInteractiveStatus(o.running ? tr('interactive_status_running') : tr('interactive_status_stopped'), !!o.running);
   } catch (_) {
   }
