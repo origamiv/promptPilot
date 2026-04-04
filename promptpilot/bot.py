@@ -563,16 +563,17 @@ async def add_task_got_skip_perms(update: Update, context: ContextTypes.DEFAULT_
         # Show project selector
         buttons = []
         row = []
-        for proj in projects:
-            row.append(InlineKeyboardButton(proj, callback_data=f"dir:{proj}"))
+        context.user_data["dir_projects"] = projects
+        for idx, proj in enumerate(projects):
+            row.append(InlineKeyboardButton(proj, callback_data=f"dir_idx:{idx}"))
             if len(row) == 2:
                 buttons.append(row)
                 row = []
         if row:
             buttons.append(row)
         buttons.append([
-            InlineKeyboardButton("✏️ Ввести вручную", callback_data="dir:__manual__"),
-            InlineKeyboardButton("⏭ Пропустить", callback_data="dir:__skip__"),
+            InlineKeyboardButton("✏️ Ввести вручную", callback_data="dir_idx:__manual__"),
+            InlineKeyboardButton("⏭ Пропустить", callback_data="dir_idx:__skip__"),
         ])
         await query.edit_message_text(
             "Выберите рабочую директорию:",
@@ -592,6 +593,7 @@ async def add_task_got_dir_btn(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
     value = query.data.split(":", 1)[1]
+    projects = context.user_data.get("dir_projects") or []
 
     if value == "__skip__":
         context.user_data["new_dir"] = None
@@ -603,7 +605,21 @@ async def add_task_got_dir_btn(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ASK_DIR_MANUAL
     else:
-        full_path = os.path.join(PROJECTS_ROOT, value)
+        try:
+            idx = int(value)
+        except ValueError:
+            await query.edit_message_text(
+                "Список проектов устарел. Нажмите «➕ Добавить задачу» и попробуйте снова."
+            )
+            return ConversationHandler.END
+
+        if idx < 0 or idx >= len(projects):
+            await query.edit_message_text(
+                "Проект не найден в текущем списке. Нажмите «➕ Добавить задачу» и попробуйте снова."
+            )
+            return ConversationHandler.END
+
+        full_path = os.path.join(PROJECTS_ROOT, projects[idx])
         context.user_data["new_dir"] = full_path
         await query.edit_message_text(f"Директория: `{full_path}`", parse_mode="Markdown")
         return await _ask_schedule_from_query(query, context)
@@ -1156,7 +1172,7 @@ def run_bot():
                 CallbackQueryHandler(add_task_got_skip_perms, pattern=r"^skipper:"),
             ],
             ASK_DIR: [
-                CallbackQueryHandler(add_task_got_dir_btn, pattern=r"^dir:"),
+                CallbackQueryHandler(add_task_got_dir_btn, pattern=r"^dir_idx:"),
             ],
             ASK_DIR_MANUAL: [
                 CommandHandler("skip", add_task_skip_dir),
