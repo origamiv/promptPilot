@@ -385,6 +385,12 @@
     padding: 14px 16px;
     transition: border-color .15s;
   }
+  .task-row.task-running {
+    background: #fff7cc;
+  }
+  [data-theme="dark"] .task-row.task-running {
+    background: color-mix(in oklab, #fff2a3 38%, var(--surface));
+  }
 
   .task-header {
     display: flex;
@@ -769,6 +775,12 @@
     padding: 10px 10px 8px;
     margin-bottom: 10px;
     position: relative;
+  }
+  .admin-mobile-card.status-3 {
+    background: #fff7cc;
+  }
+  [data-theme="dark"] .admin-mobile-card.status-3 {
+    background: color-mix(in oklab, #fff2a3 34%, var(--bg));
   }
   .admin-mobile-head {
     display: flex;
@@ -2275,7 +2287,7 @@ async function loadTasks() {
     const resultHTML = buildTaskResultHTML(t, parsed);
 
     return `
-    <div class="task-row${expanded ? ' expanded' : ''}">
+    <div class="task-row${t.status === 'running' ? ' task-running' : ''}${expanded ? ' expanded' : ''}">
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-id">#${t.id}</span>
         <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
@@ -2306,7 +2318,7 @@ async function loadTasks() {
     const workedMinutesLabel = taskWorkedMinutesLabel(t);
 
     return `
-    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+    <div class="admin-mobile-card${t.status === 'running' ? ' status-3' : ''}${expanded ? ' expanded' : ''}">
       <div class="admin-mobile-head" onclick="toggleTask(${t.id})">
         <div class="admin-mobile-main">
           <div class="task-mobile-head-line1">
@@ -3262,7 +3274,7 @@ function renderAgentsCards(rows) {
       .filter(Boolean)
       .join(' · ');
     return `
-    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+    <div class="admin-mobile-card${status === 3 ? ' status-3' : ''}${expanded ? ' expanded' : ''}">
       <div class="admin-mobile-head" onclick="toggleAdminCard('agent', ${r.id})">
         <div class="admin-mobile-main">
           <div class="admin-mobile-title">${title}</div>
@@ -3293,7 +3305,7 @@ function renderAccountsCards(rows) {
       .filter(Boolean)
       .join(' · ');
     return `
-    <div class="admin-mobile-card${expanded ? ' expanded' : ''}${r.is_active ? ' active-account-card' : ''}">
+    <div class="admin-mobile-card${status === 3 ? ' status-3' : ''}${expanded ? ' expanded' : ''}${r.is_active ? ' active-account-card' : ''}">
       <div class="admin-mobile-head" onclick="toggleAdminCard('account', ${r.id})">
         <div class="admin-mobile-main">
           <div class="admin-mobile-title">${title}</div>
@@ -3335,7 +3347,7 @@ function renderPromptsCards(rows) {
       .filter(Boolean)
       .join(' · ');
     return `
-    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+    <div class="admin-mobile-card${status === 3 ? ' status-3' : ''}${expanded ? ' expanded' : ''}">
       <div class="admin-mobile-head" onclick="toggleAdminCard('prompt', ${r.id})">
         <div class="admin-mobile-main">
           <div class="admin-mobile-title">${title}</div>
@@ -3635,7 +3647,7 @@ loadVersion();
 loadCosts();
 refresh();
 switchView(parseViewFromHash(), { syncUrl: false });
-setInterval(refresh, 5000);
+setInterval(refresh, 15000);
 setInterval(loadWorkerStatus, 10000);
 setInterval(loadCosts, 30000);
 </script>
