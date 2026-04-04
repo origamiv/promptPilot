@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1590,14 +1590,14 @@
     <button id="menuInteractive" class="side-btn" onclick="switchView('interactive')">Интерактив</button>
     <button id="menuProjects" class="side-btn" onclick="switchView('projects')">Проекты</button>
     <button id="menuAgents" class="side-btn" onclick="switchView('agents')">Агенты</button>
-    <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Аккаунты агентов</button>
+    <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Учётные записи агентов</button>
     <button id="menuPrompts" class="side-btn" onclick="switchView('prompts')">Промпты</button>
   </aside>
 <div class="container">
   <header>
     <div class="logo">Prompt<span>Pilot</span></div>
     <div class="header-right">
-      <button id="langBtn" class="btn-lang" onclick="toggleLanguage()">RU</button>
+      <button id="langBtn" class="btn-lang" onclick="toggleLanguage()" title="Switch to English" aria-label="Switch to English">EN</button>
       <button id="themeBtn" class="btn-theme" onclick="toggleTheme()">Light</button>
       <div class="badges" id="badges"></div>
     </div>
@@ -1833,9 +1833,11 @@ const I18N = {
     tasks: 'Задачи',
     projects: 'Проекты',
     agents: 'Агенты',
-    accounts: 'Аккаунты агентов',
+    accounts: 'Учётные записи агентов',
     prompts: 'Промпты',
     open_menu: 'Открыть меню',
+    switch_to_ru: 'Переключить на русский',
+    switch_to_en: 'Переключить на английский',
     light: 'Светлая',
     dark: 'Тёмная',
     prompt_placeholder: 'Введите ваш промпт...',
@@ -1925,6 +1927,8 @@ const I18N = {
     accounts: 'Agent Accounts',
     prompts: 'Prompts',
     open_menu: 'Open menu',
+    switch_to_ru: 'Switch to Russian',
+    switch_to_en: 'Switch to English',
     light: 'Light',
     dark: 'Dark',
     prompt_placeholder: 'Enter your prompt here...',
@@ -2032,7 +2036,13 @@ function applyLanguage(lang) {
   currentLang = (lang === 'en') ? 'en' : 'ru';
   document.documentElement.lang = currentLang === 'ru' ? 'ru' : 'en';
   const langBtn = document.getElementById('langBtn');
-  if (langBtn) langBtn.textContent = currentLang.toUpperCase();
+  if (langBtn) {
+    const nextLang = currentLang === 'ru' ? 'en' : 'ru';
+    langBtn.textContent = nextLang.toUpperCase();
+    const switchLabel = nextLang === 'ru' ? tr('switch_to_ru') : tr('switch_to_en');
+    langBtn.setAttribute('title', switchLabel);
+    langBtn.setAttribute('aria-label', switchLabel);
+  }
   const themeBtn = document.getElementById('themeBtn');
   if (themeBtn) themeBtn.textContent = currentTheme === 'light' ? tr('dark') : tr('light');
 
