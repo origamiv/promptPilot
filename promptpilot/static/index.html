@@ -56,6 +56,17 @@
   .mobile-topbar {
     display: none;
   }
+  .help-toggle {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
   .sidebar-backdrop {
     display: none;
   }
@@ -1404,6 +1415,11 @@
       line-height: 1;
       cursor: pointer;
     }
+    .help-toggle {
+      width: 38px;
+      height: 38px;
+      font-size: 18px;
+    }
     .sidebar-backdrop {
       position: fixed;
       inset: 0;
@@ -1699,7 +1715,7 @@
   <div class="mobile-topbar">
     <button class="menu-toggle" id="menuToggle" type="button" onclick="toggleMobileMenu()" aria-label="Открыть меню">☰</button>
     <div class="mobile-brand">PromptPilot</div>
-    <div></div>
+    <button class="help-toggle" id="helpBtn" type="button" onclick="openContextHelp()" aria-label="Помощь" title="Помощь">📖</button>
   </div>
   <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeMobileMenu()"></div>
   <aside class="sidebar">
@@ -1968,6 +1984,7 @@ const I18N = {
     agents: 'Агенты',
     accounts: 'Учётные записи агентов',
     prompts: 'Промпты',
+    help: 'Помощь',
     open_menu: 'Открыть меню',
     switch_to_ru: 'Переключить на русский',
     switch_to_en: 'Переключить на английский',
@@ -2059,6 +2076,7 @@ const I18N = {
     agents: 'Agents',
     accounts: 'Agent Accounts',
     prompts: 'Prompts',
+    help: 'Help',
     open_menu: 'Open menu',
     switch_to_ru: 'Switch to Russian',
     switch_to_en: 'Switch to English',
@@ -2194,6 +2212,11 @@ function applyLanguage(lang) {
   document.getElementById('accountsTitle').textContent = tr('accounts');
   document.getElementById('promptsTitle').textContent = tr('prompts');
   document.getElementById('menuToggle').setAttribute('aria-label', tr('open_menu'));
+  const helpBtn = document.getElementById('helpBtn');
+  if (helpBtn) {
+    helpBtn.setAttribute('aria-label', tr('help'));
+    helpBtn.setAttribute('title', tr('help'));
+  }
   document.getElementById('providerLabelText').textContent = tr('provider');
   document.getElementById('modelLabelText').textContent = tr('model');
   document.getElementById('priorityLabelText').textContent = tr('priority');
@@ -3434,6 +3457,11 @@ function toggleMobileMenu() {
 function parseViewFromHash() {
   const raw = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
   return VIEW_NAMES.has(raw) ? raw : 'tasks';
+}
+
+function openContextHelp() {
+  const section = VIEW_NAMES.has(currentView) ? currentView : 'tasks';
+  window.open(`/help/${encodeURIComponent(section)}`, '_blank', 'noopener,noreferrer');
 }
 
 function switchView(view, opts = {}) {

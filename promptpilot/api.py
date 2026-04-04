@@ -30,8 +30,10 @@ app = FastAPI(title="PromptPilot", version="0.1.0")
 # When frozen by PyInstaller, __file__ points into the temp extraction dir
 if getattr(sys, "frozen", False):
     STATIC_DIR = Path(sys._MEIPASS) / "promptpilot" / "static"
+    HELP_DIR = Path(sys.executable).parent / "docs" / "help"
 else:
     STATIC_DIR = Path(__file__).parent / "static"
+    HELP_DIR = Path(__file__).resolve().parent.parent / "docs" / "help"
 
 _interactive_guard = threading.Lock()
 _interactive_session = None
@@ -980,6 +982,32 @@ def api_admin_delete_prompt(prompt_id: int):
 def index():
     return FileResponse(
         STATIC_DIR / "index.html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
+@app.get("/help/{section}")
+def help_page(section: str):
+    allowed = {
+        "tasks": "tasks.html",
+        "interactive": "interactive.html",
+        "agents": "agents.html",
+        "accounts": "accounts.html",
+        "projects": "projects.html",
+        "prompts": "prompts.html",
+    }
+    name = allowed.get(str(section or "").strip().lower())
+    if not name:
+        raise HTTPException(404, "Help page not found")
+    path = HELP_DIR / name
+    if not path.exists():
+        raise HTTPException(404, "Help page not found")
+    return FileResponse(
+        path,
         headers={
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
             "Pragma": "no-cache",
