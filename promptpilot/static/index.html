@@ -1690,7 +1690,7 @@
             <input type="text" id="recurrenceInput" placeholder="6h / daily@09:00" style="width:140px">
           </label>
           <label><span id="promptListLabelText">Список промптов</span>
-            <input type="text" id="promptListInput" value="base, current, end" placeholder="base, current, end" style="width:220px">
+            <input type="text" id="promptListInput" value="base, current, project, end" placeholder="base, current, project, end" style="width:220px">
           </label>
           <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
@@ -1738,7 +1738,7 @@ const I18N = {
     project: 'Проект',
     recur: 'Повтор',
     prompt_list: 'Список промптов',
-    prompt_list_placeholder: 'base, current, end',
+    prompt_list_placeholder: 'base, current, project, end',
     add_task: 'Добавить задачу',
     all: 'Все',
     pending: 'В очереди',
@@ -1794,6 +1794,7 @@ const I18N = {
     h_short: 'ч',
     d_short: 'д',
     prompts_not_found: 'Не найдены промпты: {names}',
+    project_prompt_missing: 'Не найден project-промпт: выберите проект с заполненным comment',
     task_agent: 'Агент',
     task_account: 'Аккаунт агента',
     worked_minutes: '{n} мин',
@@ -1811,7 +1812,7 @@ const I18N = {
     project: 'Project',
     recur: 'Recur',
     prompt_list: 'Prompt List',
-    prompt_list_placeholder: 'base, current, end',
+    prompt_list_placeholder: 'base, current, project, end',
     add_task: 'Add Task',
     all: 'All',
     pending: 'Pending',
@@ -1867,6 +1868,7 @@ const I18N = {
     h_short: 'h',
     d_short: 'd',
     prompts_not_found: 'Prompts not found: {names}',
+    project_prompt_missing: 'Project prompt is missing: select a project with a non-empty comment',
     task_agent: 'Agent',
     task_account: 'Agent account',
     worked_minutes: '{n} min',
@@ -2354,7 +2356,7 @@ async function addTask() {
   const recurrence = document.getElementById('recurrenceInput').value.trim() || null;
 
   try {
-    const agentPrompt = await buildPromptFromList(currentPrompt, promptListRaw);
+    const agentPrompt = await buildPromptFromList(currentPrompt, promptListRaw, workdir);
     const body = {
       prompt: currentPrompt,
       subject,
@@ -2394,9 +2396,12 @@ function parsePromptList(raw) {
   return tokens.length ? tokens : ['current'];
 }
 
-async function buildPromptFromList(currentPrompt, listRaw) {
+async function buildPromptFromList(currentPrompt, listRaw, workdir) {
   const list = parsePromptList(listRaw);
-  const needsDbPrompts = list.some(x => x.toLowerCase() !== 'current');
+  const needsDbPrompts = list.some(x => {
+    const key = x.toLowerCase();
+    return key !== 'current' && key !== 'project';
+  });
   let byShort = new Map();
 
   if (needsDbPrompts) {
@@ -2414,6 +2419,15 @@ async function buildPromptFromList(currentPrompt, listRaw) {
     const key = item.toLowerCase();
     if (key === 'current') {
       parts.push(currentPrompt);
+      continue;
+    }
+    if (key === 'project') {
+      const project = projectByWorkingDir(workdir);
+      const projectPrompt = String((project && project.comment) || '').trim();
+      if (!projectPrompt) {
+        throw new Error(tr('project_prompt_missing'));
+      }
+      parts.push(projectPrompt);
       continue;
     }
     if (!byShort.has(key)) {

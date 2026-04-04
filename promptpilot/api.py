@@ -155,6 +155,7 @@ def api_projects(q: Optional[str] = None):
                 "folder": folder,
                 "path": path,
                 "color": r.get("color"),
+                "comment": r.get("comment"),
             }
         )
     return entries
