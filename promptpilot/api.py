@@ -471,11 +471,18 @@ def api_interactive_start(payload: InteractiveStartRequest):
 
         tmux_session = f"pp_interactive_{uuid.uuid4().hex[:12]}"
         output_path = os.path.join(tempfile.gettempdir(), f"{tmux_session}.log")
-        try:
-            with open(output_path, "wb"):
-                pass
-        except OSError as e:
-            raise HTTPException(500, f"Interactive start failed: cannot create log file: {e}")
+        touch_cmd = f": > {shlex.quote(output_path)}"
+        touched = subprocess.run(
+            ["/bin/sh", "-lc", touch_cmd],
+            capture_output=True,
+            text=True,
+            env=env,
+            preexec_fn=preexec_fn,
+            close_fds=True,
+        )
+        if touched.returncode != 0:
+            err = (touched.stderr or touched.stdout or "").strip()
+            raise HTTPException(500, f"Interactive start failed: cannot create log file: {err or 'touch failed'}")
 
         pane_cmd = f"exec {shlex.quote(cmd[0])}"
         start_args = [tmux_bin, "new-session", "-d", "-s", tmux_session]
