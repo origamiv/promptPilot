@@ -94,6 +94,12 @@
   }
 
   .container { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
+  body.interactive-fullscreen .container {
+    max-width: none;
+    width: 100%;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 
   /* Header */
   header {
@@ -159,6 +165,21 @@
     flex-direction: column;
     gap: 12px;
   }
+  .interactive-config-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .interactive-actions-row {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+  #interactiveView.interactive-config-collapsed .interactive-config-row {
+    display: none;
+  }
   .interactive-status {
     font-size: 12px;
     color: var(--text2);
@@ -187,8 +208,11 @@
     min-height: 360px;
     height: clamp(360px, 58vh, 760px);
     width: 100%;
-    overflow: auto;
-    white-space: pre;
+    overflow-y: auto;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     font-family: var(--mono);
     font-size: 13px;
     line-height: 1.32;
@@ -1588,6 +1612,10 @@
     .interactive-terminal {
       min-height: 240px;
     }
+    .interactive-actions-row {
+      width: 100%;
+      margin-left: 0;
+    }
   }
 </style>
 </head>
@@ -1648,10 +1676,13 @@
   <div class="admin-view" id="interactiveView">
     <div class="admin-header">
       <div class="admin-title" id="interactiveTitle">Интерактив</div>
-      <div class="interactive-status" id="interactiveStatus">Отключено</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" type="button" id="interactiveConfigToggleBtn" onclick="toggleInteractiveConfigCollapsed()">Параметры</button>
+        <div class="interactive-status" id="interactiveStatus">Отключено</div>
+      </div>
     </div>
     <div class="add-form interactive-form">
-      <div class="form-row">
+      <div class="form-row interactive-config-row" id="interactiveConfigRow">
         <label><span id="interactiveAgentLabel">Агент кодинга</span>
           <select id="interactiveProviderInput"></select>
         </label>
@@ -1660,9 +1691,11 @@
           <input type="text" id="interactiveWorkdirInput" placeholder="C:\Projects\MyApp" style="display:none">
         </label>
         <button class="btn btn-primary" type="button" id="interactiveStartBtn" onclick="startInteractiveSession()">Старт</button>
-        <button class="btn btn-danger" type="button" id="interactiveStopBtn" onclick="stopInteractiveSession()">Стоп</button>
-        <button class="btn btn-ghost" type="button" onclick="sendInteractiveCtrlC()">Ctrl+C</button>
-        <button class="btn btn-ghost" type="button" onclick="clearInteractiveTerminal()">Очистить</button>
+        <div class="interactive-actions-row">
+          <button class="btn btn-danger" type="button" id="interactiveStopBtn" onclick="stopInteractiveSession()">Стоп</button>
+          <button class="btn btn-ghost" type="button" onclick="sendInteractiveCtrlC()">Ctrl+C</button>
+          <button class="btn btn-ghost" type="button" onclick="clearInteractiveTerminal()">Очистить</button>
+        </div>
       </div>
       <div class="interactive-terminal-wrap">
         <div id="interactiveTerminal" class="interactive-terminal" tabindex="0"></div>
@@ -1844,6 +1877,7 @@ let crudState = { entity: null, mode: 'create', id: null };
 let interactiveState = { has_session: false, running: false, cursor: 0, pollTimer: null };
 let interactiveTerminal = null;
 let interactiveMobileKb = null;
+let interactiveConfigCollapsed = false;
 let interactiveOutboundBuffer = '';
 let interactiveFlushTimer = null;
 let interactiveSendChain = Promise.resolve();
@@ -1938,6 +1972,8 @@ const I18N = {
     interactive_status_stopped: 'Сессия завершена',
     interactive_start: 'Старт',
     interactive_stop: 'Стоп',
+    interactive_config_show: 'Показать форму',
+    interactive_config_hide: 'Свернуть форму',
     interactive_send: 'Отправить',
     interactive_input_placeholder: 'Введите команду и нажмите Enter',
   },
@@ -2029,6 +2065,8 @@ const I18N = {
     interactive_status_stopped: 'Session stopped',
     interactive_start: 'Start',
     interactive_stop: 'Stop',
+    interactive_config_show: 'Show start form',
+    interactive_config_hide: 'Hide start form',
     interactive_send: 'Send',
     interactive_input_placeholder: 'Type command and press Enter',
   }
@@ -2100,6 +2138,7 @@ function applyLanguage(lang) {
   document.getElementById('interactiveProjectLabel').textContent = tr('dir');
   document.getElementById('interactiveStartBtn').textContent = tr('interactive_start');
   document.getElementById('interactiveStopBtn').textContent = tr('interactive_stop');
+  updateInteractiveConfigToggleLabel();
   document.querySelector('#interactiveInput + button').textContent = tr('interactive_send');
   document.getElementById('interactiveInput').placeholder = tr('interactive_input_placeholder');
 
@@ -2994,6 +3033,23 @@ function updateInteractiveStatus(text, running) {
   document.getElementById('interactiveStopBtn').disabled = !running;
 }
 
+function updateInteractiveConfigToggleLabel() {
+  const btn = document.getElementById('interactiveConfigToggleBtn');
+  if (!btn) return;
+  btn.textContent = interactiveConfigCollapsed ? tr('interactive_config_show') : tr('interactive_config_hide');
+}
+
+function setInteractiveConfigCollapsed(collapsed) {
+  interactiveConfigCollapsed = !!collapsed;
+  const view = document.getElementById('interactiveView');
+  if (view) view.classList.toggle('interactive-config-collapsed', interactiveConfigCollapsed);
+  updateInteractiveConfigToggleLabel();
+}
+
+function toggleInteractiveConfigCollapsed() {
+  setInteractiveConfigCollapsed(!interactiveConfigCollapsed);
+}
+
 function interactiveTerminalTheme() {
   if (currentTheme === 'light') {
     return {
@@ -3177,6 +3233,7 @@ async function loadInteractiveState() {
       s.running ? tr('interactive_status_running') : (s.has_session ? tr('interactive_status_stopped') : tr('interactive_status_off')),
       !!s.running
     );
+    setInteractiveConfigCollapsed(!!s.has_session);
     setInteractivePolling(!!s.running || !!s.has_session);
     if (s.has_session) {
       clearInteractiveTerminalView({ resetCursor: true });
@@ -3184,6 +3241,7 @@ async function loadInteractiveState() {
       await pollInteractiveOutput();
     }
   } catch (e) {
+    setInteractiveConfigCollapsed(false);
     updateInteractiveStatus(tr('interactive_status_off'), false);
   }
 }
@@ -3205,6 +3263,7 @@ async function startInteractiveSession() {
     interactiveState.cursor = 0;
     clearInteractiveTerminalView({ resetCursor: true });
     updateInteractiveStatus(tr('interactive_status_running'), true);
+    setInteractiveConfigCollapsed(true);
     setInteractivePolling(true);
     await pollInteractiveOutput();
     if (interactiveTerminal) interactiveTerminal.focus();
@@ -3226,6 +3285,7 @@ async function stopInteractiveSession() {
       interactiveFlushTimer = null;
     }
     setInteractivePolling(false);
+    setInteractiveConfigCollapsed(false);
     updateInteractiveStatus(tr('interactive_status_off'), false);
   } catch (e) {
     alert(e.message);
@@ -3270,6 +3330,7 @@ async function pollInteractiveOutput() {
       interactiveState.running = false;
       interactiveState.cursor = 0;
       setInteractivePolling(false);
+      setInteractiveConfigCollapsed(false);
       updateInteractiveStatus(tr('interactive_status_off'), false);
       return;
     }
@@ -3279,6 +3340,7 @@ async function pollInteractiveOutput() {
     interactiveState.running = !!o.running;
     interactiveState.has_session = true;
     if (!o.running) setInteractivePolling(false);
+    setInteractiveConfigCollapsed(true);
     updateInteractiveStatus(o.running ? tr('interactive_status_running') : tr('interactive_status_stopped'), !!o.running);
   } catch (_) {
   }
@@ -3319,6 +3381,7 @@ function switchView(view, opts = {}) {
   const { syncUrl = true } = opts;
   if (!VIEW_NAMES.has(view)) view = 'tasks';
   currentView = view;
+  document.body.classList.toggle('interactive-fullscreen', view === 'interactive');
 
   if (syncUrl) {
     const targetHash = `#${view}`;
