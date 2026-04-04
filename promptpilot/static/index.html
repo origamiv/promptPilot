@@ -857,6 +857,19 @@
     border-radius: var(--radius);
     padding: 16px;
   }
+  .help-view {
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+  .help-frame {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #fff;
+    min-height: 68vh;
+    height: calc(100dvh - 150px);
+  }
   .admin-header {
     display: flex;
     align-items: center;
@@ -1608,6 +1621,20 @@
       padding: 12px;
       overflow-x: auto;
     }
+    .help-view {
+      padding: 0;
+      overflow: hidden;
+      border: none;
+      background: transparent;
+    }
+    .help-frame {
+      border-left: none;
+      border-right: none;
+      border-bottom: none;
+      border-radius: 0;
+      min-height: calc(100dvh - 56px);
+      height: calc(100dvh - 56px);
+    }
     .admin-header input {
       flex: 1 1 auto;
       min-width: 0;
@@ -1800,6 +1827,10 @@
         <button class="btn btn-primary" type="button" onclick="sendInteractiveInput()">Отправить</button>
       </div>
     </div>
+  </div>
+
+  <div class="admin-view help-view" id="helpView">
+    <iframe id="helpFrame" class="help-frame" title="Справка"></iframe>
   </div>
 
   <div class="admin-view" id="projectsView">
@@ -3433,8 +3464,10 @@ function clearInteractiveTerminal() {
 }
 
 let currentView = 'tasks';
+let lastContentView = 'tasks';
+let currentHelpSection = 'tasks';
 
-const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts']);
+const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help']);
 
 function isMobileLayout() {
   return window.matchMedia('(max-width: 980px)').matches;
@@ -3459,14 +3492,30 @@ function parseViewFromHash() {
   return VIEW_NAMES.has(raw) ? raw : 'tasks';
 }
 
+function helpSectionForView(view) {
+  const v = String(view || '').trim().toLowerCase();
+  if (v === 'help') return currentHelpSection || lastContentView || 'tasks';
+  return VIEW_NAMES.has(v) ? v : 'tasks';
+}
+
+function loadHelpSection(section) {
+  const frame = document.getElementById('helpFrame');
+  if (!frame) return;
+  const safe = helpSectionForView(section);
+  currentHelpSection = safe;
+  frame.src = `/help/${encodeURIComponent(safe)}`;
+}
+
 function openContextHelp() {
-  const section = VIEW_NAMES.has(currentView) ? currentView : 'tasks';
-  window.open(`/help/${encodeURIComponent(section)}`, '_blank', 'noopener,noreferrer');
+  const section = helpSectionForView(currentView === 'help' ? lastContentView : currentView);
+  loadHelpSection(section);
+  switchView('help');
 }
 
 function switchView(view, opts = {}) {
   const { syncUrl = true } = opts;
   if (!VIEW_NAMES.has(view)) view = 'tasks';
+  if (view !== 'help') lastContentView = view;
   currentView = view;
   document.body.classList.toggle('interactive-fullscreen', view === 'interactive');
 
@@ -3479,6 +3528,7 @@ function switchView(view, opts = {}) {
   if (!isTasks) closeTaskFormScreen();
   document.getElementById('tasksView').style.display = isTasks ? '' : 'none';
   document.getElementById('interactiveView').style.display = view === 'interactive' ? 'block' : 'none';
+  document.getElementById('helpView').style.display = view === 'help' ? 'block' : 'none';
   document.getElementById('projectsView').style.display = view === 'projects' ? 'block' : 'none';
   document.getElementById('agentsView').style.display = view === 'agents' ? 'block' : 'none';
   document.getElementById('accountsView').style.display = view === 'accounts' ? 'block' : 'none';
@@ -3492,6 +3542,7 @@ function switchView(view, opts = {}) {
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
 
   if (view === 'projects') loadProjectsCrud();
+  if (view === 'help') loadHelpSection(currentHelpSection || lastContentView || 'tasks');
   if (view === 'interactive') {
     ensureInteractiveTerminalReady();
     setTimeout(() => {
