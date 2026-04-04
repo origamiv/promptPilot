@@ -907,6 +907,24 @@ def list_agents(search: Optional[str] = None, limit: int = 200) -> list[dict]:
         return [dict(r) for r in cur.fetchall()]
 
 
+def list_active_agents(limit: int = 200) -> list[dict]:
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT id, name, shortname, email, priority, status, created_at, updated_at
+                FROM {}.agents
+                WHERE deleted_at IS NULL
+                  AND status = 1
+                ORDER BY priority ASC, id ASC
+                LIMIT %s
+                """
+            ).format(sql.Identifier(SCHEMA_NAME)),
+            (limit,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
 def create_agent(name: str, shortname: str, email: Optional[str] = None, priority: int = 0, status: int = 1) -> dict:
     now = datetime.utcnow().replace(microsecond=0)
     with _connect() as conn, conn.cursor() as cur:
@@ -1273,6 +1291,27 @@ def list_agent_accounts_for_limits(limit: int = 1000) -> list[dict]:
                 FROM {}.agents_accounts aa
                 LEFT JOIN {}.agents a ON a.id = aa.agent_id
                 ORDER BY aa.id
+                LIMIT %s
+                """
+            ).format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME)),
+            (limit,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def list_agent_accounts_for_limits_all(limit: int = 1000) -> list[dict]:
+    """List all non-disabled accounts with credentials for comprehensive limit polling."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT aa.id, aa.name, aa.shortname, aa.agent_id, aa.status, aa.token,
+                       aa.is_active, aa.login, aa.claude_credentials,
+                       a.name AS agent_name, a.shortname AS agent_shortname
+                FROM {}.agents_accounts aa
+                LEFT JOIN {}.agents a ON a.id = aa.agent_id
+                WHERE aa.status <> 2
+                ORDER BY aa.is_active DESC, aa.id
                 LIMIT %s
                 """
             ).format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME)),

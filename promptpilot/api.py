@@ -180,22 +180,36 @@ def _interactive_cmd_for_provider(provider: str) -> list[str]:
         if parts:
             candidates.append(parts[0])
 
+    resolved: list[str] | None = None
     for cmd0 in candidates:
         if not cmd0:
             continue
         if os.path.isabs(cmd0) or os.sep in cmd0:
             if os.path.exists(cmd0):
-                return [cmd0]
+                resolved = [cmd0]
+                break
             continue
         if shutil.which(cmd0):
-            return [cmd0]
+            resolved = [cmd0]
+            break
 
-    if candidates:
-        return [candidates[0]]
+    if resolved is None and candidates:
+        resolved = [candidates[0]]
 
-    if not template_parts:
+    if resolved is None and not template_parts:
         raise ValueError("Invalid provider command")
-    return [template_parts[0]]
+    if resolved is None:
+        resolved = [template_parts[0]]
+
+    # Interactive-only flags requested by project owner.
+    if key == "codex":
+        if "--yolo" not in resolved:
+            resolved.append("--yolo")
+    elif key in ("claude", "claude-z"):
+        if "--dangerously-skip-permissions" not in resolved:
+            resolved.append("--dangerously-skip-permissions")
+
+    return resolved
 
 
 def _interactive_tmux_target(session: dict) -> str:
@@ -426,15 +440,24 @@ def api_config():
 @app.get("/api/providers")
 def api_providers():
     providers = load_providers()
+    agents = db.list_active_agents(limit=500)
     default_models = ["sonnet", "opus", "haiku"]
-    return {
-        name: {
-            "description": info.get("description", name),
-            "supports_skills": info.get("supports_skills", False),
-            "models": info.get("models", default_models if info.get("supports_skills") else []),
+    items = {}
+    for agent in agents:
+        shortname = str(agent.get("shortname") or "").strip()
+        if not shortname:
+            continue
+        info = providers.get(shortname, {})
+        supports_skills = bool(info.get("supports_skills", False))
+        models = info.get("models")
+        if models is None:
+            models = default_models if supports_skills else []
+        items[shortname] = {
+            "description": agent.get("name") or info.get("description", shortname),
+            "supports_skills": supports_skills,
+            "models": models,
         }
-        for name, info in providers.items()
-    }
+    return items
 
 
 @app.get("/api/skills")
@@ -482,10 +505,6 @@ def api_interactive_start(payload: InteractiveStartRequest):
     provider = str(payload.provider or "").strip()
     if not provider:
         raise HTTPException(400, "provider is required")
-
-    providers = load_providers()
-    if provider not in providers:
-        raise HTTPException(400, f"Unknown provider: {provider}")
 
     working_dir = (payload.working_dir or "").strip() or None
     if working_dir and not os.path.isdir(working_dir):
