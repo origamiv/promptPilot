@@ -207,6 +207,15 @@
     flex: 1;
     min-width: 220px;
   }
+  .interactive-mobile-kb {
+    position: fixed;
+    left: -10000px;
+    bottom: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
 
   .form-row {
     display: flex;
@@ -1657,6 +1666,7 @@
       </div>
       <div class="interactive-terminal-wrap">
         <div id="interactiveTerminal" class="interactive-terminal" tabindex="0"></div>
+        <textarea id="interactiveMobileKb" class="interactive-mobile-kb" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
       </div>
       <div class="form-row interactive-input-row">
         <input type="text" id="interactiveInput" placeholder="Введите команду и нажмите Enter">
@@ -1833,6 +1843,7 @@ let appTimezone = 'UTC';
 let crudState = { entity: null, mode: 'create', id: null };
 let interactiveState = { has_session: false, running: false, cursor: 0, pollTimer: null };
 let interactiveTerminal = null;
+let interactiveMobileKb = null;
 let interactiveOutboundBuffer = '';
 let interactiveFlushTimer = null;
 let interactiveSendChain = Promise.resolve();
@@ -3010,11 +3021,19 @@ function fitInteractiveTerminal() {
 function ensureInteractiveTerminalReady() {
   if (interactiveTerminal) return true;
   const mount = document.getElementById('interactiveTerminal');
+  const mobileKb = document.getElementById('interactiveMobileKb');
   if (!mount) return false;
   interactiveTerminal = mount;
+  interactiveMobileKb = mobileKb || null;
   applyInteractiveTerminalTheme();
 
-  interactiveTerminal.addEventListener('click', () => interactiveTerminal.focus());
+  interactiveTerminal.addEventListener('click', () => {
+    interactiveTerminal.focus();
+    focusInteractiveMobileKeyboard();
+  });
+  interactiveTerminal.addEventListener('touchstart', () => {
+    focusInteractiveMobileKeyboard();
+  }, { passive: true });
   interactiveTerminal.addEventListener('paste', (e) => {
     if (!interactiveState.has_session) return;
     const text = e.clipboardData?.getData('text') || '';
@@ -3029,7 +3048,33 @@ function ensureInteractiveTerminalReady() {
     e.preventDefault();
     queueInteractiveRawInput(seq);
   });
+  if (interactiveMobileKb) {
+    interactiveMobileKb.addEventListener('keydown', (e) => {
+      if (!interactiveState.has_session) return;
+      const seq = interactiveKeyEventToSeq(e);
+      if (seq == null) return;
+      e.preventDefault();
+      queueInteractiveRawInput(seq);
+    });
+    interactiveMobileKb.addEventListener('input', (e) => {
+      if (!interactiveState.has_session) {
+        e.target.value = '';
+        return;
+      }
+      const text = String(e.target.value || '');
+      if (text) queueInteractiveRawInput(text);
+      e.target.value = '';
+    });
+  }
   return true;
+}
+
+function focusInteractiveMobileKeyboard() {
+  if (!isMobileLayout()) return;
+  if (!interactiveState.has_session) return;
+  if (!interactiveMobileKb) return;
+  try { interactiveMobileKb.focus({ preventScroll: true }); }
+  catch (_) { interactiveMobileKb.focus(); }
 }
 
 function interactiveKeyEventToSeq(e) {
@@ -3163,6 +3208,7 @@ async function startInteractiveSession() {
     setInteractivePolling(true);
     await pollInteractiveOutput();
     if (interactiveTerminal) interactiveTerminal.focus();
+    focusInteractiveMobileKeyboard();
   } catch (e) {
     alert(e.message);
   }
