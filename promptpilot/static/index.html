@@ -1193,6 +1193,32 @@
     background: transparent;
     border: none;
   }
+  #taskFormScreen {
+    background: rgba(0, 0, 0, 0.45);
+    padding: 20px;
+    align-items: center;
+    justify-content: center;
+  }
+  #taskFormScreen.open {
+    display: flex;
+  }
+  #taskFormScreen .task-form-dialog {
+    width: min(980px, 100%);
+    max-height: calc(100dvh - 40px);
+    overflow: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.4);
+  }
+  #taskFormScreen .crud-mobile-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  #taskFormScreen .crud-mobile-body {
+    padding: 14px 16px 16px;
+  }
 
   @media (max-width: 980px) {
     .app-layout { display: block; min-height: 100dvh; }
@@ -1263,6 +1289,20 @@
       width: 100%;
       justify-content: space-between;
       gap: 8px;
+    }
+    #taskFormScreen {
+      padding: 0;
+      background: var(--bg);
+      align-items: stretch;
+      justify-content: stretch;
+    }
+    #taskFormScreen .task-form-dialog {
+      width: 100%;
+      max-height: none;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      background: transparent;
     }
     #taskFormScreen .add-form {
       padding: 14px;
@@ -1595,60 +1635,62 @@
     </form>
   </div>
 </div>
-<div id="taskFormScreen" class="crud-mobile-screen">
-  <div class="crud-mobile-head">
-    <button class="btn btn-ghost" type="button" onclick="closeTaskFormScreen()">←</button>
-    <div id="taskFormTitle" class="crud-mobile-title">Добавить задачу</div>
-    <div></div>
-  </div>
-  <div class="crud-mobile-body">
-    <div class="add-form" id="addForm">
-      <input type="text" id="subjectInput" placeholder="Тема (необязательно — возьмём из первой строки промпта)" style="width:100%;margin-bottom:8px">
-      <textarea id="promptInput" placeholder="Введите ваш промпт..."></textarea>
-      <div class="skills-toggle-row" id="skillsToggleRow">
-        <button type="button" class="btn-skills" id="skillsToggleBtn" onclick="toggleSkills()">⚡ Skills</button>
-        <span class="skills-hint" id="skillsHint">Только Claude Code · /skill-name [args]</span>
-      </div>
-      <div class="skills-panel" id="skillsPanel"></div>
-      <div class="form-row">
-        <label><span id="providerLabelText">Провайдер</span>
-          <select id="providerInput"></select>
-        </label>
-        <label id="modelLabel" style="display:none"><span id="modelLabelText">Модель</span>
-          <select id="modelInput"></select>
-        </label>
-        <label><span id="priorityLabelText">Приоритет</span>
-          <select id="priorityInput">
-            <option value="1">1 (highest)</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5" selected>5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-            <option value="9">9</option>
-            <option value="10">10 (lowest)</option>
-          </select>
-        </label>
-        <label><span id="scheduleLabelText">Расписание</span>
-          <input type="datetime-local" id="scheduleInput">
-        </label>
-        <label id="workdirLabel"><span id="dirLabelText">Папка</span>
-          <select id="workdirSelect" style="display:none" onchange="onProjectSelect()"></select>
-          <input type="text" id="workdirInput" placeholder="C:\Projects\MyApp" style="display:none">
-        </label>
-        <label><span id="recurLabelText">Повтор</span>
-          <input type="text" id="recurrenceInput" placeholder="6h / daily@09:00" style="width:140px">
-        </label>
-        <label><span id="promptListLabelText">Список промптов</span>
-          <input type="text" id="promptListInput" value="base, current, end" placeholder="base, current, end" style="width:220px">
-        </label>
-        <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
-          <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
-        </label>
-        <button class="btn btn-primary" id="addTaskBtn" onclick="addTask()">Добавить задачу</button>
+<div id="taskFormScreen" class="crud-mobile-screen" onclick="onTaskFormBackdrop(event)">
+  <div class="task-form-dialog">
+    <div class="crud-mobile-head">
+      <button class="btn btn-ghost" type="button" onclick="closeTaskFormScreen()">×</button>
+      <div id="taskFormTitle" class="crud-mobile-title">Добавить задачу</div>
+      <div></div>
+    </div>
+    <div class="crud-mobile-body">
+      <div class="add-form" id="addForm">
+        <input type="text" id="subjectInput" placeholder="Тема (необязательно — возьмём из первой строки промпта)" style="width:100%;margin-bottom:8px">
+        <textarea id="promptInput" placeholder="Введите ваш промпт..."></textarea>
+        <div class="skills-toggle-row" id="skillsToggleRow">
+          <button type="button" class="btn-skills" id="skillsToggleBtn" onclick="toggleSkills()">⚡ Skills</button>
+          <span class="skills-hint" id="skillsHint">Только Claude Code · /skill-name [args]</span>
+        </div>
+        <div class="skills-panel" id="skillsPanel"></div>
+        <div class="form-row">
+          <label><span id="providerLabelText">Провайдер</span>
+            <select id="providerInput"></select>
+          </label>
+          <label id="modelLabel" style="display:none"><span id="modelLabelText">Модель</span>
+            <select id="modelInput"></select>
+          </label>
+          <label><span id="priorityLabelText">Приоритет</span>
+            <select id="priorityInput">
+              <option value="1">1 (highest)</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5" selected>5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10 (lowest)</option>
+            </select>
+          </label>
+          <label><span id="scheduleLabelText">Расписание</span>
+            <input type="datetime-local" id="scheduleInput">
+          </label>
+          <label id="workdirLabel"><span id="dirLabelText">Папка</span>
+            <select id="workdirSelect" style="display:none" onchange="onProjectSelect()"></select>
+            <input type="text" id="workdirInput" placeholder="C:\Projects\MyApp" style="display:none">
+          </label>
+          <label><span id="recurLabelText">Повтор</span>
+            <input type="text" id="recurrenceInput" placeholder="6h / daily@09:00" style="width:140px">
+          </label>
+          <label><span id="promptListLabelText">Список промптов</span>
+            <input type="text" id="promptListInput" value="base, current, end" placeholder="base, current, end" style="width:220px">
+          </label>
+          <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
+            <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
+          </label>
+          <button class="btn btn-primary" id="addTaskBtn" onclick="addTask()">Добавить задачу</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2750,6 +2792,10 @@ function closeTaskFormScreen() {
   if (!screen || !screen.classList.contains('open')) return;
   screen.classList.remove('open');
   closeSkillsPanel();
+}
+
+function onTaskFormBackdrop(e) {
+  if (e.target.id === 'taskFormScreen') closeTaskFormScreen();
 }
 
 function submitTaskFromScreen() {
