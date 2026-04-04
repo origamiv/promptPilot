@@ -1837,6 +1837,7 @@ let interactiveFitAddon = null;
 let interactiveOutboundBuffer = '';
 let interactiveFlushTimer = null;
 let interactiveSendChain = Promise.resolve();
+let interactiveLastInputErrorAt = 0;
 
 const I18N = {
   ru: {
@@ -3036,8 +3037,29 @@ function ensureInteractiveTerminalReady() {
   interactiveTerminal.open(mount);
   fitInteractiveTerminal();
 
+  interactiveTerminal.attachCustomKeyEventHandler((ev) => {
+    if (ev.type !== 'keydown') return true;
+    if (!interactiveState.has_session) return true;
+
+    const key = ev.key || '';
+    const ctrl = !!ev.ctrlKey;
+    const alt = !!ev.altKey;
+    const meta = !!ev.metaKey;
+
+    if (ctrl && !alt && !meta && key.length === 1) {
+      const upper = key.toUpperCase();
+      const code = upper.charCodeAt(0);
+      if (code >= 64 && code <= 95) {
+        queueInteractiveRawInput(String.fromCharCode(code - 64));
+        ev.preventDefault();
+        return false;
+      }
+    }
+    return true;
+  });
+
   interactiveTerminal.onData((data) => {
-    if (!interactiveState.running) return;
+    if (!interactiveState.has_session) return;
     queueInteractiveRawInput(data);
   });
   mount.addEventListener('click', () => interactiveTerminal.focus());
@@ -3096,7 +3118,13 @@ function flushInteractiveRawInput() {
       body: JSON.stringify({ text: chunk, append_newline: false }),
     }))
     .then(() => pollInteractiveOutput())
-    .catch(() => {});
+    .catch((e) => {
+      const now = Date.now();
+      if (now - interactiveLastInputErrorAt > 3000) {
+        interactiveLastInputErrorAt = now;
+        alert(e?.message || 'Interactive input failed');
+      }
+    });
 }
 
 function setInteractivePolling(active) {
