@@ -2424,9 +2424,6 @@ async function buildPromptFromList(currentPrompt, listRaw, workdir) {
     if (key === 'project') {
       const project = projectByWorkingDir(workdir);
       const projectPrompt = String((project && project.comment) || '').trim();
-      if (!projectPrompt) {
-        throw new Error(tr('project_prompt_missing'));
-      }
       parts.push(projectPrompt);
       continue;
     }
