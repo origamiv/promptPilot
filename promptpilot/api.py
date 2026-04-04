@@ -5,6 +5,7 @@ import os
 import pwd
 import pty
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -116,25 +117,46 @@ def _interactive_stop_locked(session: Optional[dict]):
 
 def _interactive_cmd_for_provider(provider: str) -> list[str]:
     key = str(provider or "").strip().lower()
-    if key in ("claude", "claude-z"):
-        return ["claude"]
-    if key == "codex":
-        return ["codex"]
-    if key == "qwen":
-        return ["qwen"]
-    if key == "cursor":
-        return ["cursor-agent"]
-
     providers = load_providers()
-    info = providers.get(key) or providers.get(provider)
-    if info and info.get("cmd"):
-        parts = shlex.split(str(info["cmd"]))
+    info = providers.get(key) or providers.get(provider) or {}
+    template_parts = shlex.split(str(info.get("cmd") or ""))
+
+    # Prefer canonical interactive commands, but for Claude also respect custom
+    # executable path from provider config (e.g. PP_CLAUDE_EXE absolute path).
+    candidates = []
+    if key in ("claude", "claude-z"):
+        candidates.append(template_parts[0] if template_parts else "")
+        candidates.append("claude")
+    elif key == "codex":
+        candidates.append("codex")
+    elif key == "qwen":
+        candidates.append("qwen")
+    elif key == "cursor":
+        candidates.append("cursor-agent")
+    elif template_parts:
+        candidates.append(template_parts[0])
+
+    if not candidates:
+        parts = shlex.split(str(provider or ""))
         if parts:
-            return [parts[0]]
-    parts = shlex.split(str(provider or ""))
-    if not parts:
+            candidates.append(parts[0])
+
+    for cmd0 in candidates:
+        if not cmd0:
+            continue
+        if os.path.isabs(cmd0) or os.sep in cmd0:
+            if os.path.exists(cmd0):
+                return [cmd0]
+            continue
+        if shutil.which(cmd0):
+            return [cmd0]
+
+    if candidates:
+        return [candidates[0]]
+
+    if not template_parts:
         raise ValueError("Invalid provider command")
-    return [parts[0]]
+    return [template_parts[0]]
 
 
 def _current_system_user() -> str:
