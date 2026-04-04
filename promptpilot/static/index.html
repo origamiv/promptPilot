@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PromptPilot</title>
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
 <style>
   :root {
     --bg: #0f1117;
@@ -188,13 +187,16 @@
     min-height: 360px;
     height: clamp(360px, 58vh, 760px);
     width: 100%;
-  }
-  .interactive-terminal .xterm {
-    height: 100%;
+    overflow: auto;
+    white-space: pre;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.32;
+    color: #dbe6ff;
+    background: #0b1220;
     border-radius: 6px;
-  }
-  .interactive-terminal .xterm-viewport {
-    overflow-y: auto !important;
+    padding: 10px;
+    outline: none;
   }
   .interactive-input-row {
     display: flex;
@@ -1654,7 +1656,7 @@
         <button class="btn btn-ghost" type="button" onclick="clearInteractiveTerminal()">Очистить</button>
       </div>
       <div class="interactive-terminal-wrap">
-        <div id="interactiveTerminal" class="interactive-terminal"></div>
+        <div id="interactiveTerminal" class="interactive-terminal" tabindex="0"></div>
       </div>
       <div class="form-row interactive-input-row">
         <input type="text" id="interactiveInput" placeholder="Введите команду и нажмите Enter">
@@ -1811,8 +1813,6 @@
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script>
 const API = '/api';
 let currentFilter = '';
@@ -1833,7 +1833,6 @@ let appTimezone = 'UTC';
 let crudState = { entity: null, mode: 'create', id: null };
 let interactiveState = { has_session: false, running: false, cursor: 0, pollTimer: null };
 let interactiveTerminal = null;
-let interactiveFitAddon = null;
 let interactiveOutboundBuffer = '';
 let interactiveFlushTimer = null;
 let interactiveSendChain = Promise.resolve();
@@ -2989,113 +2988,83 @@ function interactiveTerminalTheme() {
     return {
       background: '#fdfefe',
       foreground: '#1d2538',
-      cursor: '#3b5ed8',
-      cursorAccent: '#fdfefe',
-      selectionBackground: '#bdd0ff88',
     };
   }
   return {
     background: '#0b1220',
     foreground: '#dbe6ff',
-    cursor: '#8b9cf7',
-    cursorAccent: '#0b1220',
-    selectionBackground: '#3b4b7f88',
   };
 }
 
 function applyInteractiveTerminalTheme() {
-  if (!interactiveTerminal || !interactiveTerminal.options) return;
-  interactiveTerminal.options.theme = interactiveTerminalTheme();
-  interactiveTerminal.refresh(0, interactiveTerminal.rows - 1);
+  if (!interactiveTerminal) return;
+  const theme = interactiveTerminalTheme();
+  interactiveTerminal.style.background = theme.background;
+  interactiveTerminal.style.color = theme.foreground;
 }
 
 function fitInteractiveTerminal() {
-  if (!interactiveFitAddon) return;
-  try {
-    interactiveFitAddon.fit();
-  } catch (_) {
-  }
+  // pyte рендерится как обычный текстовый блок, fit не требуется.
 }
 
 function ensureInteractiveTerminalReady() {
   if (interactiveTerminal) return true;
-  if (!window.Terminal || !window.FitAddon || !window.FitAddon.FitAddon) return false;
   const mount = document.getElementById('interactiveTerminal');
   if (!mount) return false;
+  interactiveTerminal = mount;
+  applyInteractiveTerminalTheme();
 
-  interactiveTerminal = new window.Terminal({
-    convertEol: true,
-    cursorBlink: true,
-    fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
-    fontSize: 13,
-    lineHeight: 1.32,
-    scrollback: 5000,
-    theme: interactiveTerminalTheme(),
-  });
-  interactiveFitAddon = new window.FitAddon.FitAddon();
-  interactiveTerminal.loadAddon(interactiveFitAddon);
-  interactiveTerminal.open(mount);
-  fitInteractiveTerminal();
-
-  interactiveTerminal.attachCustomKeyEventHandler((ev) => {
-    if (ev.type !== 'keydown') return true;
-    if (!interactiveState.has_session) return true;
-
-    const key = ev.key || '';
-    const ctrl = !!ev.ctrlKey;
-    const alt = !!ev.altKey;
-    const meta = !!ev.metaKey;
-
-    if (ctrl && !alt && !meta && key.length === 1) {
-      const upper = key.toUpperCase();
-      const code = upper.charCodeAt(0);
-      if (code >= 64 && code <= 95) {
-        queueInteractiveRawInput(String.fromCharCode(code - 64));
-        ev.preventDefault();
-        return false;
-      }
-    }
-    return true;
-  });
-
-  interactiveTerminal.onData((data) => {
+  interactiveTerminal.addEventListener('click', () => interactiveTerminal.focus());
+  interactiveTerminal.addEventListener('paste', (e) => {
     if (!interactiveState.has_session) return;
-    queueInteractiveRawInput(data);
+    const text = e.clipboardData?.getData('text') || '';
+    if (!text) return;
+    e.preventDefault();
+    queueInteractiveRawInput(text);
   });
-  mount.addEventListener('click', () => interactiveTerminal.focus());
+  interactiveTerminal.addEventListener('keydown', (e) => {
+    if (!interactiveState.has_session) return;
+    const seq = interactiveKeyEventToSeq(e);
+    if (seq == null) return;
+    e.preventDefault();
+    queueInteractiveRawInput(seq);
+  });
   return true;
 }
 
-function normalizeInteractiveChunk(text) {
-  if (!text) return '';
-  return String(text)
-    .replace(/\u0000/g, '');
+function interactiveKeyEventToSeq(e) {
+  const key = e.key || '';
+  if (e.ctrlKey && !e.altKey && !e.metaKey && key.length === 1) {
+    const upper = key.toUpperCase();
+    const code = upper.charCodeAt(0);
+    if (code >= 64 && code <= 95) return String.fromCharCode(code - 64);
+  }
+  if (key.length === 1 && !e.metaKey && !e.ctrlKey) return key;
+  if (key === 'Enter') return '\r';
+  if (key === 'Backspace') return '\x7f';
+  if (key === 'Tab') return '\t';
+  if (key === 'Escape') return '\x1b';
+  if (key === 'ArrowUp') return '\x1b[A';
+  if (key === 'ArrowDown') return '\x1b[B';
+  if (key === 'ArrowRight') return '\x1b[C';
+  if (key === 'ArrowLeft') return '\x1b[D';
+  if (key === 'Delete') return '\x1b[3~';
+  if (key === 'Home') return '\x1b[H';
+  if (key === 'End') return '\x1b[F';
+  if (key === 'PageUp') return '\x1b[5~';
+  if (key === 'PageDown') return '\x1b[6~';
+  return null;
 }
 
-function appendInteractiveTerminal(text) {
-  if (!text) return;
-  const normalized = normalizeInteractiveChunk(text);
-  if (!normalized) return;
-  if (ensureInteractiveTerminalReady()) {
-    interactiveTerminal.write(normalized);
-    interactiveTerminal.scrollToBottom();
-    return;
-  }
-  const fallback = document.getElementById('interactiveTerminal');
-  fallback.textContent += normalized;
-  fallback.parentElement.scrollTop = fallback.parentElement.scrollHeight;
+function setInteractiveTerminalScreen(text) {
+  if (!ensureInteractiveTerminalReady()) return;
+  interactiveTerminal.textContent = text || '';
+  interactiveTerminal.scrollTop = interactiveTerminal.scrollHeight;
 }
 
 function clearInteractiveTerminalView(opts = {}) {
   const resetCursor = !!opts.resetCursor;
-  if (interactiveTerminal) {
-    interactiveTerminal.reset();
-    applyInteractiveTerminalTheme();
-    fitInteractiveTerminal();
-  } else {
-    const mount = document.getElementById('interactiveTerminal');
-    if (mount) mount.textContent = '';
-  }
+  if (ensureInteractiveTerminalReady()) interactiveTerminal.textContent = '';
   if (resetCursor) interactiveState.cursor = 0;
 }
 
@@ -3258,7 +3227,8 @@ async function pollInteractiveOutput() {
       updateInteractiveStatus(tr('interactive_status_off'), false);
       return;
     }
-    if (o.chunk) appendInteractiveTerminal(o.chunk);
+    if (typeof o.screen === 'string') setInteractiveTerminalScreen(o.screen);
+    else if (o.chunk) setInteractiveTerminalScreen(o.chunk);
     interactiveState.cursor = Number(o.cursor || interactiveState.cursor || 0);
     interactiveState.running = !!o.running;
     interactiveState.has_session = true;

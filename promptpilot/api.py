@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+import pyte
 
 from . import db
 from .config import APP_TIMEZONE, AGENT_USER, get_skills, load_providers, PROJECTS_ROOT
@@ -34,6 +35,9 @@ else:
 
 _interactive_guard = threading.Lock()
 _interactive_session = None
+_INTERACTIVE_TERM_COLS = 160
+_INTERACTIVE_TERM_ROWS = 40
+_INTERACTIVE_TERM_HISTORY = 5000
 
 
 class InteractiveStartRequest(BaseModel):
@@ -69,7 +73,36 @@ def _interactive_read_output_locked(session: dict):
         except Exception:
             chunks.append(str(data))
     if chunks:
-        session["output"] += "".join(chunks)
+        merged = "".join(chunks)
+        session["output"] += merged
+        _interactive_feed_pyte_locked(session, merged)
+
+
+def _interactive_render_pyte_locked(session: dict) -> str:
+    screen = session.get("pyte_screen")
+    if not screen:
+        return ""
+    try:
+        lines = [line.rstrip() for line in screen.display]
+    except Exception:
+        return ""
+    return "\n".join(lines).rstrip("\n")
+
+
+def _interactive_feed_pyte_locked(session: dict, text: str):
+    if not text:
+        return
+    stream = session.get("pyte_stream")
+    if not stream:
+        return
+    try:
+        stream.feed(text)
+    except Exception:
+        return
+    rendered = _interactive_render_pyte_locked(session)
+    if rendered != session.get("rendered", ""):
+        session["rendered"] = rendered
+        session["render_cursor"] = int(session.get("render_cursor") or 0) + 1
 
 
 def _interactive_state_locked(session: Optional[dict]) -> dict:
@@ -90,7 +123,7 @@ def _interactive_state_locked(session: Optional[dict]) -> dict:
         "runtime_user": session.get("runtime_user"),
         "running": running,
         "exit_code": session.get("exit_code"),
-        "cursor": len(session.get("output", "")),
+        "cursor": int(session.get("render_cursor") or 0),
     }
 
 
@@ -548,9 +581,18 @@ def api_interactive_start(payload: InteractiveStartRequest):
             "output_offset": 0,
             "env": env,
             "preexec_fn": preexec_fn,
-            "output": (f"[system] {runtime_notice}\n" if runtime_notice else ""),
+            "output": "",
+            "pyte_screen": pyte.HistoryScreen(_INTERACTIVE_TERM_COLS, _INTERACTIVE_TERM_ROWS, history=_INTERACTIVE_TERM_HISTORY),
+            "pyte_stream": None,
+            "rendered": "",
+            "render_cursor": 0,
             "exit_code": None,
         }
+        _interactive_session["pyte_stream"] = pyte.Stream(_interactive_session["pyte_screen"])
+        if runtime_notice:
+            notice = f"[system] {runtime_notice}\n"
+            _interactive_session["output"] = notice
+            _interactive_feed_pyte_locked(_interactive_session, notice)
         return _interactive_state_locked(_interactive_session)
 
 
@@ -568,7 +610,7 @@ def api_interactive_input(payload: InteractiveInputRequest):
         data = payload.text + ("\n" if payload.append_newline else "")
         _interactive_send_tmux_input_locked(session, data)
         _interactive_read_output_locked(session)
-        return {"ok": True, "cursor": len(session["output"])}
+        return {"ok": True, "cursor": int(session.get("render_cursor") or 0)}
 
 
 @app.get("/api/interactive/output")
@@ -583,18 +625,20 @@ def api_interactive_output(cursor: int = 0):
                 "chunk": "",
             }
         _interactive_read_output_locked(session)
-        output = session["output"]
+        rendered = session.get("rendered", "")
         running = _interactive_is_running_locked(session)
         if not running and session.get("exit_code") is None:
             session["exit_code"] = 0
-        safe_cursor = max(0, min(int(cursor), len(output)))
-        chunk = output[safe_cursor:]
+        current_cursor = int(session.get("render_cursor") or 0)
+        safe_cursor = max(0, min(int(cursor), current_cursor))
+        chunk = rendered if safe_cursor != current_cursor else ""
         return {
             "has_session": True,
             "running": running,
             "exit_code": session.get("exit_code"),
-            "cursor": len(output),
+            "cursor": current_cursor,
             "chunk": chunk,
+            "screen": rendered,
             "provider": session["provider"],
             "working_dir": session["working_dir"],
             "runtime_user": session.get("runtime_user"),

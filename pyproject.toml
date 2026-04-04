@@ -12,6 +12,7 @@ dependencies = [
     "python-telegram-bot>=21.0",
     "pystray>=0.19",
     "Pillow>=10.0",
+    "pyte>=0.8.2",
 ]
 
 [project.scripts]
