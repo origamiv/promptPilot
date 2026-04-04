@@ -179,8 +179,9 @@
     flex: 1 1 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 0;
   }
+  .interactive-toolbar label span { display: none; }
   .interactive-toolbar select {
     width: 100%;
     min-width: 0;
@@ -219,14 +220,14 @@
     background: color-mix(in oklab, var(--green) 18%, transparent);
   }
   .interactive-terminal-wrap {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: #0a0f18;
+    border: none;
+    border-radius: 0;
+    background: transparent;
     min-height: 360px;
     max-height: 62vh;
     overflow: hidden;
-    box-shadow: inset 0 0 0 1px #0f172a;
-    padding: 8px;
+    box-shadow: none;
+    padding: 0;
   }
   .interactive-terminal {
     margin: 0;
@@ -247,6 +248,7 @@
     padding: 10px;
     outline: none;
   }
+  #interactiveTerminalWrap { display: none; }
   .interactive-input-row {
     display: none;
   }
@@ -1722,7 +1724,7 @@
         </label>
         <button class="interactive-toggle-btn" type="button" id="interactiveToggleBtn" onclick="toggleInteractiveSession()" title="Старт" aria-label="Старт">▶</button>
       </div>
-      <div class="interactive-terminal-wrap">
+      <div class="interactive-terminal-wrap" id="interactiveTerminalWrap">
         <div id="interactiveTerminal" class="interactive-terminal" tabindex="0"></div>
         <textarea id="interactiveMobileKb" class="interactive-mobile-kb" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
       </div>
@@ -2154,8 +2156,6 @@ function applyLanguage(lang) {
   document.getElementById('openTaskFormBtn').title = tr('add_task');
   document.getElementById('openTaskFormBtn').setAttribute('aria-label', tr('add_task'));
   document.getElementById('skillsHint').textContent = tr('skills_hint');
-  document.getElementById('interactiveAgentLabel').textContent = tr('coding_agent');
-  document.getElementById('interactiveProjectLabel').textContent = tr('dir');
   updateInteractiveStatus(interactiveState.running ? tr('interactive_status_running') : tr('interactive_status_off'), interactiveState.running);
   document.querySelector('#interactiveInput + button').textContent = tr('interactive_send');
   document.getElementById('interactiveInput').placeholder = tr('interactive_input_placeholder');
@@ -3002,13 +3002,19 @@ function renderInteractiveProjects() {
   const current = sel.value;
   sel.innerHTML = [
     `<option value="">${tr('select_project')}</option>`,
-    ...projectsCache.map(p => `<option value="${esc(p.path)}">${esc(p.name)} — ${esc(p.folder || p.path)}</option>`),
+    ...projectsCache.map(p => `<option value="${esc(p.path)}">${esc(p.name)}</option>`),
   ].join('');
   if (current && Array.from(sel.options).some(o => o.value === current)) {
     sel.value = current;
   } else if (projectsCache.length) {
     sel.value = projectsCache[0].path;
   }
+}
+
+function setInteractiveTerminalVisible(visible) {
+  const wrap = document.getElementById('interactiveTerminalWrap');
+  if (!wrap) return;
+  wrap.style.display = visible ? 'block' : 'none';
 }
 
 function getInteractiveWorkdir() {
@@ -3207,13 +3213,17 @@ async function loadInteractiveState() {
       s.running ? tr('interactive_status_running') : (s.has_session ? tr('interactive_status_stopped') : tr('interactive_status_off')),
       !!s.running
     );
+    setInteractiveTerminalVisible(!!s.has_session);
     setInteractivePolling(!!s.running || !!s.has_session);
     if (s.has_session) {
       clearInteractiveTerminalView({ resetCursor: true });
       interactiveState.cursor = 0;
       await pollInteractiveOutput();
     }
-  } catch (e) { updateInteractiveStatus(tr('interactive_status_off'), false); }
+  } catch (e) {
+    setInteractiveTerminalVisible(false);
+    updateInteractiveStatus(tr('interactive_status_off'), false);
+  }
 }
 
 async function startInteractiveSession() {
@@ -3233,6 +3243,7 @@ async function startInteractiveSession() {
     interactiveState.cursor = 0;
     clearInteractiveTerminalView({ resetCursor: true });
     updateInteractiveStatus(tr('interactive_status_running'), true);
+    setInteractiveTerminalVisible(true);
     setInteractivePolling(true);
     await pollInteractiveOutput();
     if (interactiveTerminal) interactiveTerminal.focus();
@@ -3254,6 +3265,7 @@ async function stopInteractiveSession() {
       interactiveFlushTimer = null;
     }
     setInteractivePolling(false);
+    setInteractiveTerminalVisible(false);
     updateInteractiveStatus(tr('interactive_status_off'), false);
   } catch (e) {
     alert(e.message);
@@ -3298,9 +3310,11 @@ async function pollInteractiveOutput() {
       interactiveState.running = false;
       interactiveState.cursor = 0;
       setInteractivePolling(false);
+      setInteractiveTerminalVisible(false);
       updateInteractiveStatus(tr('interactive_status_off'), false);
       return;
     }
+    setInteractiveTerminalVisible(true);
     if (typeof o.screen === 'string') setInteractiveTerminalScreen(o.screen);
     else if (o.chunk) setInteractiveTerminalScreen(o.chunk);
     interactiveState.cursor = Number(o.cursor || interactiveState.cursor || 0);
