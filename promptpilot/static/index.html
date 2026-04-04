@@ -1579,13 +1579,13 @@
 <body>
 <div class="app-layout">
   <div class="mobile-topbar">
-    <button class="menu-toggle" id="menuToggle" type="button" onclick="toggleMobileMenu()" aria-label="Open menu">☰</button>
+    <button class="menu-toggle" id="menuToggle" type="button" onclick="toggleMobileMenu()" aria-label="Открыть меню">☰</button>
     <div class="mobile-brand">PromptPilot</div>
     <div></div>
   </div>
   <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeMobileMenu()"></div>
   <aside class="sidebar">
-    <div class="side-title">Меню</div>
+    <div class="side-title" id="menuTitle">Меню</div>
     <button id="menuTasks" class="side-btn active" onclick="switchView('tasks')">Задачи</button>
     <button id="menuInteractive" class="side-btn" onclick="switchView('interactive')">Интерактив</button>
     <button id="menuProjects" class="side-btn" onclick="switchView('projects')">Проекты</button>
@@ -1632,7 +1632,7 @@
 
   <div class="admin-view" id="interactiveView">
     <div class="admin-header">
-      <div class="admin-title">Интерактив</div>
+      <div class="admin-title" id="interactiveTitle">Интерактив</div>
       <div class="interactive-status" id="interactiveStatus">Отключено</div>
     </div>
     <div class="add-form interactive-form">
@@ -1661,7 +1661,7 @@
 
   <div class="admin-view" id="projectsView">
     <div class="admin-header">
-      <div class="admin-title">Проекты</div>
+      <div class="admin-title" id="projectsTitle">Проекты</div>
       <input id="projectsSearch" placeholder="Поиск..." oninput="loadProjectsCrud()">
       <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createProjectCrud()">+</button>
     </div>
@@ -1674,7 +1674,7 @@
 
   <div class="admin-view" id="agentsView">
     <div class="admin-header">
-      <div class="admin-title">Агенты</div>
+      <div class="admin-title" id="agentsTitle">Агенты</div>
       <input id="agentsSearch" placeholder="Поиск..." oninput="loadAgentsCrud()">
       <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createAgentCrud()">+</button>
     </div>
@@ -1687,7 +1687,7 @@
 
   <div class="admin-view" id="accountsView">
     <div class="admin-header">
-      <div class="admin-title">Аккаунты агентов</div>
+      <div class="admin-title" id="accountsTitle">Аккаунты агентов</div>
       <input id="accountsSearch" placeholder="Поиск..." oninput="loadAccountsCrud()">
       <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createAccountCrud()">+</button>
     </div>
@@ -1700,7 +1700,7 @@
 
   <div class="admin-view" id="promptsView">
     <div class="admin-header">
-      <div class="admin-title">Промпты</div>
+      <div class="admin-title" id="promptsTitle">Промпты</div>
       <input id="promptsSearch" placeholder="Поиск..." oninput="loadPromptsCrud()">
       <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createPromptCrud()">+</button>
     </div>
@@ -1829,7 +1829,13 @@ let interactiveState = { has_session: false, running: false, cursor: 0, pollTime
 
 const I18N = {
   ru: {
+    menu: 'Меню',
     tasks: 'Задачи',
+    projects: 'Проекты',
+    agents: 'Агенты',
+    accounts: 'Аккаунты агентов',
+    prompts: 'Промпты',
+    open_menu: 'Открыть меню',
     light: 'Светлая',
     dark: 'Тёмная',
     prompt_placeholder: 'Введите ваш промпт...',
@@ -1912,7 +1918,13 @@ const I18N = {
     interactive_input_placeholder: 'Введите команду и нажмите Enter',
   },
   en: {
+    menu: 'Menu',
     tasks: 'Tasks',
+    projects: 'Projects',
+    agents: 'Agents',
+    accounts: 'Agent Accounts',
+    prompts: 'Prompts',
+    open_menu: 'Open menu',
     light: 'Light',
     dark: 'Dark',
     prompt_placeholder: 'Enter your prompt here...',
@@ -2026,8 +2038,19 @@ function applyLanguage(lang) {
 
   document.getElementById('promptInput').placeholder = tr('prompt_placeholder');
   document.getElementById('tasksTitle').textContent = tr('tasks');
+  document.getElementById('menuTitle').textContent = tr('menu');
   document.getElementById('menuTasks').textContent = tr('tasks');
   document.getElementById('menuInteractive').textContent = tr('interactive');
+  document.getElementById('menuProjects').textContent = tr('projects');
+  document.getElementById('menuAgents').textContent = tr('agents');
+  document.getElementById('menuAccounts').textContent = tr('accounts');
+  document.getElementById('menuPrompts').textContent = tr('prompts');
+  document.getElementById('interactiveTitle').textContent = tr('interactive');
+  document.getElementById('projectsTitle').textContent = tr('projects');
+  document.getElementById('agentsTitle').textContent = tr('agents');
+  document.getElementById('accountsTitle').textContent = tr('accounts');
+  document.getElementById('promptsTitle').textContent = tr('prompts');
+  document.getElementById('menuToggle').setAttribute('aria-label', tr('open_menu'));
   document.getElementById('providerLabelText').textContent = tr('provider');
   document.getElementById('modelLabelText').textContent = tr('model');
   document.getElementById('priorityLabelText').textContent = tr('priority');
