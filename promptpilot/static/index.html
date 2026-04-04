@@ -1483,6 +1483,13 @@
   .select2-dropdown {
     background: var(--surface);
     border: 1px solid var(--border);
+    z-index: 1300 !important;
+  }
+  .select2-container {
+    z-index: 1300 !important;
+  }
+  .select2-container--open {
+    z-index: 1300 !important;
   }
   .select2-container--default .select2-search--dropdown .select2-search__field {
     background: var(--bg);
@@ -2691,6 +2698,7 @@ function renderProjectOptions() {
 function initProjectSelect2() {
   if (!window.jQuery || !window.jQuery.fn || !window.jQuery.fn.select2) return;
   const $sel = window.jQuery('#workdirSelect');
+  const $dropdownParent = window.jQuery('#taskFormScreen .task-form-dialog');
   if ($sel.hasClass('select2-hidden-accessible')) {
     $sel.off('change.select2proj');
     $sel.select2('destroy');
@@ -2698,6 +2706,7 @@ function initProjectSelect2() {
   $sel.select2({
     width: '260px',
     placeholder: tr('select_project'),
+    dropdownParent: $dropdownParent.length ? $dropdownParent : undefined,
   });
   $sel.on('change.select2proj', () => onProjectSelect());
 }
