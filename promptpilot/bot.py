@@ -489,16 +489,24 @@ async def add_task_got_model(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 def _list_projects():
-    """Return sorted list of immediate subdirectories under PROJECTS_ROOT."""
-    if not PROJECTS_ROOT:
-        return []
-    try:
-        return sorted(
-            d for d in os.listdir(PROJECTS_ROOT)
-            if os.path.isdir(os.path.join(PROJECTS_ROOT, d)) and not d.startswith(".")
+    """Return projects from DB table sorted by last_used_at DESC."""
+    base_root = PROJECTS_ROOT or "/www/wwwroot"
+    rows = db.list_projects(limit=400)
+    projects = []
+    for row in rows:
+        folder = (row.get("folder") or "").strip()
+        if not folder:
+            continue
+        path = folder if os.path.isabs(folder) else os.path.join(base_root, folder)
+        projects.append(
+            {
+                "id": row.get("id"),
+                "name": (row.get("name") or folder).strip(),
+                "folder": folder,
+                "path": path,
+            }
         )
-    except OSError:
-        return []
+    return projects
 
 
 def _list_projects_with_skills():
@@ -511,7 +519,7 @@ def _list_projects_with_skills():
     from pathlib import Path
     result = []
     for proj in _list_projects():
-        full = Path(PROJECTS_ROOT) / proj
+        full = Path(proj["path"])
         for sub in ("commands", "skills"):
             skill_dir = full / ".claude" / sub
             if not skill_dir.is_dir():
@@ -565,7 +573,7 @@ async def add_task_got_skip_perms(update: Update, context: ContextTypes.DEFAULT_
         row = []
         context.user_data["dir_projects"] = projects
         for idx, proj in enumerate(projects):
-            row.append(InlineKeyboardButton(proj, callback_data=f"dir_idx:{idx}"))
+            row.append(InlineKeyboardButton(proj["name"], callback_data=f"dir_idx:{idx}"))
             if len(row) == 2:
                 buttons.append(row)
                 row = []
@@ -619,7 +627,7 @@ async def add_task_got_dir_btn(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             return ConversationHandler.END
 
-        full_path = os.path.join(PROJECTS_ROOT, projects[idx])
+        full_path = projects[idx]["path"]
         context.user_data["new_dir"] = full_path
         await query.edit_message_text(f"Директория: `{full_path}`", parse_mode="Markdown")
         return await _ask_schedule_from_query(query, context)
@@ -979,8 +987,9 @@ async def cb_skills_proj_picker(update: Update, context: ContextTypes.DEFAULT_TY
 
     buttons = []
     row = []
-    for proj in projects:
-        row.append(InlineKeyboardButton(proj, callback_data=f"skills_dir:{proj}"))
+    context.user_data["skills_projects"] = projects
+    for idx, proj in enumerate(projects):
+        row.append(InlineKeyboardButton(proj["name"], callback_data=f"skills_dir:{idx}"))
         if len(row) == 2:
             buttons.append(row)
             row = []
@@ -999,8 +1008,20 @@ async def cb_skills_dir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    proj_name = query.data.split(":", 1)[1]
-    workdir = os.path.join(PROJECTS_ROOT, proj_name)
+    value = query.data.split(":", 1)[1]
+    projects = context.user_data.get("skills_projects") or []
+    try:
+        idx = int(value)
+    except ValueError:
+        await query.edit_message_text("Список проектов устарел. Откройте список снова.")
+        return
+    if idx < 0 or idx >= len(projects):
+        await query.edit_message_text("Проект не найден. Откройте список снова.")
+        return
+
+    proj = projects[idx]
+    proj_name = proj["name"]
+    workdir = proj["path"]
     context.user_data["skills_workdir"] = workdir
 
     skills = get_skills(working_dir=workdir)
