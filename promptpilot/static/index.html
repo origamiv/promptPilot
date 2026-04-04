@@ -272,18 +272,18 @@
   .interactive-tools {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 8px;
+    gap: 4px;
+    margin: 0 0 6px 0;
   }
   #interactiveTools { display: none; }
   .interactive-tool-btn {
     min-height: 34px;
-    padding: 6px 10px;
+    padding: 4px 7px;
     border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
   }
   .interactive-tool-btn:disabled {
@@ -1678,13 +1678,13 @@
       height: calc(100dvh - 168px);
     }
     .interactive-tools {
-      gap: 5px;
+      gap: 4px;
     }
     .interactive-tool-btn {
-      flex: 1 0 calc(20% - 5px);
-      min-width: 56px;
-      padding: 6px 6px;
-      font-size: 11px;
+      flex: 1 0 calc(20% - 4px);
+      min-width: 48px;
+      padding: 4px 5px;
+      font-size: 10px;
     }
   }
 </style>
@@ -1758,10 +1758,6 @@
         </label>
         <button class="interactive-toggle-btn" type="button" id="interactiveToggleBtn" onclick="toggleInteractiveSession()" title="Старт" aria-label="Старт">▶</button>
       </div>
-      <div class="interactive-terminal-wrap" id="interactiveTerminalWrap">
-        <div id="interactiveTerminal" class="interactive-terminal" tabindex="0"></div>
-        <textarea id="interactiveMobileKb" class="interactive-mobile-kb" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
-      </div>
       <div class="interactive-tools" id="interactiveTools">
         <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[A')" title="Arrow Up">↑</button>
         <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[B')" title="Arrow Down">↓</button>
@@ -1774,6 +1770,10 @@
         <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[H')" title="Home">Home</button>
         <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[F')" title="End">End</button>
         <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x7f')" title="Backspace">⌫</button>
+      </div>
+      <div class="interactive-terminal-wrap" id="interactiveTerminalWrap">
+        <div id="interactiveTerminal" class="interactive-terminal" tabindex="0"></div>
+        <textarea id="interactiveMobileKb" class="interactive-mobile-kb" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
       </div>
       <div class="form-row interactive-input-row">
         <input type="text" id="interactiveInput" placeholder="Введите команду и нажмите Enter">
