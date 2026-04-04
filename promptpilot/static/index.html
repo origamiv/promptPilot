@@ -2971,10 +2971,22 @@ function updateInteractiveStatus(text, running) {
   document.getElementById('interactiveStopBtn').disabled = !running;
 }
 
+function normalizeInteractiveChunk(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\x1B\][^\x07]*(?:\x07|\x1B\\)/g, '')
+    .replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\u0000/g, '');
+}
+
 function appendInteractiveTerminal(text) {
   if (!text) return;
+  const normalized = normalizeInteractiveChunk(text);
+  if (!normalized) return;
   const pre = document.getElementById('interactiveTerminal');
-  pre.textContent += text;
+  pre.textContent += normalized;
   pre.parentElement.scrollTop = pre.parentElement.scrollHeight;
 }
 

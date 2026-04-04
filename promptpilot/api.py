@@ -2,6 +2,7 @@
 
 import fcntl
 import os
+import pwd
 import pty
 import shlex
 import subprocess
@@ -17,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import db
-from .config import APP_TIMEZONE, get_skills, load_providers, PROJECTS_ROOT
+from .config import APP_TIMEZONE, AGENT_USER, get_skills, load_providers, PROJECTS_ROOT
 from .config import get_provider_env
 from .models import CostStats, Stats, TaskCreate, TaskInDB, TaskStatus, TaskUpdate
 from . import relogin
@@ -85,6 +86,7 @@ def _interactive_state_locked(session: Optional[dict]) -> dict:
         "id": session["id"],
         "provider": session["provider"],
         "working_dir": session["working_dir"],
+        "runtime_user": session.get("runtime_user"),
         "running": proc.poll() is None,
         "exit_code": session.get("exit_code"),
         "cursor": len(session.get("output", "")),
@@ -133,6 +135,49 @@ def _interactive_cmd_for_provider(provider: str) -> list[str]:
     if not parts:
         raise ValueError("Invalid provider command")
     return [parts[0]]
+
+
+def _current_system_user() -> str:
+    try:
+        return pwd.getpwuid(os.geteuid()).pw_name
+    except Exception:
+        return str(os.geteuid())
+
+
+def _interactive_runtime_env(base_env: dict) -> tuple[dict, Optional[object], str, Optional[str]]:
+    env = dict(base_env or os.environ)
+    runtime_user = _current_system_user()
+    runtime_notice = None
+    preexec_fn = None
+
+    target_user = (AGENT_USER or "").strip()
+    if not target_user or os.name == "nt":
+        return env, preexec_fn, runtime_user, runtime_notice
+
+    if os.geteuid() != 0:
+        runtime_notice = (
+            f"AGENT_USER={target_user} ignored for interactive session "
+            f"(server uid={os.geteuid()}, root required for setuid)"
+        )
+        return env, preexec_fn, runtime_user, runtime_notice
+
+    try:
+        pw = pwd.getpwnam(target_user)
+    except KeyError:
+        raise HTTPException(400, f"Configured AGENT_USER '{target_user}' does not exist")
+
+    env["HOME"] = pw.pw_dir or f"/home/{target_user}"
+    env["USER"] = target_user
+    env["LOGNAME"] = target_user
+
+    def _drop_privileges():
+        os.initgroups(target_user, pw.pw_gid)
+        os.setgid(pw.pw_gid)
+        os.setuid(pw.pw_uid)
+
+    preexec_fn = _drop_privileges
+    runtime_user = target_user
+    return env, preexec_fn, runtime_user, runtime_notice
 
 
 # --- API ---
@@ -292,7 +337,7 @@ def api_interactive_start(payload: InteractiveStartRequest):
         raise HTTPException(400, f"Working directory does not exist: {working_dir}")
 
     cmd = _interactive_cmd_for_provider(provider)
-    env = get_provider_env(provider)
+    env, preexec_fn, runtime_user, runtime_notice = _interactive_runtime_env(get_provider_env(provider))
 
     try:
         master_fd, slave_fd = pty.openpty()
@@ -307,6 +352,7 @@ def api_interactive_start(payload: InteractiveStartRequest):
             env=env,
             close_fds=True,
             text=False,
+            preexec_fn=preexec_fn,
         )
         os.close(slave_fd)
     except FileNotFoundError:
@@ -332,9 +378,10 @@ def api_interactive_start(payload: InteractiveStartRequest):
             "id": str(uuid.uuid4()),
             "provider": provider,
             "working_dir": working_dir,
+            "runtime_user": runtime_user,
             "process": proc,
             "master_fd": master_fd,
-            "output": "",
+            "output": (f"[system] {runtime_notice}\n" if runtime_notice else ""),
             "exit_code": None,
         }
         return _interactive_state_locked(_interactive_session)
@@ -381,6 +428,7 @@ def api_interactive_output(cursor: int = 0):
             "chunk": chunk,
             "provider": session["provider"],
             "working_dir": session["working_dir"],
+            "runtime_user": session.get("runtime_user"),
             "id": session["id"],
         }
 
