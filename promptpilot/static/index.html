@@ -269,6 +269,27 @@
     opacity: 0;
     pointer-events: none;
   }
+  .interactive-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  #interactiveTools { display: none; }
+  .interactive-tool-btn {
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .interactive-tool-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 
   .form-row {
     display: flex;
@@ -1656,6 +1677,15 @@
       min-height: 220px;
       height: calc(100dvh - 168px);
     }
+    .interactive-tools {
+      gap: 5px;
+    }
+    .interactive-tool-btn {
+      flex: 1 0 calc(20% - 5px);
+      min-width: 56px;
+      padding: 6px 6px;
+      font-size: 11px;
+    }
   }
 </style>
 </head>
@@ -1731,6 +1761,19 @@
       <div class="interactive-terminal-wrap" id="interactiveTerminalWrap">
         <div id="interactiveTerminal" class="interactive-terminal" tabindex="0"></div>
         <textarea id="interactiveMobileKb" class="interactive-mobile-kb" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+      </div>
+      <div class="interactive-tools" id="interactiveTools">
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[A')" title="Arrow Up">↑</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[B')" title="Arrow Down">↓</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[D')" title="Arrow Left">←</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[C')" title="Arrow Right">→</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b')" title="Escape">Esc</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\r')" title="Enter">Enter</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x03')" title="Ctrl+C">Ctrl+C</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractivePaste()" title="Ctrl+V">Ctrl+V</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[H')" title="Home">Home</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x1b[F')" title="End">End</button>
+        <button class="interactive-tool-btn" type="button" onclick="sendInteractiveToolKey('\\x7f')" title="Backspace">⌫</button>
       </div>
       <div class="form-row interactive-input-row">
         <input type="text" id="interactiveInput" placeholder="Введите команду и нажмите Enter">
@@ -3017,8 +3060,36 @@ function renderInteractiveProjects() {
 
 function setInteractiveTerminalVisible(visible) {
   const wrap = document.getElementById('interactiveTerminalWrap');
+  const tools = document.getElementById('interactiveTools');
   if (!wrap) return;
   wrap.style.display = visible ? 'block' : 'none';
+  if (tools) tools.style.display = visible ? 'flex' : 'none';
+}
+
+function decodeInteractiveSeq(raw) {
+  return String(raw || '')
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\r/g, '\r')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t');
+}
+
+function sendInteractiveToolKey(rawSeq) {
+  if (!interactiveState.has_session) return;
+  const seq = decodeInteractiveSeq(rawSeq);
+  if (!seq) return;
+  queueInteractiveRawInput(seq);
+}
+
+async function sendInteractivePaste() {
+  if (!interactiveState.has_session) return;
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text) return;
+    queueInteractiveRawInput(text);
+  } catch (_) {
+    alert('Clipboard read failed');
+  }
 }
 
 function getInteractiveWorkdir() {
