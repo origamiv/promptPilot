@@ -271,9 +271,12 @@
   }
   .interactive-tools {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 4px;
     margin: 0 0 6px 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
   }
   #interactiveTools { display: none; }
   .interactive-tool-btn {
@@ -285,6 +288,7 @@
     color: var(--text);
     font-size: 11px;
     cursor: pointer;
+    flex: 0 0 auto;
   }
   .interactive-tool-btn:disabled {
     opacity: 0.45;
@@ -1681,8 +1685,8 @@
       gap: 4px;
     }
     .interactive-tool-btn {
-      flex: 1 0 calc(20% - 4px);
-      min-width: 48px;
+      flex: 0 0 auto;
+      min-width: 0;
       padding: 4px 5px;
       font-size: 10px;
     }
