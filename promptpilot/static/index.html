@@ -154,6 +154,54 @@
   }
   .add-form textarea:focus { outline: none; border-color: var(--accent); }
 
+  .interactive-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .interactive-status {
+    font-size: 12px;
+    color: var(--text2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 4px 10px;
+    background: var(--surface2);
+  }
+  .interactive-status.running {
+    color: var(--green);
+    border-color: color-mix(in oklab, var(--green) 45%, var(--border));
+    background: color-mix(in oklab, var(--green) 18%, transparent);
+  }
+  .interactive-terminal-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #0a0f18;
+    min-height: 360px;
+    max-height: 62vh;
+    overflow: auto;
+    box-shadow: inset 0 0 0 1px #0f172a;
+  }
+  .interactive-terminal {
+    margin: 0;
+    padding: 12px;
+    min-height: 360px;
+    color: #9ef6bf;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .interactive-input-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .interactive-input-row input {
+    flex: 1;
+    min-width: 220px;
+  }
+
   .form-row {
     display: flex;
     gap: 12px;
@@ -1514,6 +1562,18 @@
     background: var(--accent);
     color: #fff;
   }
+  @media (max-width: 980px) {
+    .interactive-input-row {
+      flex-wrap: wrap;
+    }
+    .interactive-input-row button {
+      width: 100%;
+    }
+    .interactive-terminal-wrap,
+    .interactive-terminal {
+      min-height: 240px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1527,6 +1587,7 @@
   <aside class="sidebar">
     <div class="side-title">Меню</div>
     <button id="menuTasks" class="side-btn active" onclick="switchView('tasks')">Задачи</button>
+    <button id="menuInteractive" class="side-btn" onclick="switchView('interactive')">Интерактив</button>
     <button id="menuProjects" class="side-btn" onclick="switchView('projects')">Проекты</button>
     <button id="menuAgents" class="side-btn" onclick="switchView('agents')">Агенты</button>
     <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Аккаунты агентов</button>
@@ -1567,6 +1628,35 @@
 
     <div class="task-list" id="taskList"></div>
     <div class="task-mobile-list" id="taskMobileList"></div>
+  </div>
+
+  <div class="admin-view" id="interactiveView">
+    <div class="admin-header">
+      <div class="admin-title">Интерактив</div>
+      <div class="interactive-status" id="interactiveStatus">Отключено</div>
+    </div>
+    <div class="add-form interactive-form">
+      <div class="form-row">
+        <label><span id="interactiveAgentLabel">Агент кодинга</span>
+          <select id="interactiveProviderInput"></select>
+        </label>
+        <label><span id="interactiveProjectLabel">Папка</span>
+          <select id="interactiveWorkdirSelect" style="display:none" onchange="onInteractiveProjectSelect()"></select>
+          <input type="text" id="interactiveWorkdirInput" placeholder="C:\Projects\MyApp" style="display:none">
+        </label>
+        <button class="btn btn-primary" type="button" id="interactiveStartBtn" onclick="startInteractiveSession()">Старт</button>
+        <button class="btn btn-danger" type="button" id="interactiveStopBtn" onclick="stopInteractiveSession()">Стоп</button>
+        <button class="btn btn-ghost" type="button" onclick="sendInteractiveCtrlC()">Ctrl+C</button>
+        <button class="btn btn-ghost" type="button" onclick="clearInteractiveTerminal()">Очистить</button>
+      </div>
+      <div class="interactive-terminal-wrap">
+        <pre id="interactiveTerminal" class="interactive-terminal"></pre>
+      </div>
+      <div class="form-row interactive-input-row">
+        <input type="text" id="interactiveInput" placeholder="Введите команду и нажмите Enter">
+        <button class="btn btn-primary" type="button" onclick="sendInteractiveInput()">Отправить</button>
+      </div>
+    </div>
   </div>
 
   <div class="admin-view" id="projectsView">
@@ -1735,6 +1825,7 @@ let adminCardExpanded = new Set();
 let adminCardMenuKey = null;
 let appTimezone = 'UTC';
 let crudState = { entity: null, mode: 'create', id: null };
+let interactiveState = { has_session: false, running: false, cursor: 0, pollTimer: null };
 
 const I18N = {
   ru: {
@@ -1810,6 +1901,15 @@ const I18N = {
     task_agent: 'Агент',
     task_account: 'Аккаунт агента',
     worked_minutes: '{n} мин',
+    interactive: 'Интерактив',
+    coding_agent: 'Агент кодинга',
+    interactive_status_off: 'Отключено',
+    interactive_status_running: 'Сессия активна',
+    interactive_status_stopped: 'Сессия завершена',
+    interactive_start: 'Старт',
+    interactive_stop: 'Стоп',
+    interactive_send: 'Отправить',
+    interactive_input_placeholder: 'Введите команду и нажмите Enter',
   },
   en: {
     tasks: 'Tasks',
@@ -1884,6 +1984,15 @@ const I18N = {
     task_agent: 'Agent',
     task_account: 'Agent account',
     worked_minutes: '{n} min',
+    interactive: 'Interactive',
+    coding_agent: 'Coding agent',
+    interactive_status_off: 'Disconnected',
+    interactive_status_running: 'Session is active',
+    interactive_status_stopped: 'Session stopped',
+    interactive_start: 'Start',
+    interactive_stop: 'Stop',
+    interactive_send: 'Send',
+    interactive_input_placeholder: 'Type command and press Enter',
   }
 };
 
@@ -1917,6 +2026,8 @@ function applyLanguage(lang) {
 
   document.getElementById('promptInput').placeholder = tr('prompt_placeholder');
   document.getElementById('tasksTitle').textContent = tr('tasks');
+  document.getElementById('menuTasks').textContent = tr('tasks');
+  document.getElementById('menuInteractive').textContent = tr('interactive');
   document.getElementById('providerLabelText').textContent = tr('provider');
   document.getElementById('modelLabelText').textContent = tr('model');
   document.getElementById('priorityLabelText').textContent = tr('priority');
@@ -1930,6 +2041,12 @@ function applyLanguage(lang) {
   document.getElementById('openTaskFormBtn').title = tr('add_task');
   document.getElementById('openTaskFormBtn').setAttribute('aria-label', tr('add_task'));
   document.getElementById('skillsHint').textContent = tr('skills_hint');
+  document.getElementById('interactiveAgentLabel').textContent = tr('coding_agent');
+  document.getElementById('interactiveProjectLabel').textContent = tr('dir');
+  document.getElementById('interactiveStartBtn').textContent = tr('interactive_start');
+  document.getElementById('interactiveStopBtn').textContent = tr('interactive_stop');
+  document.querySelector('#interactiveInput + button').textContent = tr('interactive_send');
+  document.getElementById('interactiveInput').placeholder = tr('interactive_input_placeholder');
 
   document.getElementById('filterAllBtn').textContent = tr('all');
   document.getElementById('filterPendingBtn').textContent = tr('pending');
@@ -1942,6 +2059,7 @@ function applyLanguage(lang) {
   if (p1) p1.textContent = `1 (${tr('highest')})`;
   if (p10) p10.textContent = `10 (${tr('lowest')})`;
   if (projectsCache.length) renderProjectOptions();
+  updateInteractiveStatus(interactiveState.running ? tr('interactive_status_running') : tr('interactive_status_off'), interactiveState.running);
   setCrudActionLabels();
 
   loadWorkerStatus();
@@ -2589,6 +2707,13 @@ document.getElementById('promptInput').addEventListener('keydown', e => {
   }
 });
 
+document.getElementById('interactiveInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    sendInteractiveInput();
+  }
+});
+
 // --- Load providers into dropdown ---
 async function loadProviders() {
   providersData = await fetchJSON(`${API}/providers`);
@@ -2605,6 +2730,7 @@ async function loadProviders() {
   sel.addEventListener('change', () => { skillsCache = {}; updateSkillsToggle(); closeSkillsPanel(); updateModelSelect(); });
   updateSkillsToggle();
   updateModelSelect();
+  renderInteractiveProviders();
 }
 
 function updateModelSelect() {
@@ -2716,6 +2842,7 @@ function renderProjectOptions() {
     sel.value = projectsCache[0].path;
   }
   initProjectSelect2();
+  renderInteractiveProjects();
 }
 
 function initProjectSelect2() {
@@ -2748,9 +2875,215 @@ function onProjectSelect() {
   }
 }
 
+function renderInteractiveProviders() {
+  const sel = document.getElementById('interactiveProviderInput');
+  const providerNames = Object.keys(providersData || {});
+  sel.innerHTML = providerNames
+    .map(name => `<option value="${esc(name)}">${esc(name)}</option>`)
+    .join('');
+  if (providerNames.includes('codex')) sel.value = 'codex';
+  else if (providerNames.length) sel.value = providerNames[0];
+}
+
+function renderInteractiveProjects() {
+  const sel = document.getElementById('interactiveWorkdirSelect');
+  const inp = document.getElementById('interactiveWorkdirInput');
+  const current = sel.value;
+  sel.innerHTML = [
+    `<option value="">${tr('select_project')}</option>`,
+    ...projectsCache.map(p => `<option value="${esc(p.path)}">${esc(p.name)} — ${esc(p.folder || p.path)}</option>`),
+    `<option value="__custom__">${tr('custom_path')}</option>`,
+  ].join('');
+  if (current && Array.from(sel.options).some(o => o.value === current)) {
+    sel.value = current;
+  } else if (projectsCache.length) {
+    sel.value = projectsCache[0].path;
+  }
+  sel.style.display = '';
+  if (sel.value === '__custom__') {
+    inp.style.display = '';
+  } else {
+    inp.style.display = 'none';
+    inp.value = '';
+  }
+}
+
+function onInteractiveProjectSelect() {
+  const sel = document.getElementById('interactiveWorkdirSelect');
+  const inp = document.getElementById('interactiveWorkdirInput');
+  if (sel.value === '__custom__') {
+    inp.style.display = '';
+    inp.placeholder = 'C:\\Projects\\MyApp';
+    inp.value = '';
+    inp.focus();
+  } else {
+    inp.style.display = 'none';
+    inp.value = '';
+  }
+}
+
+function getInteractiveWorkdir() {
+  const sel = document.getElementById('interactiveWorkdirSelect');
+  const inp = document.getElementById('interactiveWorkdirInput');
+  const selected = sel.style.display !== 'none' && sel.value && sel.value !== '__custom__' ? sel.value : '';
+  const custom = inp.style.display !== 'none' ? inp.value.trim() : '';
+  return selected || custom || null;
+}
+
+function updateInteractiveStatus(text, running) {
+  const status = document.getElementById('interactiveStatus');
+  status.textContent = text;
+  status.classList.toggle('running', !!running);
+  document.getElementById('interactiveStartBtn').disabled = !!running;
+  document.getElementById('interactiveStopBtn').disabled = !running;
+}
+
+function appendInteractiveTerminal(text) {
+  if (!text) return;
+  const pre = document.getElementById('interactiveTerminal');
+  pre.textContent += text;
+  pre.parentElement.scrollTop = pre.parentElement.scrollHeight;
+}
+
+function setInteractivePolling(active) {
+  if (interactiveState.pollTimer) {
+    clearInterval(interactiveState.pollTimer);
+    interactiveState.pollTimer = null;
+  }
+  if (active) {
+    interactiveState.pollTimer = setInterval(pollInteractiveOutput, 700);
+  }
+}
+
+async function loadInteractiveState() {
+  try {
+    const s = await fetchJSON(`${API}/interactive/state`);
+    interactiveState.has_session = !!s.has_session;
+    interactiveState.running = !!s.running;
+    interactiveState.cursor = Number(s.cursor || 0);
+    if (s.provider) document.getElementById('interactiveProviderInput').value = s.provider;
+    if (s.working_dir) {
+      const sel = document.getElementById('interactiveWorkdirSelect');
+      const inp = document.getElementById('interactiveWorkdirInput');
+      if (Array.from(sel.options).some(o => o.value === s.working_dir)) {
+        sel.value = s.working_dir;
+        inp.style.display = 'none';
+        inp.value = '';
+      } else {
+        sel.value = '__custom__';
+        inp.style.display = '';
+        inp.value = s.working_dir;
+      }
+    }
+    updateInteractiveStatus(
+      s.running ? tr('interactive_status_running') : (s.has_session ? tr('interactive_status_stopped') : tr('interactive_status_off')),
+      !!s.running
+    );
+    setInteractivePolling(!!s.running || !!s.has_session);
+    if (s.has_session) {
+      document.getElementById('interactiveTerminal').textContent = '';
+      interactiveState.cursor = 0;
+      await pollInteractiveOutput();
+    }
+  } catch (e) {
+    updateInteractiveStatus(tr('interactive_status_off'), false);
+  }
+}
+
+async function startInteractiveSession() {
+  try {
+    const provider = document.getElementById('interactiveProviderInput').value;
+    const working_dir = getInteractiveWorkdir();
+    const body = { provider, working_dir };
+    const s = await fetchJSON(`${API}/interactive/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    interactiveState.has_session = !!s.has_session;
+    interactiveState.running = !!s.running;
+    interactiveState.cursor = 0;
+    document.getElementById('interactiveTerminal').textContent = '';
+    updateInteractiveStatus(tr('interactive_status_running'), true);
+    setInteractivePolling(true);
+    await pollInteractiveOutput();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function stopInteractiveSession() {
+  try {
+    await fetchJSON(`${API}/interactive/stop`, { method: 'POST' });
+    interactiveState.has_session = false;
+    interactiveState.running = false;
+    interactiveState.cursor = 0;
+    setInteractivePolling(false);
+    updateInteractiveStatus(tr('interactive_status_off'), false);
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function sendInteractiveInput() {
+  const inp = document.getElementById('interactiveInput');
+  const text = inp.value;
+  if (!text.trim()) return;
+  try {
+    await fetchJSON(`${API}/interactive/input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, append_newline: true }),
+    });
+    inp.value = '';
+    await pollInteractiveOutput();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function sendInteractiveCtrlC() {
+  try {
+    await fetchJSON(`${API}/interactive/input`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: '\u0003', append_newline: false }),
+    });
+    await pollInteractiveOutput();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function pollInteractiveOutput() {
+  try {
+    const o = await fetchJSON(`${API}/interactive/output?cursor=${interactiveState.cursor}`);
+    if (!o.has_session) {
+      interactiveState.has_session = false;
+      interactiveState.running = false;
+      interactiveState.cursor = 0;
+      setInteractivePolling(false);
+      updateInteractiveStatus(tr('interactive_status_off'), false);
+      return;
+    }
+    if (o.chunk) appendInteractiveTerminal(o.chunk);
+    interactiveState.cursor = Number(o.cursor || interactiveState.cursor || 0);
+    interactiveState.running = !!o.running;
+    interactiveState.has_session = true;
+    if (!o.running) setInteractivePolling(false);
+    updateInteractiveStatus(o.running ? tr('interactive_status_running') : tr('interactive_status_stopped'), !!o.running);
+  } catch (_) {
+  }
+}
+
+function clearInteractiveTerminal() {
+  document.getElementById('interactiveTerminal').textContent = '';
+  interactiveState.cursor = 0;
+}
+
 let currentView = 'tasks';
 
-const VIEW_NAMES = new Set(['tasks', 'projects', 'agents', 'accounts', 'prompts']);
+const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts']);
 
 function isMobileLayout() {
   return window.matchMedia('(max-width: 980px)').matches;
@@ -2788,18 +3121,21 @@ function switchView(view, opts = {}) {
   const isTasks = view === 'tasks';
   if (!isTasks) closeTaskFormScreen();
   document.getElementById('tasksView').style.display = isTasks ? '' : 'none';
+  document.getElementById('interactiveView').style.display = view === 'interactive' ? 'block' : 'none';
   document.getElementById('projectsView').style.display = view === 'projects' ? 'block' : 'none';
   document.getElementById('agentsView').style.display = view === 'agents' ? 'block' : 'none';
   document.getElementById('accountsView').style.display = view === 'accounts' ? 'block' : 'none';
   document.getElementById('promptsView').style.display = view === 'prompts' ? 'block' : 'none';
 
   document.getElementById('menuTasks').classList.toggle('active', view === 'tasks');
+  document.getElementById('menuInteractive').classList.toggle('active', view === 'interactive');
   document.getElementById('menuProjects').classList.toggle('active', view === 'projects');
   document.getElementById('menuAgents').classList.toggle('active', view === 'agents');
   document.getElementById('menuAccounts').classList.toggle('active', view === 'accounts');
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
 
   if (view === 'projects') loadProjectsCrud();
+  if (view === 'interactive') loadInteractiveState();
   if (view === 'agents') loadAgentsCrud();
   if (view === 'accounts') loadAccountsCrud();
   if (view === 'prompts') loadPromptsCrud();
@@ -3647,6 +3983,7 @@ loadVersion();
 loadCosts();
 refresh();
 switchView(parseViewFromHash(), { syncUrl: false });
+setTimeout(loadInteractiveState, 200);
 setInterval(refresh, 15000);
 setInterval(loadWorkerStatus, 10000);
 setInterval(loadCosts, 30000);

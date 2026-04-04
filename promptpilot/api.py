@@ -1,17 +1,24 @@
 """FastAPI web API + static file serving."""
 
+import fcntl
+import os
+import pty
+import shlex
+import subprocess
 import sys
+import threading
+import uuid
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-
-import os
+from pydantic import BaseModel, Field
 
 from . import db
 from .config import APP_TIMEZONE, get_skills, load_providers, PROJECTS_ROOT
+from .config import get_provider_env
 from .models import CostStats, Stats, TaskCreate, TaskInDB, TaskStatus, TaskUpdate
 from . import relogin
 from .version import check_for_update
@@ -23,6 +30,109 @@ if getattr(sys, "frozen", False):
     STATIC_DIR = Path(sys._MEIPASS) / "promptpilot" / "static"
 else:
     STATIC_DIR = Path(__file__).parent / "static"
+
+_interactive_guard = threading.Lock()
+_interactive_session = None
+
+
+class InteractiveStartRequest(BaseModel):
+    provider: str
+    working_dir: Optional[str] = None
+
+
+class InteractiveInputRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=20000)
+    append_newline: bool = True
+
+
+def _interactive_read_output_locked(session: dict):
+    if not session:
+        return
+    master_fd = session.get("master_fd")
+    proc = session.get("process")
+    if master_fd is None or proc is None:
+        return
+
+    chunks = []
+    while True:
+        try:
+            data = os.read(master_fd, 4096)
+        except BlockingIOError:
+            break
+        except OSError:
+            break
+        if not data:
+            break
+        chunks.append(data.decode("utf-8", errors="replace"))
+    if chunks:
+        session["output"] += "".join(chunks)
+    if session.get("exit_code") is None:
+        code = proc.poll()
+        if code is not None:
+            session["exit_code"] = int(code)
+
+
+def _interactive_state_locked(session: Optional[dict]) -> dict:
+    if not session:
+        return {
+            "has_session": False,
+            "running": False,
+        }
+    _interactive_read_output_locked(session)
+    proc = session["process"]
+    return {
+        "has_session": True,
+        "id": session["id"],
+        "provider": session["provider"],
+        "working_dir": session["working_dir"],
+        "running": proc.poll() is None,
+        "exit_code": session.get("exit_code"),
+        "cursor": len(session.get("output", "")),
+    }
+
+
+def _interactive_stop_locked(session: Optional[dict]):
+    if not session:
+        return
+    proc = session.get("process")
+    if proc and proc.poll() is None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=2)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    master_fd = session.get("master_fd")
+    if master_fd is not None:
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+
+
+def _interactive_cmd_for_provider(provider: str) -> list[str]:
+    key = str(provider or "").strip().lower()
+    if key in ("claude", "claude-z"):
+        return ["claude"]
+    if key == "codex":
+        return ["codex"]
+    if key == "qwen":
+        return ["qwen"]
+    if key == "cursor":
+        return ["cursor-agent"]
+
+    providers = load_providers()
+    info = providers.get(key) or providers.get(provider)
+    if info and info.get("cmd"):
+        parts = shlex.split(str(info["cmd"]))
+        if parts:
+            return [parts[0]]
+    parts = shlex.split(str(provider or ""))
+    if not parts:
+        raise ValueError("Invalid provider command")
+    return [parts[0]]
 
 
 # --- API ---
@@ -159,6 +269,131 @@ def api_projects(q: Optional[str] = None):
             }
         )
     return entries
+
+
+@app.get("/api/interactive/state")
+def api_interactive_state():
+    with _interactive_guard:
+        return _interactive_state_locked(_interactive_session)
+
+
+@app.post("/api/interactive/start")
+def api_interactive_start(payload: InteractiveStartRequest):
+    provider = str(payload.provider or "").strip()
+    if not provider:
+        raise HTTPException(400, "provider is required")
+
+    providers = load_providers()
+    if provider not in providers:
+        raise HTTPException(400, f"Unknown provider: {provider}")
+
+    working_dir = (payload.working_dir or "").strip() or None
+    if working_dir and not os.path.isdir(working_dir):
+        raise HTTPException(400, f"Working directory does not exist: {working_dir}")
+
+    cmd = _interactive_cmd_for_provider(provider)
+    env = get_provider_env(provider)
+
+    try:
+        master_fd, slave_fd = pty.openpty()
+        flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        proc = subprocess.Popen(
+            cmd,
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            cwd=working_dir,
+            env=env,
+            close_fds=True,
+            text=False,
+        )
+        os.close(slave_fd)
+    except FileNotFoundError:
+        raise HTTPException(400, f"Command not found: {cmd[0]}")
+    except Exception as e:
+        raise HTTPException(500, f"Interactive start failed: {e}")
+
+    with _interactive_guard:
+        global _interactive_session
+        if _interactive_session and _interactive_session["process"].poll() is None:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            raise HTTPException(409, "Interactive session already running")
+        if _interactive_session:
+            _interactive_stop_locked(_interactive_session)
+        _interactive_session = {
+            "id": str(uuid.uuid4()),
+            "provider": provider,
+            "working_dir": working_dir,
+            "process": proc,
+            "master_fd": master_fd,
+            "output": "",
+            "exit_code": None,
+        }
+        return _interactive_state_locked(_interactive_session)
+
+
+@app.post("/api/interactive/input")
+def api_interactive_input(payload: InteractiveInputRequest):
+    with _interactive_guard:
+        session = _interactive_session
+        if not session:
+            raise HTTPException(404, "Interactive session not found")
+        if session["process"].poll() is not None:
+            _interactive_read_output_locked(session)
+            raise HTTPException(400, "Interactive session already stopped")
+        data = payload.text + ("\n" if payload.append_newline else "")
+        try:
+            os.write(session["master_fd"], data.encode("utf-8", errors="replace"))
+        except OSError as e:
+            raise HTTPException(500, f"Interactive input failed: {e}")
+        _interactive_read_output_locked(session)
+        return {"ok": True, "cursor": len(session["output"])}
+
+
+@app.get("/api/interactive/output")
+def api_interactive_output(cursor: int = 0):
+    with _interactive_guard:
+        session = _interactive_session
+        if not session:
+            return {
+                "has_session": False,
+                "running": False,
+                "cursor": 0,
+                "chunk": "",
+            }
+        _interactive_read_output_locked(session)
+        output = session["output"]
+        safe_cursor = max(0, min(int(cursor), len(output)))
+        chunk = output[safe_cursor:]
+        return {
+            "has_session": True,
+            "running": session["process"].poll() is None,
+            "exit_code": session.get("exit_code"),
+            "cursor": len(output),
+            "chunk": chunk,
+            "provider": session["provider"],
+            "working_dir": session["working_dir"],
+            "id": session["id"],
+        }
+
+
+@app.post("/api/interactive/stop")
+def api_interactive_stop():
+    with _interactive_guard:
+        global _interactive_session
+        if not _interactive_session:
+            return {"ok": True, "running": False}
+        _interactive_stop_locked(_interactive_session)
+        _interactive_session = None
+        return {"ok": True, "running": False}
 
 
 @app.get("/api/admin/projects")
