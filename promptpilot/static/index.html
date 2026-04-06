@@ -2305,7 +2305,8 @@
       <div class="kanban-header">
         <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="kanbanBackToProjects()">← Проекты</button>
         <div class="kanban-title" id="kanbanBoardTitle"></div>
-        <button class="btn btn-ghost" style="font-size:12px" onclick="loadKanban()">↺ Обновить</button>
+        <button class="btn admin-add-btn" type="button" title="Добавить задачу" style="background:#16a34a;border-color:#16a34a;color:#fff;font-size:18px;line-height:1;padding:2px 10px" onclick="openTaskFormFromKanban()">+</button>
+        <button class="btn btn-ghost" style="font-size:16px;padding:4px 8px" title="Обновить" onclick="loadKanban()">↺</button>
       </div>
       <div class="kanban-board" id="kanbanBoard"></div>
     </div>
@@ -2437,6 +2438,7 @@ let currentFilter = '';
 let expandedId = null;
 let kanbanExpandedId = null;
 let kanbanSelectedProject = null; // { id, name, path, color, folder }
+let _afterAddTaskCallback = null;
 let providersData = {};
 let skillsCache = {};
 let skillsPanelOpen = false;
@@ -3218,7 +3220,13 @@ async function addTask() {
     document.getElementById('recurrenceInput').value = '';
     setDefaultSchedule();
     closeTaskFormScreen();
-    refresh();
+    if (_afterAddTaskCallback) {
+      const cb = _afterAddTaskCallback;
+      _afterAddTaskCallback = null;
+      cb();
+    } else {
+      refresh();
+    }
   } catch (err) {
     alert(err.message);
   }
@@ -4068,6 +4076,21 @@ function switchView(view, opts = {}) {
   closeMobileMenu();
 }
 
+function openTaskFormFromKanban() {
+  _afterAddTaskCallback = () => {
+    ensureTaskStatusesRows(true).then(() => loadKanban());
+  };
+  openTaskFormScreen();
+  // Pre-select current kanban project
+  if (kanbanSelectedProject) {
+    const sel = document.getElementById('workdirSelect');
+    if (sel && sel.style.display !== 'none') {
+      const opt = Array.from(sel.options).find(o => o.value === kanbanSelectedProject.path);
+      if (opt) sel.value = kanbanSelectedProject.path;
+    }
+  }
+}
+
 function openTaskFormScreen() {
   const screen = document.getElementById('taskFormScreen');
   if (!screen) return;
@@ -4085,6 +4108,7 @@ function closeTaskFormScreen() {
   if (!screen || !screen.classList.contains('open')) return;
   screen.classList.remove('open');
   closeSkillsPanel();
+  _afterAddTaskCallback = null;
 }
 
 function onTaskFormBackdrop(e) {
