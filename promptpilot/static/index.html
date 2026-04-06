@@ -4915,7 +4915,7 @@ function renderKanbanCol(colIdStr, items, color, name) {
   const shown = items.slice(0, visible);
   const remaining = items.length - shown.length;
   const moreBtn = remaining > 0
-    ? `<button class="btn btn-ghost kanban-more-btn" onclick="kanbanShowMore('${colIdStr}')">Ещё ${remaining}</button>`
+    ? `<button class="btn btn-ghost kanban-more-btn" onclick="kanbanShowMore('${colIdStr}')">Ещё ${Math.min(remaining, KANBAN_PAGE_SIZE)}</button>`
     : '';
   return `<div class="kanban-col" data-col-id="${esc(colIdStr)}">
     <div class="kanban-col-header" style="border-top-color:${esc(color)}">
