@@ -86,6 +86,19 @@
     text-transform: uppercase;
     letter-spacing: .6px;
   }
+  .side-group {
+    margin-bottom: 6px;
+  }
+  .side-group-title {
+    font-size: 10px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    padding: 0 2px;
+    margin: 14px 0 6px;
+    opacity: .7;
+  }
+  .side-group:first-child .side-group-title { margin-top: 0; }
   .side-btn {
     width: 100%;
     text-align: left;
@@ -2118,15 +2131,21 @@
   <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeMobileMenu()"></div>
   <aside class="sidebar">
     <div class="side-title" id="menuTitle">Меню</div>
-    <button id="menuTasks" class="side-btn active" onclick="switchView('tasks')">Задачи</button>
-    <button id="menuInteractive" class="side-btn" onclick="switchView('interactive')">Интерактив</button>
-    <button id="menuProjects" class="side-btn" onclick="switchView('projects')">Проекты</button>
-    <button id="menuAgents" class="side-btn" onclick="switchView('agents')">Агенты</button>
-    <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Учётные записи агентов</button>
-    <button id="menuPrompts" class="side-btn" onclick="switchView('prompts')">Промпты</button>
-    <button id="menuWorkers" class="side-btn" onclick="switchView('workers')">Исполнители</button>
-    <button id="menuTaskStatuses" class="side-btn" onclick="switchView('task-statuses')">Статусы задач</button>
-    <button id="menuKanban" class="side-btn" onclick="switchView('kanban')">Канбан</button>
+    <div class="side-group">
+      <div class="side-group-title">Работа</div>
+      <button id="menuKanban" class="side-btn" onclick="switchView('kanban')">Канбан</button>
+      <button id="menuTasks" class="side-btn active" onclick="switchView('tasks')">Задачи</button>
+      <button id="menuProjects" class="side-btn" onclick="switchView('projects')">Проекты</button>
+      <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Учётные записи</button>
+      <button id="menuInteractive" class="side-btn" onclick="switchView('interactive')">Интерактив</button>
+    </div>
+    <div class="side-group">
+      <div class="side-group-title">Справочники</div>
+      <button id="menuAgents" class="side-btn" onclick="switchView('agents')">Агенты</button>
+      <button id="menuTaskStatuses" class="side-btn" onclick="switchView('task-statuses')">Статусы задач</button>
+      <button id="menuPrompts" class="side-btn" onclick="switchView('prompts')">Промпты</button>
+      <button id="menuWorkers" class="side-btn" onclick="switchView('workers')">Исполнители</button>
+    </div>
   </aside>
 <div class="container">
   <header>
