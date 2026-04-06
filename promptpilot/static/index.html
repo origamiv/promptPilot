@@ -4000,7 +4000,7 @@ function switchView(view, opts = {}) {
 
   if (syncUrl) {
     const targetPath = (view === 'kanban' && kanbanSelectedProject)
-      ? `/kanban/${encodeURIComponent(kanbanSelectedProject.folder || kanbanSelectedProject.path)}`
+      ? `/kanban/${encodeURIComponent(kanbanSelectedProject.shortname || kanbanSelectedProject.folder || kanbanSelectedProject.path)}`
       : `/${view}`;
     if (window.location.pathname !== targetPath) history.pushState({ view }, '', targetPath);
   }
@@ -4989,7 +4989,7 @@ async function loadKanbanProjects() {
 async function selectKanbanProject(projectId) {
   kanbanSelectedProject = projectsCache.find(p => p.id === projectId) || null;
   if (!kanbanSelectedProject) return;
-  const slug = encodeURIComponent(kanbanSelectedProject.folder || kanbanSelectedProject.path);
+  const slug = encodeURIComponent(kanbanSelectedProject.shortname || kanbanSelectedProject.folder || kanbanSelectedProject.path);
   history.pushState({ view: 'kanban' }, '', `/kanban/${slug}`);
   document.getElementById('kanbanProjectPicker').style.display = 'none';
   document.getElementById('kanbanBoardWrap').style.display = '';
@@ -5395,7 +5395,7 @@ window.addEventListener('popstate', (e) => {
   if (view === 'kanban') {
     const folder = parseKanbanProjectFromPath();
     if (folder) {
-      const proj = projectsCache.find(p => (p.folder || p.path) === folder);
+      const proj = projectsCache.find(p => (p.shortname || p.folder || p.path) === folder);
       if (proj) { selectKanbanProject(proj.id); return; }
     }
     kanbanBackToProjects();
@@ -5438,7 +5438,7 @@ const _initKanbanFolder = parseKanbanProjectFromPath();
 if (_initKanbanFolder) {
   const _tryRestoreKanban = async () => {
     if (!projectsCache.length) await loadProjects();
-    const proj = projectsCache.find(p => (p.folder || p.path) === _initKanbanFolder);
+    const proj = projectsCache.find(p => (p.shortname || p.folder || p.path) === _initKanbanFolder);
     if (proj) { await selectKanbanProject(proj.id); return; }
     history.replaceState({ view: 'kanban' }, '', '/kanban');
   };
