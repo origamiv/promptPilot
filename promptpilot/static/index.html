@@ -1061,24 +1061,21 @@
   }
   .kanban-more-btn:hover { color: var(--cyan); border-color: var(--cyan); }
   .kanban-project-grid {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 12px;
     padding-bottom: 24px;
-    justify-content: center;
   }
   .kanban-project-card {
-    flex: 0 0 200px;
-    width: 200px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 16px;
+    padding: 14px 16px;
     cursor: pointer;
     transition: border-color .15s, box-shadow .15s;
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    align-items: center;
+    gap: 10px;
   }
   .kanban-project-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
   .kanban-project-dot {
@@ -4978,11 +4975,8 @@ async function loadKanbanProjects() {
   grid.innerHTML = projectsCache.map(p => {
     const color = normalizeHexColor(p.color) || '#9ca3af';
     return `<div class="kanban-project-card" onclick="selectKanbanProject(${p.id})">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="kanban-project-dot" style="background:${esc(color)}"></span>
-        <span class="kanban-project-name">${esc(p.name)}</span>
-      </div>
-      <div class="kanban-project-folder">${esc(p.folder || p.path)}</div>
+      <span class="kanban-project-dot" style="background:${esc(color)}"></span>
+      <span class="kanban-project-name">${esc(p.name)}</span>
     </div>`;
   }).join('');
 }
