@@ -1060,6 +1060,35 @@
     text-align: center;
   }
   .kanban-more-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+  .kanban-project-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-bottom: 24px;
+  }
+  .kanban-project-card {
+    flex: 0 0 200px;
+    width: 200px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .kanban-project-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .kanban-project-dot {
+    width: 12px; height: 12px; border-radius: 50%; flex: 0 0 12px;
+  }
+  .kanban-project-name {
+    font-size: 14px; font-weight: 700; line-height: 1.3;
+  }
+  .kanban-project-folder {
+    font-size: 11px; color: var(--text2); word-break: break-all;
+  }
   .kanban-card {
     background: var(--bg);
     border: 1px solid var(--border);
@@ -2237,11 +2266,22 @@
   </div>
 
   <div id="kanbanView">
-    <div class="kanban-header">
-      <div class="kanban-title" id="kanbanTitle">Канбан</div>
-      <button class="btn btn-ghost" style="font-size:12px" onclick="loadKanban()">↺ Обновить</button>
+    <!-- Project picker -->
+    <div id="kanbanProjectPicker">
+      <div class="kanban-header">
+        <div class="kanban-title" id="kanbanTitle">Канбан</div>
+      </div>
+      <div class="kanban-project-grid" id="kanbanProjectGrid"></div>
     </div>
-    <div class="kanban-board" id="kanbanBoard"></div>
+    <!-- Board (hidden until project selected) -->
+    <div id="kanbanBoardWrap" style="display:none">
+      <div class="kanban-header">
+        <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="kanbanBackToProjects()">← Проекты</button>
+        <div class="kanban-title" id="kanbanBoardTitle"></div>
+        <button class="btn btn-ghost" style="font-size:12px" onclick="loadKanban()">↺ Обновить</button>
+      </div>
+      <div class="kanban-board" id="kanbanBoard"></div>
+    </div>
   </div>
 
   <div class="admin-view" id="workersView">
@@ -2369,6 +2409,7 @@ const API = '/api';
 let currentFilter = '';
 let expandedId = null;
 let kanbanExpandedId = null;
+let kanbanSelectedProject = null; // { id, name, path, color, folder }
 let providersData = {};
 let skillsCache = {};
 let skillsPanelOpen = false;
@@ -3985,7 +4026,7 @@ function switchView(view, opts = {}) {
   if (view === 'prompts') loadPromptsCrud();
   if (view === 'workers') loadWorkersCrud();
   if (view === 'task-statuses') loadTaskStatusesCrud();
-  if (view === 'kanban') loadKanban();
+  if (view === 'kanban') loadKanbanProjects();
   adminCardMenuKey = null;
   closeMobileMenu();
 }
@@ -4866,8 +4907,6 @@ function taskKanbanColId(t) {
 
 function renderKanbanCard(t) {
   const expanded = kanbanExpandedId === t.id;
-  const project = projectByWorkingDir(t.working_dir);
-  const projectName = project && project.name ? project.name : null;
   const workerRow = t.worker_id ? adminWorkersRows.find(w => w.id === t.worker_id) : null;
   const agentIconInfo = taskAgentIconInfo(t);
   const parsed = parseResult(t.result);
@@ -4879,11 +4918,8 @@ function renderKanbanCard(t) {
            alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy"
            title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}" style="flex:0 0 22px">
       <div style="flex:1;min-width:0">
-        <div class="kanban-card-title">${esc(taskCardTitle(t))}</div>
+        <div class="kanban-card-title"><span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}</div>
         <div class="kanban-card-meta">
-          <span class="kanban-card-id">#${t.id}</span>
-          <span class="status-dot ${taskStatusDotClass(t.status)}"${taskDotStyle(t)} title="${esc(statusLabel(t.status))}" style="width:8px;height:8px"></span>
-          ${projectName ? `<span class="kanban-card-badge"${projectBadgeStyleAttr(project)}>${esc(projectName)}</span>` : ''}
           ${agentIconInfo ? `<span class="kanban-card-badge" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
           <span class="kanban-card-badge">P${t.priority}</span>
           <span class="kanban-card-badge">${timeAgo(t.created_at)}</span>
@@ -4903,6 +4939,47 @@ function toggleKanbanCard(id) {
     const tid = parseInt(el.id.replace('kcard-', ''), 10);
     el.classList.toggle('expanded', tid === kanbanExpandedId);
   });
+}
+
+async function loadKanbanProjects() {
+  // Ensure projects are loaded
+  if (!projectsCache.length) await loadProjects();
+  const picker = document.getElementById('kanbanProjectPicker');
+  const boardWrap = document.getElementById('kanbanBoardWrap');
+  picker.style.display = '';
+  boardWrap.style.display = 'none';
+  kanbanSelectedProject = null;
+
+  const grid = document.getElementById('kanbanProjectGrid');
+  if (!projectsCache.length) {
+    grid.innerHTML = '<div style="color:var(--text2);padding:16px">Нет проектов</div>';
+    return;
+  }
+  grid.innerHTML = projectsCache.map(p => {
+    const color = normalizeHexColor(p.color) || '#9ca3af';
+    return `<div class="kanban-project-card" onclick="selectKanbanProject(${p.id})">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="kanban-project-dot" style="background:${esc(color)}"></span>
+        <span class="kanban-project-name">${esc(p.name)}</span>
+      </div>
+      <div class="kanban-project-folder">${esc(p.folder || p.path)}</div>
+    </div>`;
+  }).join('');
+}
+
+async function selectKanbanProject(projectId) {
+  kanbanSelectedProject = projectsCache.find(p => p.id === projectId) || null;
+  if (!kanbanSelectedProject) return;
+  document.getElementById('kanbanProjectPicker').style.display = 'none';
+  document.getElementById('kanbanBoardWrap').style.display = '';
+  document.getElementById('kanbanBoardTitle').textContent = kanbanSelectedProject.name;
+  await loadKanban();
+}
+
+function kanbanBackToProjects() {
+  kanbanSelectedProject = null;
+  document.getElementById('kanbanProjectPicker').style.display = '';
+  document.getElementById('kanbanBoardWrap').style.display = 'none';
 }
 
 const KANBAN_PAGE_SIZE = 10;
@@ -4948,7 +5025,13 @@ async function loadKanban() {
   board.innerHTML = '<div style="padding:24px;color:var(--text2)">Загрузка…</div>';
 
   await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows()]);
-  const tasks = await fetchJSON(`${API}/tasks?limit=1000`);
+  let tasks = await fetchJSON(`${API}/tasks?limit=1000`);
+
+  // Filter by selected project
+  if (kanbanSelectedProject) {
+    const projPath = (kanbanSelectedProject.path || '').replace(/\/+$/, '').toLowerCase();
+    tasks = tasks.filter(t => t.working_dir && t.working_dir.replace(/\/+$/, '').toLowerCase() === projPath);
+  }
 
   // Sort newest first (updated_at → created_at fallback)
   tasks.sort((a, b) => {
