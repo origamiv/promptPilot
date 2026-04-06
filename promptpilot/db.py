@@ -333,6 +333,12 @@ def init_db():
                 """
             ).format(sql.Identifier(SCHEMA_NAME))
         )
+        # nom column migration (for existing tables created before this field)
+        cur.execute(
+            sql.SQL(
+                "ALTER TABLE {}.tasks_statuses ADD COLUMN IF NOT EXISTS nom SMALLINT"
+            ).format(sql.Identifier(SCHEMA_NAME))
+        )
         # Seed default task statuses
         cur.execute(
             sql.SQL(
@@ -347,13 +353,6 @@ def init_db():
                   (6, 4, 'Ожидает тестирования',      'pending_test',     NULL,        '#8b5cf6', 1, NOW(), NOW())
                 ON CONFLICT (id) DO NOTHING
                 """
-            ).format(sql.Identifier(SCHEMA_NAME))
-        )
-
-        # nom column in tasks_statuses
-        cur.execute(
-            sql.SQL(
-                "ALTER TABLE {}.tasks_statuses ADD COLUMN IF NOT EXISTS nom SMALLINT"
             ).format(sql.Identifier(SCHEMA_NAME))
         )
         # Back-fill nom for seed rows where nom is still NULL
