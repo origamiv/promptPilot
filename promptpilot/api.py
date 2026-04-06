@@ -1165,12 +1165,6 @@ def index():
     return FileResponse(STATIC_DIR / "index.html", headers=_SPA_HEADERS)
 
 
-@app.get("/{full_path:path}")
-def spa_fallback(full_path: str):
-    """Serve index.html for all non-API paths so History API routing works on F5."""
-    return FileResponse(STATIC_DIR / "index.html", headers=_SPA_HEADERS)
-
-
 _SPA_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
     "Pragma": "no-cache",
@@ -1187,6 +1181,7 @@ def help_page(section: str):
         "accounts": "accounts.html",
         "projects": "projects.html",
         "prompts": "prompts.html",
+        "workers": "workers.html",
         "task-statuses": "task-statuses.html",
         "kanban": "kanban.html",
     }
@@ -1204,3 +1199,9 @@ def help_page(section: str):
             "Expires": "0",
         },
     )
+
+
+@app.get("/{full_path:path}")
+def spa_fallback(full_path: str):
+    """Serve index.html for all non-API paths so History API routing works on F5."""
+    return FileResponse(STATIC_DIR / "index.html", headers=_SPA_HEADERS)
