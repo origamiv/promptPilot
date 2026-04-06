@@ -330,6 +330,95 @@
   }
   .form-row select:focus, .form-row input:focus { outline: none; border-color: var(--accent); }
   .form-row input[type="text"] { width: 180px; }
+  /* Worker custom picker */
+  .worker-picker {
+    position: relative;
+    display: inline-block;
+  }
+  .worker-picker-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px 5px 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text);
+    min-width: 160px;
+    max-width: 220px;
+    text-align: left;
+    transition: border-color .15s;
+  }
+  .worker-picker-trigger:hover, .worker-picker.open .worker-picker-trigger {
+    border-color: var(--accent);
+  }
+  .worker-picker-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .worker-picker-arrow {
+    font-size: 10px;
+    color: var(--text2);
+    flex: 0 0 auto;
+    transition: transform .15s;
+  }
+  .worker-picker.open .worker-picker-arrow { transform: rotate(180deg); }
+  .worker-picker-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 9999;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    min-width: 220px;
+    max-width: 280px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .worker-picker.open .worker-picker-dropdown { display: block; }
+  .worker-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background .1s;
+  }
+  .worker-picker-item:hover { background: var(--surface2); }
+  .worker-picker-item.selected { background: color-mix(in oklab, var(--accent) 12%, var(--bg)); }
+  .worker-picker-item-info { min-width: 0; }
+  .worker-picker-item-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .worker-picker-item-role {
+    font-size: 11px;
+    color: var(--text2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .task-worker-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    vertical-align: middle;
+    flex: 0 0 22px;
+  }
 
   .btn {
     padding: 8px 20px;
@@ -696,6 +785,20 @@
     color: var(--text2);
     margin-top: 10px;
   }
+  .detail-worker-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .detail-worker-name {
+    font-weight: 600;
+    color: var(--text) !important;
+  }
+  .detail-worker-role {
+    color: var(--text2) !important;
+    font-weight: 400;
+  }
+  .detail-worker-role::before { content: '·'; margin-right: 4px; }
   .detail-info {
     font-size: 12px;
     color: var(--text2);
@@ -991,6 +1094,81 @@
     border-radius: 999px;
     padding: 1px 8px;
     background: var(--surface2);
+  }
+  /* Worker avatar */
+  .worker-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border);
+    background: var(--surface2);
+    flex: 0 0 40px;
+  }
+  .worker-avatar-sm {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    vertical-align: middle;
+    flex: 0 0 24px;
+  }
+  .worker-avatar-lg {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border);
+    background: var(--surface2);
+    flex: 0 0 56px;
+  }
+  #workersCards .admin-mobile-card {
+    padding: 10px;
+  }
+  #workersCards .worker-card-head {
+    padding: 0;
+    min-height: 52px;
+  }
+  .worker-card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    padding-right: 8px;
+  }
+  .worker-card-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .worker-card-name {
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .worker-card-role {
+    font-size: 11px;
+    color: var(--text2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+  .worker-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .worker-avatar-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    vertical-align: middle;
   }
   .status-chip {
     display: inline-flex;
@@ -1753,6 +1931,7 @@
     <button id="menuAgents" class="side-btn" onclick="switchView('agents')">Агенты</button>
     <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Учётные записи агентов</button>
     <button id="menuPrompts" class="side-btn" onclick="switchView('prompts')">Промпты</button>
+    <button id="menuWorkers" class="side-btn" onclick="switchView('workers')">Исполнители</button>
   </aside>
 <div class="container">
   <header>
@@ -1884,6 +2063,19 @@
       <tbody id="promptsTbody"></tbody>
     </table>
   </div>
+
+  <div class="admin-view" id="workersView">
+    <div class="admin-header">
+      <div class="admin-title" id="workersTitle">Исполнители</div>
+      <input id="workersSearch" placeholder="Поиск..." oninput="loadWorkersCrud()">
+      <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createWorkerCrud()">+</button>
+    </div>
+    <div class="admin-mobile-list" id="workersCards"></div>
+    <table class="admin-table">
+      <thead><tr><th></th><th>ID</th><th>Имя</th><th>Short</th><th>Роль</th><th>Агент?</th><th>Agent</th><th>Статус</th><th></th></tr></thead>
+      <tbody id="workersTbody"></tbody>
+    </table>
+  </div>
 </div>
 </div>
 
@@ -1968,6 +2160,17 @@
           <label><span id="promptListLabelText">Список промптов</span>
             <input type="text" id="promptListInput" value="base, current, project, end" placeholder="base, current, project, end" style="width:220px">
           </label>
+          <label id="workerLabel"><span id="workerLabelText">Исполнитель</span>
+            <div class="worker-picker" id="workerPicker">
+              <button type="button" class="worker-picker-trigger" id="workerPickerTrigger" onclick="toggleWorkerPicker(event)">
+                <img id="workerSelectAvatar" class="worker-avatar-sm" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e5e7eb'/%3E%3Ccircle cx='50' cy='38' r='17' fill='%239ca3af'/%3E%3Cellipse cx='50' cy='86' rx='28' ry='22' fill='%239ca3af'/%3E%3C/svg%3E" alt="">
+                <span id="workerSelectName" class="worker-picker-name">— без исполнителя —</span>
+                <span class="worker-picker-arrow">▾</span>
+              </button>
+              <div class="worker-picker-dropdown" id="workerPickerDropdown"></div>
+              <input type="hidden" id="workerInput" value="">
+            </div>
+          </label>
           <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
             <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
@@ -1995,6 +2198,7 @@ let adminProjectsRows = [];
 let adminAgentsRows = [];
 let adminAccountsRows = [];
 let adminPromptsRows = [];
+let adminWorkersRows = [];
 let adminCardExpanded = new Set();
 let adminCardMenuKey = null;
 let appTimezone = 'UTC';
@@ -2279,6 +2483,7 @@ function applyLanguage(lang) {
   setCrudActionLabels();
 
   loadWorkerStatus();
+  ensureWorkersRows().then(populateWorkerSelect);
   refresh();
   loadCosts();
 }
@@ -2562,8 +2767,20 @@ function buildTaskResultHTML(t, parsed) {
 function buildTaskDetailHTML(t, resultHTML, opts = {}) {
   const includeSubject = opts.includeSubject ?? false;
   const includePrompt = opts.includePrompt ?? true;
+  const workerRow = t.worker_id ? adminWorkersRows.find(w => w.id === t.worker_id) : null;
+  const workerHTML = (() => {
+    const av = workerRow ? workerAvatarUrl(workerRow) : WORKER_DEFAULT_AVATAR;
+    const name = workerRow ? esc(workerRow.name) : 'Без исполнителя';
+    const role = workerRow && workerRow.role ? `<span class="detail-worker-role">${esc(workerRow.role)}</span>` : '';
+    return `<div class="detail-info detail-worker-row">
+      <span class="label">Исполнитель: </span>
+      <img class="task-worker-avatar" src="${esc(av)}" alt="${name}" loading="lazy">
+      <span class="detail-worker-name">${name}</span>${role}
+    </div>`;
+  })();
   return `
     ${includeSubject && t.subject ? `<div class="detail-info"><span class="label">Тема: </span><span>${esc(t.subject)}</span></div>` : ''}
+    ${workerHTML}
     ${includePrompt ? `
       <div class="detail-label">${tr('prompt')}</div>
       <div class="result-block">
@@ -2596,7 +2813,10 @@ function buildTaskDetailHTML(t, resultHTML, opts = {}) {
 
 async function loadTasks() {
   const params = currentFilter ? `?status=${currentFilter}&limit=100` : '?limit=100';
-  const tasks = await fetchJSON(`${API}/tasks${params}`);
+  const [tasks] = await Promise.all([
+    fetchJSON(`${API}/tasks${params}`),
+    ensureWorkersRows(),
+  ]);
   const list = document.getElementById('taskList');
   const mobileList = document.getElementById('taskMobileList');
 
@@ -2618,6 +2838,7 @@ async function loadTasks() {
     const projectName = project && project.name ? project.name : '';
     const agentAccountName = taskAgentAccountName(t);
     const agentIconInfo = taskAgentIconInfo(t);
+    const workerRow = t.worker_id ? adminWorkersRows.find(w => w.id === t.worker_id) : null;
 
     const resultHTML = buildTaskResultHTML(t, parsed);
 
@@ -2634,6 +2855,7 @@ async function loadTasks() {
         ${scheduleInfo(t)}
         <span class="task-meta">P${t.priority}</span>
         <span class="task-meta">${time}</span>
+        <span class="task-meta worker-avatar-badge" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}"><img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy">${workerRow ? ` ${esc(workerRow.shortname || workerRow.name)}` : ''}</span>
       </div>
       <div class="task-detail">
         ${buildTaskDetailHTML(t, resultHTML, { includeSubject: true, includePrompt: true })}
@@ -2651,10 +2873,12 @@ async function loadTasks() {
     const agentAccountName = taskAgentAccountName(t);
     const agentIconInfo = taskAgentIconInfo(t);
     const workedMinutesLabel = taskWorkedMinutesLabel(t);
+    const workerRow = t.worker_id ? adminWorkersRows.find(w => w.id === t.worker_id) : null;
 
     return `
     <div class="admin-mobile-card${t.status === 'running' ? ' status-3' : ''}${expanded ? ' expanded' : ''}">
       <div class="admin-mobile-head" onclick="toggleTask(${t.id})">
+        <img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}">
         <div class="admin-mobile-main">
           <div class="task-mobile-head-line1">
             <span class="task-mobile-id">#${t.id}</span>
@@ -2701,6 +2925,8 @@ async function addTask() {
   const workdir = selVal || document.getElementById('workdirInput').value.trim() || null;
   const skipPermissions = document.getElementById('skipPermissions').checked;
   const recurrence = document.getElementById('recurrenceInput').value.trim() || null;
+  const workerIdRaw = document.getElementById('workerInput').value;
+  const workerId = workerIdRaw ? parseInt(workerIdRaw, 10) : null;
 
   try {
     const agentPrompt = await buildPromptFromList(currentPrompt, promptListRaw, workdir);
@@ -2714,6 +2940,7 @@ async function addTask() {
       skip_permissions: skipPermissions,
       scheduled_at: schedule ? new Date(schedule).toISOString() : null,
       recurrence,
+      worker_id: workerId,
     };
     if (agentPrompt !== currentPrompt) {
       body.agent_prompt = agentPrompt;
@@ -3467,7 +3694,7 @@ let currentView = 'tasks';
 let lastContentView = 'tasks';
 let currentHelpSection = 'tasks';
 
-const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help']);
+const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help', 'workers']);
 
 function isMobileLayout() {
   return window.matchMedia('(max-width: 980px)').matches;
@@ -3533,6 +3760,7 @@ function switchView(view, opts = {}) {
   document.getElementById('agentsView').style.display = view === 'agents' ? 'block' : 'none';
   document.getElementById('accountsView').style.display = view === 'accounts' ? 'block' : 'none';
   document.getElementById('promptsView').style.display = view === 'prompts' ? 'block' : 'none';
+  document.getElementById('workersView').style.display = view === 'workers' ? 'block' : 'none';
 
   document.getElementById('menuTasks').classList.toggle('active', view === 'tasks');
   document.getElementById('menuInteractive').classList.toggle('active', view === 'interactive');
@@ -3540,6 +3768,7 @@ function switchView(view, opts = {}) {
   document.getElementById('menuAgents').classList.toggle('active', view === 'agents');
   document.getElementById('menuAccounts').classList.toggle('active', view === 'accounts');
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
+  document.getElementById('menuWorkers').classList.toggle('active', view === 'workers');
 
   if (view === 'projects') loadProjectsCrud();
   if (view === 'help') loadHelpSection(currentHelpSection || lastContentView || 'tasks');
@@ -3554,6 +3783,7 @@ function switchView(view, opts = {}) {
   if (view === 'agents') loadAgentsCrud();
   if (view === 'accounts') loadAccountsCrud();
   if (view === 'prompts') loadPromptsCrud();
+  if (view === 'workers') loadWorkersCrud();
   adminCardMenuKey = null;
   closeMobileMenu();
 }
@@ -3624,6 +3854,7 @@ function renderCurrentAdminCards() {
   if (currentView === 'agents') renderAgentsCards(adminAgentsRows);
   if (currentView === 'accounts') renderAccountsCards(adminAccountsRows);
   if (currentView === 'prompts') renderPromptsCards(adminPromptsRows);
+  if (currentView === 'workers') renderWorkersCards(adminWorkersRows);
 }
 
 const CRUD_TX = {
@@ -3660,6 +3891,10 @@ const CRUD_TX = {
     delete_agent_confirm: 'Удалить агента',
     delete_account_confirm: 'Удалить аккаунт',
     delete_prompt_confirm: 'Удалить промпт',
+    delete_worker_confirm: 'Удалить исполнителя',
+    worker: 'исполнителя',
+    role: 'Роль',
+    is_agent_field: 'Является агентом',
     invalid_json: 'Некорректный JSON в options',
     invalid_color: 'Некорректный цвет. Используйте формат #RRGGBB',
     relogin: 'Войти',
@@ -3699,6 +3934,10 @@ const CRUD_TX = {
     delete_agent_confirm: 'Delete agent',
     delete_account_confirm: 'Delete account',
     delete_prompt_confirm: 'Delete prompt',
+    delete_worker_confirm: 'Delete worker',
+    worker: 'worker',
+    role: 'Role',
+    is_agent_field: 'Is agent',
     invalid_json: 'Invalid JSON in options',
     invalid_color: 'Invalid color. Use #RRGGBB format',
     relogin: 'Login',
@@ -3771,6 +4010,7 @@ function entityTitle(entity) {
   if (entity === 'project') return tc('project');
   if (entity === 'agent') return tc('agent');
   if (entity === 'prompt') return tc('prompt');
+  if (entity === 'worker') return tc('worker');
   return tc('account');
 }
 
@@ -3815,6 +4055,36 @@ function renderCrudFields(entity, row = {}) {
       </div>
     `;
   }
+  if (entity === 'worker') {
+    const agentOptions = adminAgentsRows.length
+      ? `<option value=""></option>` + adminAgentsRows.map(a => `<option value="${a.id}" ${Number(row.agent_id) === Number(a.id) ? 'selected' : ''}>${esc(a.name || '')} (#${a.id})</option>`).join('')
+      : `<option value=""></option>`;
+    return `
+      <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
+      <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field"><label>${tc('role')}</label><input id="crud_role" value="${esc(row.role || '')}"></div>
+      <div class="crud-field"><label>${tc('is_agent_field')}</label>
+        <select id="crud_is_agent">
+          <option value="0" ${row.is_agent ? '' : 'selected'}>Нет</option>
+          <option value="1" ${row.is_agent ? 'selected' : ''}>Да</option>
+        </select>
+      </div>
+      <div class="crud-field"><label>${tc('agent_link')}</label><select id="crud_agent_id">${agentOptions}</select></div>
+      <div class="crud-field"><label>${tc('status')}</label>
+        <select id="crud_status">
+          <option value="0" ${Number(row.status ?? 0) === 0 ? 'selected' : ''}>0 — Новый (требует верификации)</option>
+          <option value="1" ${Number(row.status ?? 0) === 1 ? 'selected' : ''}>1 — Активен</option>
+          <option value="2" ${Number(row.status ?? 0) === 2 ? 'selected' : ''}>2 — Выключен</option>
+          <option value="3" ${Number(row.status ?? 0) === 3 ? 'selected' : ''}>3 — Работает</option>
+        </select>
+      </div>
+      <div class="crud-field">
+        <label>Аватар (URL картинки)</label>
+        <input id="crud_avatar_url" type="url" placeholder="https://..." value="${esc(row.avatar_url || '')}">
+        ${row.avatar_url ? `<div style="margin-top:6px"><img src="${esc(row.avatar_url)}" style="width:48px;height:48px;border-radius:50%;border:1px solid var(--border);object-fit:cover" alt="avatar"></div>` : ''}
+      </div>
+    `;
+  }
   const agentOptions = adminAgentsRows.length
     ? adminAgentsRows.map(a => `<option value="${a.id}" ${Number(row.agent_id) === Number(a.id) ? 'selected' : ''}>${esc(a.name || '')} (#${a.id})</option>`).join('')
     : `<option value="">${tc('no_agents')}</option>`;
@@ -3845,12 +4115,14 @@ function renderCrudFields(entity, row = {}) {
 
 async function openCrudModal(entity, mode, id = null) {
   if (entity === 'account') await ensureAgentsRows();
+  if (entity === 'worker') await ensureAgentsRows();
   let row = {};
   if (mode === 'edit') {
     if (entity === 'project') row = adminProjectsRows.find(x => x.id === id) || {};
     if (entity === 'agent') row = adminAgentsRows.find(x => x.id === id) || {};
     if (entity === 'account') row = adminAccountsRows.find(x => x.id === id) || {};
     if (entity === 'prompt') row = adminPromptsRows.find(x => x.id === id) || {};
+    if (entity === 'worker') row = adminWorkersRows.find(x => x.id === id) || {};
   }
   crudState = { entity, mode, id };
   const title = `${mode === 'create' ? tc('add') : tc('edit')} ${entityTitle(entity)}`;
@@ -3968,6 +4240,28 @@ async function submitCrudModal(e) {
       await fetchJSON(`${API}/admin/agents-accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } else {
       await fetchJSON(`${API}/admin/agents-accounts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    }
+    if (crudState.entity === 'worker') {
+      const agentIdRaw = crudValue('crud_agent_id');
+      const avatarUrlRaw = crudValue('crud_avatar_url').trim();
+      const body = {
+        name: crudValue('crud_name').trim(),
+        shortname: crudValue('crud_shortname').trim(),
+        role: crudValue('crud_role').trim() || null,
+        is_agent: (crudValue('crud_is_agent') || '0') === '1',
+        agent_id: agentIdRaw ? parseInt(agentIdRaw, 10) : null,
+        status: parseInt(crudValue('crud_status') || '0', 10),
+        avatar_url: avatarUrlRaw || null,
+      };
+      if (mode === 'create') {
+        await fetchJSON(`${API}/admin/workers`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await fetchJSON(`${API}/admin/workers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      if (isMobileLayout()) closeCrudScreen();
+      else closeCrudModal();
+      await loadWorkersCrud();
+      return;
     }
     if (isMobileLayout()) closeCrudScreen();
     else closeCrudModal();
@@ -4307,6 +4601,168 @@ async function deletePromptCrud(id) {
   } catch (e) {
     alert(`${tc('delete_failed')}: ${e.message}`);
   }
+}
+
+// --- CRUD: Workers ---
+const WORKER_STATUS_LABELS = {
+  0: 'Новый',
+  1: 'Активен',
+  2: 'Выключен',
+  3: 'Работает',
+};
+
+const WORKER_DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e5e7eb'/%3E%3Ccircle cx='50' cy='38' r='17' fill='%239ca3af'/%3E%3Cellipse cx='50' cy='86' rx='28' ry='22' fill='%239ca3af'/%3E%3C/svg%3E";
+
+function workerAvatarUrl(r) {
+  if (r.avatar_url) return r.avatar_url;
+  const seed = encodeURIComponent(r.shortname || r.name || String(r.id));
+  if (r.is_agent) return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+  return `https://api.dicebear.com/7.x/lorelei/svg?seed=${seed}&backgroundColor=b6e3f4,ffdfbf,c0aede`;
+}
+
+function workerAvatarImg(r, cls = 'worker-avatar') {
+  const url = workerAvatarUrl(r);
+  return `<img class="${cls}" src="${esc(url)}" alt="${esc(r.name || '')}" loading="lazy" onerror="this.style.display='none'">`;
+}
+
+async function ensureWorkersRows(force = false) {
+  if (!force && adminWorkersRows.length) return;
+  adminWorkersRows = await fetchJSON(`${API}/admin/workers`);
+}
+
+function populateWorkerSelect() {
+  const dropdown = document.getElementById('workerPickerDropdown');
+  if (!dropdown) return;
+  const currentVal = document.getElementById('workerInput').value;
+  const active = adminWorkersRows.filter(w => w.status === 1 || w.status === 3);
+  dropdown.innerHTML =
+    `<div class="worker-picker-item${!currentVal ? ' selected' : ''}" onclick="selectWorker(null)">` +
+    `<img class="worker-avatar-sm" src="${WORKER_DEFAULT_AVATAR}" alt="">` +
+    `<div class="worker-picker-item-info"><div class="worker-picker-item-name">— без исполнителя —</div></div></div>` +
+    active.map(w => {
+      const av = esc(workerAvatarUrl(w));
+      const sel = String(w.id) === String(currentVal) ? ' selected' : '';
+      return `<div class="worker-picker-item${sel}" onclick="selectWorker(${w.id})">` +
+        `<img class="worker-avatar-sm" src="${av}" alt="${esc(w.name)}" loading="lazy">` +
+        `<div class="worker-picker-item-info">` +
+        `<div class="worker-picker-item-name">${esc(w.name)}</div>` +
+        `<div class="worker-picker-item-role">${esc(w.role || w.shortname)}</div>` +
+        `</div></div>`;
+    }).join('');
+  updateWorkerPickerTrigger();
+}
+
+function updateWorkerPickerTrigger() {
+  const wid = document.getElementById('workerInput').value;
+  const w = wid ? adminWorkersRows.find(x => String(x.id) === String(wid)) : null;
+  const img = document.getElementById('workerSelectAvatar');
+  const name = document.getElementById('workerSelectName');
+  if (img) { img.src = w ? workerAvatarUrl(w) : WORKER_DEFAULT_AVATAR; img.alt = w ? w.name : ''; }
+  if (name) name.textContent = w ? w.name : '— без исполнителя —';
+}
+
+function selectWorker(id) {
+  document.getElementById('workerInput').value = id ?? '';
+  closeWorkerPicker();
+  populateWorkerSelect();
+}
+
+function toggleWorkerPicker(e) {
+  e.stopPropagation();
+  const picker = document.getElementById('workerPicker');
+  if (!picker) return;
+  const wasOpen = picker.classList.contains('open');
+  closeWorkerPicker();
+  if (!wasOpen) picker.classList.add('open');
+}
+
+function closeWorkerPicker() {
+  const picker = document.getElementById('workerPicker');
+  if (picker) picker.classList.remove('open');
+}
+
+document.addEventListener('click', e => {
+  const picker = document.getElementById('workerPicker');
+  if (picker && !picker.contains(e.target)) closeWorkerPicker();
+});
+
+async function loadWorkersCrud() {
+  const q = document.getElementById('workersSearch').value.trim();
+  const rows = await fetchJSON(`${API}/admin/workers${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  adminWorkersRows = rows;
+  const tbody = document.getElementById('workersTbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="width:36px;text-align:center">${workerAvatarImg(r, 'worker-avatar-sm')}</td>
+      <td>${r.id}</td>
+      <td>${esc(r.name || '')}</td>
+      <td>${esc(r.shortname || '')}</td>
+      <td>${esc(r.role || '')}</td>
+      <td>${r.is_agent ? 'Да' : 'Нет'}</td>
+      <td>${esc(r.agent_name || (r.agent_id ? String(r.agent_id) : ''))}</td>
+      <td>${WORKER_STATUS_LABELS[r.status] ?? r.status}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" onclick="editWorkerCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteWorkerCrud(${r.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+  renderWorkersCards(rows);
+}
+
+async function createWorkerCrud() {
+  await openCrudModal('worker', 'create');
+}
+
+async function editWorkerCrud(id) {
+  await openCrudModal('worker', 'edit', id);
+}
+
+async function deleteWorkerCrud(id) {
+  if (!confirm(`${tc('delete_worker_confirm')} #${id}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/workers/${id}`, { method: 'DELETE' });
+    await loadWorkersCrud();
+  } catch (e) {
+    alert(`${tc('delete_failed')}: ${e.message}`);
+  }
+}
+
+function renderWorkersCards(rows) {
+  const cards = document.getElementById('workersCards');
+  cards.innerHTML = rows.map(r => {
+    const expanded = isAdminExpanded('worker', r.id);
+    const statusRaw = Number.isFinite(Number(r.status)) ? Number(r.status) : 0;
+    const status = [0, 1, 2, 3].includes(statusRaw) ? statusRaw : 0;
+    const statusLabel = WORKER_STATUS_LABELS[status] ?? status;
+    const agentBadge = r.agent_name ? `<span class="admin-mobile-chip">${esc(r.agent_name)}</span>` : '';
+    return `
+    <div class="admin-mobile-card${status === 3 ? ' status-3' : ''}${expanded ? ' expanded' : ''}">
+      <div class="worker-card-head" onclick="toggleAdminCard('worker', ${r.id})">
+        ${workerAvatarImg(r, 'worker-avatar')}
+        <div class="worker-card-info">
+          <div class="worker-card-name">${esc(r.name || '')} <span style="color:var(--text2);font-weight:400;font-size:11px">#${r.id}</span></div>
+          <div class="worker-card-role">${esc(r.role || r.shortname || '')}</div>
+          <div class="admin-mobile-sub" style="margin-top:3px">
+            <span class="admin-mobile-chip status-chip"><span class="status-dot s${status}"></span>${statusLabel}</span>
+            ${agentBadge}
+          </div>
+        </div>
+        <div class="worker-card-actions">
+          <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit worker" onclick="event.stopPropagation(); editWorkerCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" aria-label="Delete worker" onclick="event.stopPropagation(); deleteWorkerCrud(${r.id})">🗑</button>
+        </div>
+      </div>
+      <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Short:</b> ${esc(r.shortname || '')}</div>
+        <div class="admin-mobile-kv"><b>Роль:</b> ${esc(r.role || '—')}</div>
+        <div class="admin-mobile-kv"><b>Агент:</b> ${r.is_agent ? 'Да' : 'Нет'}</div>
+        ${r.agent_name ? `<div class="admin-mobile-kv"><b>Agent:</b> ${esc(r.agent_name)}</div>` : ''}
+        <div class="admin-mobile-kv"><b>Статус:</b> ${statusLabel}</div>
+        ${r.avatar_url ? `<div class="admin-mobile-kv"><b>Аватар:</b> <a href="${esc(r.avatar_url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;word-break:break-all">${esc(r.avatar_url)}</a></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // --- Worker pause ---

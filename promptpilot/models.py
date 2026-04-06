@@ -31,6 +31,7 @@ class TaskCreate(BaseModel):
     parent_task_id: Optional[int] = None  # Task this is a reply to
     tg_chat_id: Optional[int] = None  # Telegram chat to notify on completion
     recurrence: Optional[str] = None  # e.g. "6h", "daily@09:00"
+    worker_id: Optional[int] = None
 
 
 class TaskUpdate(BaseModel):
@@ -69,6 +70,7 @@ class TaskInDB(BaseModel):
     tg_chat_id: Optional[int] = None
     notified_at: Optional[datetime] = None
     recurrence: Optional[str] = None
+    worker_id: Optional[int] = None
 
 
 class Stats(BaseModel):

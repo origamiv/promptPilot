@@ -995,6 +995,86 @@ def api_admin_delete_prompt(prompt_id: int):
         raise HTTPException(400, f"Delete prompt failed: {e}")
 
 
+@app.get("/api/admin/workers")
+def api_admin_workers(q: Optional[str] = None):
+    return db.list_workers(search=q, limit=500)
+
+
+@app.post("/api/admin/workers")
+def api_admin_create_worker(payload: dict):
+    required = ("name", "shortname")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name and shortname are required")
+    status = payload.get("status", 0)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be integer 0..3")
+    if status not in (0, 1, 2, 3):
+        raise HTTPException(400, "status must be integer 0..3")
+    agent_id = payload.get("agent_id")
+    avatar_url = payload.get("avatar_url")
+    try:
+        return db.create_worker(
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            role=(str(payload.get("role")).strip() if payload.get("role") is not None else None),
+            is_agent=bool(payload.get("is_agent", False)),
+            agent_id=int(agent_id) if agent_id else None,
+            status=status,
+            avatar_url=str(avatar_url).strip() if avatar_url else None,
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Create worker failed: {e}")
+
+
+@app.patch("/api/admin/workers/{worker_id}")
+def api_admin_update_worker(worker_id: int, payload: dict):
+    required = ("name", "shortname")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name and shortname are required")
+    status = payload.get("status", 0)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be integer 0..3")
+    if status not in (0, 1, 2, 3):
+        raise HTTPException(400, "status must be integer 0..3")
+    agent_id = payload.get("agent_id")
+    avatar_url = payload.get("avatar_url")
+    try:
+        ok = db.update_worker(
+            worker_id=worker_id,
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            role=(str(payload.get("role")).strip() if payload.get("role") is not None else None),
+            is_agent=bool(payload.get("is_agent", False)),
+            agent_id=int(agent_id) if agent_id else None,
+            status=status,
+            avatar_url=str(avatar_url).strip() if avatar_url else None,
+        )
+        if not ok:
+            raise HTTPException(404, "Worker not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Update worker failed: {e}")
+
+
+@app.delete("/api/admin/workers/{worker_id}")
+def api_admin_delete_worker(worker_id: int):
+    try:
+        ok = db.delete_worker(worker_id)
+        if not ok:
+            raise HTTPException(404, "Worker not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Delete worker failed: {e}")
+
+
 # --- Frontend ---
 
 @app.get("/")
