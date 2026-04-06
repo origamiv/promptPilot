@@ -960,6 +960,149 @@
     border-radius: var(--radius);
     padding: 16px;
   }
+
+  /* Kanban */
+  #kanbanView {
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    display: none;
+    flex-direction: column;
+  }
+  #kanbanView.kanban-active { display: flex; }
+  body.kanban-fullwidth .container { max-width: none; padding: 0 16px; }
+  .kanban-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0 10px;
+  }
+  .kanban-title {
+    font-size: 18px;
+    font-weight: 700;
+    flex: 1;
+  }
+  .kanban-board {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 12px;
+    align-items: flex-start;
+    height: calc(100dvh - 110px);
+  }
+  .kanban-col {
+    flex: 0 0 272px;
+    width: 272px;
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .kanban-col-header {
+    padding: 10px 12px 9px;
+    border-top: 3px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: 0 0 auto;
+    background: var(--surface);
+  }
+  .kanban-col-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: 0 0 10px;
+  }
+  .kanban-col-name {
+    font-size: 13px;
+    font-weight: 700;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kanban-col-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 7px;
+    flex: 0 0 auto;
+  }
+  .kanban-col-body {
+    overflow-y: auto;
+    flex: 1;
+    padding: 6px 8px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .kanban-empty {
+    font-size: 12px;
+    color: var(--text2);
+    text-align: center;
+    padding: 20px 8px;
+  }
+  .kanban-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .kanban-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .kanban-card.expanded { border-color: var(--accent); }
+  .kanban-card-head {
+    padding: 8px 10px 7px;
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+  }
+  .kanban-card-body {
+    padding: 0 10px 8px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    display: none;
+  }
+  .kanban-card.expanded .kanban-card-body { display: block; }
+  .kanban-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+  }
+  .kanban-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+  }
+  .kanban-card-badge {
+    font-size: 10px;
+    color: var(--text2);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+  .kanban-card-id {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text2);
+    flex: 0 0 auto;
+  }
   .help-view {
     background: transparent;
     border: none;
@@ -1838,6 +1981,13 @@
       flex: 1 1 calc(50% - 8px);
       text-align: center;
     }
+    .kanban-board {
+      height: calc(100dvh - 130px);
+    }
+    .kanban-col {
+      flex: 0 0 240px;
+      width: 240px;
+    }
   }
 
   /* Select2 project select */
@@ -1933,6 +2083,7 @@
     <button id="menuPrompts" class="side-btn" onclick="switchView('prompts')">Промпты</button>
     <button id="menuWorkers" class="side-btn" onclick="switchView('workers')">Исполнители</button>
     <button id="menuTaskStatuses" class="side-btn" onclick="switchView('task-statuses')">Статусы задач</button>
+    <button id="menuKanban" class="side-btn" onclick="switchView('kanban')">Канбан</button>
   </aside>
 <div class="container">
   <header>
@@ -2078,6 +2229,14 @@
     </table>
   </div>
 
+  <div id="kanbanView">
+    <div class="kanban-header">
+      <div class="kanban-title" id="kanbanTitle">Канбан</div>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="loadKanban()">↺ Обновить</button>
+    </div>
+    <div class="kanban-board" id="kanbanBoard"></div>
+  </div>
+
   <div class="admin-view" id="workersView">
     <div class="admin-header">
       <div class="admin-title" id="workersTitle">Исполнители</div>
@@ -2202,6 +2361,7 @@
 const API = '/api';
 let currentFilter = '';
 let expandedId = null;
+let kanbanExpandedId = null;
 let providersData = {};
 let skillsCache = {};
 let skillsPanelOpen = false;
@@ -3721,7 +3881,7 @@ let currentView = 'tasks';
 let lastContentView = 'tasks';
 let currentHelpSection = 'tasks';
 
-const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help', 'workers', 'task-statuses']);
+const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help', 'workers', 'task-statuses', 'kanban']);
 
 function isMobileLayout() {
   return window.matchMedia('(max-width: 980px)').matches;
@@ -3789,6 +3949,9 @@ function switchView(view, opts = {}) {
   document.getElementById('promptsView').style.display = view === 'prompts' ? 'block' : 'none';
   document.getElementById('workersView').style.display = view === 'workers' ? 'block' : 'none';
   document.getElementById('taskStatusesView').style.display = view === 'task-statuses' ? 'block' : 'none';
+  const kanbanEl = document.getElementById('kanbanView');
+  if (view === 'kanban') { kanbanEl.classList.add('kanban-active'); document.body.classList.add('kanban-fullwidth'); }
+  else { kanbanEl.classList.remove('kanban-active'); document.body.classList.remove('kanban-fullwidth'); }
 
   document.getElementById('menuTasks').classList.toggle('active', view === 'tasks');
   document.getElementById('menuInteractive').classList.toggle('active', view === 'interactive');
@@ -3798,6 +3961,7 @@ function switchView(view, opts = {}) {
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
   document.getElementById('menuWorkers').classList.toggle('active', view === 'workers');
   document.getElementById('menuTaskStatuses').classList.toggle('active', view === 'task-statuses');
+  document.getElementById('menuKanban').classList.toggle('active', view === 'kanban');
 
   if (view === 'projects') loadProjectsCrud();
   if (view === 'help') loadHelpSection(currentHelpSection || lastContentView || 'tasks');
@@ -3814,6 +3978,7 @@ function switchView(view, opts = {}) {
   if (view === 'prompts') loadPromptsCrud();
   if (view === 'workers') loadWorkersCrud();
   if (view === 'task-statuses') loadTaskStatusesCrud();
+  if (view === 'kanban') loadKanban();
   adminCardMenuKey = null;
   closeMobileMenu();
 }
@@ -4679,6 +4844,103 @@ async function deletePromptCrud(id) {
   } catch (e) {
     alert(`${tc('delete_failed')}: ${e.message}`);
   }
+}
+
+// --- Kanban ---
+
+function taskKanbanColId(t) {
+  if (t.task_status_id) return t.task_status_id;
+  const rs = adminTaskStatusesRows.find(s => s.status === 1 && s.status_to === t.status);
+  return rs ? rs.id : '__none__';
+}
+
+function renderKanbanCard(t) {
+  const expanded = kanbanExpandedId === t.id;
+  const project = projectByWorkingDir(t.working_dir);
+  const projectName = project && project.name ? project.name : null;
+  const workerRow = t.worker_id ? adminWorkersRows.find(w => w.id === t.worker_id) : null;
+  const agentIconInfo = taskAgentIconInfo(t);
+  const parsed = parseResult(t.result);
+  const resultHTML = buildTaskResultHTML(t, parsed);
+
+  return `<div class="kanban-card${expanded ? ' expanded' : ''}" id="kcard-${t.id}">
+    <div class="kanban-card-head" onclick="toggleKanbanCard(${t.id})">
+      <img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}"
+           alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy"
+           title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}" style="flex:0 0 22px">
+      <div style="flex:1;min-width:0">
+        <div class="kanban-card-title">${esc(taskCardTitle(t))}</div>
+        <div class="kanban-card-meta">
+          <span class="kanban-card-id">#${t.id}</span>
+          <span class="status-dot ${taskStatusDotClass(t.status)}"${taskDotStyle(t)} title="${esc(statusLabel(t.status))}" style="width:8px;height:8px"></span>
+          ${projectName ? `<span class="kanban-card-badge"${projectBadgeStyleAttr(project)}>${esc(projectName)}</span>` : ''}
+          ${agentIconInfo ? `<span class="kanban-card-badge" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
+          <span class="kanban-card-badge">P${t.priority}</span>
+          <span class="kanban-card-badge">${timeAgo(t.created_at)}</span>
+        </div>
+      </div>
+    </div>
+    <div class="kanban-card-body">
+      ${buildTaskDetailHTML(t, resultHTML, { includeSubject: true, includePrompt: true })}
+    </div>
+  </div>`;
+}
+
+function toggleKanbanCard(id) {
+  kanbanExpandedId = kanbanExpandedId === id ? null : id;
+  // Patch DOM in-place: just toggle class and body visibility
+  document.querySelectorAll('.kanban-card').forEach(el => {
+    const tid = parseInt(el.id.replace('kcard-', ''), 10);
+    el.classList.toggle('expanded', tid === kanbanExpandedId);
+  });
+}
+
+async function loadKanban() {
+  const board = document.getElementById('kanbanBoard');
+  if (!board) return;
+  board.innerHTML = '<div style="padding:24px;color:var(--text2)">Загрузка…</div>';
+
+  await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows()]);
+  const tasks = await fetchJSON(`${API}/tasks?limit=1000`);
+
+  const activeCols = adminTaskStatusesRows.filter(s => s.status === 1);
+
+  // Group tasks by column id
+  const colMap = Object.fromEntries(activeCols.map(c => [c.id, []]));
+  const unassigned = [];
+  tasks.forEach(t => {
+    const cid = taskKanbanColId(t);
+    if (cid !== '__none__' && colMap[cid] !== undefined) colMap[cid].push(t);
+    else unassigned.push(t);
+  });
+
+  const colsHTML = activeCols.map(col => {
+    const items = colMap[col.id] || [];
+    const color = col.color || '#9ca3af';
+    return `<div class="kanban-col">
+      <div class="kanban-col-header" style="border-top-color:${esc(color)}">
+        <span class="kanban-col-dot" style="background:${esc(color)}"></span>
+        <span class="kanban-col-name">${esc(col.name)}</span>
+        <span class="kanban-col-count">${items.length}</span>
+      </div>
+      <div class="kanban-col-body">
+        ${items.length ? items.map(renderKanbanCard).join('') : '<div class="kanban-empty">Нет задач</div>'}
+      </div>
+    </div>`;
+  }).join('');
+
+  const noneHTML = unassigned.length ? `<div class="kanban-col">
+    <div class="kanban-col-header" style="border-top-color:#9ca3af">
+      <span class="kanban-col-dot" style="background:#9ca3af"></span>
+      <span class="kanban-col-name">Без статуса</span>
+      <span class="kanban-col-count">${unassigned.length}</span>
+    </div>
+    <div class="kanban-col-body">
+      ${unassigned.map(renderKanbanCard).join('')}
+    </div>
+  </div>` : '';
+
+  board.innerHTML = colsHTML + noneHTML;
 }
 
 // --- CRUD: Task Statuses ---

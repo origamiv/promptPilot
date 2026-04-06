@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Справка: Статусы задач</title><style>body{font-family:Arial,sans-serif;max-width:920px;margin:24px auto;padding:0 16px;line-height:1.55}h1{margin:0 0 12px}h2{margin:18px 0 8px}code{background:#f2f4f8;padding:2px 6px;border-radius:4px}.color-dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:6px}</style></head>
+<body>
+<h1>Справка: Статусы задач</h1>
+<p>Раздел <b>Статусы задач</b> — это справочник пользовательских статусов, которые отображаются на Канбан-доске и задают цвет индикатора в карточках задач.</p>
+<h2>Поля статуса</h2>
+<ul>
+<li><b>Название</b> — полное название статуса, отображается в заголовке колонки Канбана.</li>
+<li><b>Short</b> (сокращение) — краткий код, используется для идентификации и поиска.</li>
+<li><b>status_to</b> — маппинг на системный статус задачи (<code>pending</code>, <code>running</code>, <code>completed</code>, <code>failed</code> и т.д.). Позволяет связать пользовательский статус с техническим.</li>
+<li><b>Цвет</b> — HEX-цвет (<code>#rrggbb</code>) точки-индикатора в карточке задачи. Если статус назначен задаче, цвет переопределяет стандартный цвет системного статуса.</li>
+<li><b>Статус записи</b> — 1 = активен (отображается на доске), 0/2 = выключен (скрыт с доски).</li>
+</ul>
+<h2>Предустановленные статусы</h2>
+<ul>
+<li><span class="color-dot" style="background:#22c55e"></span><b>Успешно завершена</b> — задача выполнена и проверена.</li>
+<li><span class="color-dot" style="background:#ef4444"></span><b>Завершена с ошибкой</b> — выполнение провалилось, требует разбора.</li>
+<li><span class="color-dot" style="background:#3b82f6"></span><b>В работе</b> — задача взята исполнителем.</li>
+<li><span class="color-dot" style="background:#a855f7"></span><b>Новая</b> — только что создана, ещё не взята в работу.</li>
+<li><span class="color-dot" style="background:#f59e0b"></span><b>Ожидает подтверждения</b> — нужно согласование перед запуском.</li>
+<li><span class="color-dot" style="background:#06b6d4"></span><b>Ожидает тестирования</b> — выполнена, ждёт проверки.</li>
+</ul>
+<h2>Как использовать</h2>
+<ul>
+<li>Создайте статус, укажите название, цвет и при необходимости <code>status_to</code>.</li>
+<li>При создании или редактировании задачи назначьте ей нужный статус из справочника.</li>
+<li>Цвет точки на карточке задачи автоматически изменится в соответствии с выбранным статусом.</li>
+<li>На Канбан-доске задача попадёт в колонку соответствующего статуса.</li>
+</ul>
+</body></html>

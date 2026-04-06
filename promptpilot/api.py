@@ -1180,6 +1180,8 @@ def help_page(section: str):
         "accounts": "accounts.html",
         "projects": "projects.html",
         "prompts": "prompts.html",
+        "task-statuses": "task-statuses.html",
+        "kanban": "kanban.html",
     }
     name = allowed.get(str(section or "").strip().lower())
     if not name:
