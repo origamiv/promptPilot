@@ -835,7 +835,7 @@ def list_projects(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                 cur.execute(
                     sql.SQL(
                         """
-                        SELECT id, name, folder, color, comment
+                        SELECT id, name, shortname, folder, color, comment
                         FROM {}.projects
                         WHERE deleted_at IS NULL
                           AND folder IS NOT NULL
@@ -851,7 +851,7 @@ def list_projects(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                 cur.execute(
                     sql.SQL(
                         """
-                        SELECT id, name, folder, color, comment
+                        SELECT id, name, shortname, folder, color, comment
                         FROM {}.projects
                         WHERE deleted_at IS NULL
                           AND folder IS NOT NULL

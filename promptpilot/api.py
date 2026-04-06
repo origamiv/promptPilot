@@ -485,6 +485,7 @@ def api_projects(q: Optional[str] = None):
             {
                 "id": r.get("id"),
                 "name": r.get("name") or folder,
+                "shortname": r.get("shortname"),
                 "folder": folder,
                 "path": path,
                 "color": r.get("color"),
