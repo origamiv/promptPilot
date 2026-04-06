@@ -4906,17 +4906,18 @@ function toggleKanbanCard(id) {
 }
 
 const KANBAN_PAGE_SIZE = 10;
-// colId (number | '__none__') → number of visible cards
+// все ключи — строки (String(colId))
 const kanbanColVisible = {};
+let _kanbanColItems = {};
 
-function renderKanbanCol(colId, items, color, name) {
-  const visible = kanbanColVisible[colId] ?? KANBAN_PAGE_SIZE;
+function renderKanbanCol(colIdStr, items, color, name) {
+  const visible = kanbanColVisible[colIdStr] ?? KANBAN_PAGE_SIZE;
   const shown = items.slice(0, visible);
   const remaining = items.length - shown.length;
   const moreBtn = remaining > 0
-    ? `<button class="btn btn-ghost kanban-more-btn" onclick="kanbanShowMore(${JSON.stringify(String(colId))})">Ещё ${remaining}</button>`
+    ? `<button class="btn btn-ghost kanban-more-btn" onclick="kanbanShowMore('${colIdStr}')">Ещё ${remaining}</button>`
     : '';
-  return `<div class="kanban-col" data-col-id="${esc(String(colId))}">
+  return `<div class="kanban-col" data-col-id="${esc(colIdStr)}">
     <div class="kanban-col-header" style="border-top-color:${esc(color)}">
       <span class="kanban-col-dot" style="background:${esc(color)}"></span>
       <span class="kanban-col-name">${esc(name)}</span>
@@ -4929,18 +4930,14 @@ function renderKanbanCol(colId, items, color, name) {
   </div>`;
 }
 
-// Stores full task lists per column for incremental "Ещё"
-let _kanbanColItems = {};
-
 function kanbanShowMore(colIdStr) {
   const items = _kanbanColItems[colIdStr];
   if (!items) return;
   kanbanColVisible[colIdStr] = (kanbanColVisible[colIdStr] ?? KANBAN_PAGE_SIZE) + KANBAN_PAGE_SIZE;
   const col = adminTaskStatusesRows.find(s => String(s.id) === colIdStr);
-  const isNone = colIdStr === '__none__';
   const color = col ? (col.color || '#9ca3af') : '#9ca3af';
   const name = col ? col.name : 'Без статуса';
-  const newColHTML = renderKanbanCol(colIdStr === '__none__' ? '__none__' : parseInt(colIdStr, 10), items, color, name);
+  const newColHTML = renderKanbanCol(colIdStr, items, color, name);
   const el = [...document.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === colIdStr);
   if (el) el.outerHTML = newColHTML;
 }
@@ -4978,7 +4975,7 @@ async function loadKanban() {
 
   const colsHTML = activeCols.map(col => {
     const items = colMap[col.id] || [];
-    return renderKanbanCol(col.id, items, col.color || '#9ca3af', col.name);
+    return renderKanbanCol(String(col.id), items, col.color || '#9ca3af', col.name);
   }).join('');
 
   const noneHTML = unassigned.length
