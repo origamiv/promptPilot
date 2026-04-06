@@ -3714,8 +3714,8 @@ function toggleMobileMenu() {
   else openMobileMenu();
 }
 
-function parseViewFromHash() {
-  const raw = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+function parseViewFromPath() {
+  const raw = window.location.pathname.replace(/^\//, '').trim().toLowerCase();
   return VIEW_NAMES.has(raw) ? raw : 'tasks';
 }
 
@@ -3747,8 +3747,8 @@ function switchView(view, opts = {}) {
   document.body.classList.toggle('interactive-fullscreen', view === 'interactive');
 
   if (syncUrl) {
-    const targetHash = `#${view}`;
-    if (window.location.hash !== targetHash) window.location.hash = targetHash;
+    const targetPath = `/${view}`;
+    if (window.location.pathname !== targetPath) history.pushState({ view }, '', targetPath);
   }
 
   const isTasks = view === 'tasks';
@@ -4822,8 +4822,8 @@ async function loadCosts() {
   } catch (_) {}
 }
 
-window.addEventListener('hashchange', () => {
-  const view = parseViewFromHash();
+window.addEventListener('popstate', (e) => {
+  const view = (e.state && VIEW_NAMES.has(e.state.view)) ? e.state.view : parseViewFromPath();
   if (view !== currentView) switchView(view, { syncUrl: false });
 });
 
@@ -4854,7 +4854,8 @@ loadWorkerStatus();
 loadVersion();
 loadCosts();
 refresh();
-switchView(parseViewFromHash(), { syncUrl: false });
+switchView(parseViewFromPath(), { syncUrl: false });
+history.replaceState({ view: currentView }, '', `/${currentView}`);
 setTimeout(loadInteractiveState, 200);
 setInterval(refresh, 15000);
 setInterval(loadWorkerStatus, 10000);
