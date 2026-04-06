@@ -1932,6 +1932,7 @@
     <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Учётные записи агентов</button>
     <button id="menuPrompts" class="side-btn" onclick="switchView('prompts')">Промпты</button>
     <button id="menuWorkers" class="side-btn" onclick="switchView('workers')">Исполнители</button>
+    <button id="menuTaskStatuses" class="side-btn" onclick="switchView('task-statuses')">Статусы задач</button>
   </aside>
 <div class="container">
   <header>
@@ -2061,6 +2062,19 @@
     <table class="admin-table">
       <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Message</th><th>Options</th><th></th></tr></thead>
       <tbody id="promptsTbody"></tbody>
+    </table>
+  </div>
+
+  <div class="admin-view" id="taskStatusesView">
+    <div class="admin-header">
+      <div class="admin-title" id="taskStatusesTitle">Статусы задач</div>
+      <input id="taskStatusesSearch" placeholder="Поиск..." oninput="loadTaskStatusesCrud()">
+      <button class="btn admin-add-btn" type="button" title="Добавить" onclick="createTaskStatusCrud()">+</button>
+    </div>
+    <div class="admin-mobile-list" id="taskStatusesCards"></div>
+    <table class="admin-table">
+      <thead><tr><th>Цвет</th><th>ID</th><th>Название</th><th>Short</th><th>status_to</th><th>Статус</th><th></th></tr></thead>
+      <tbody id="taskStatusesTbody"></tbody>
     </table>
   </div>
 
@@ -2199,6 +2213,7 @@ let adminAgentsRows = [];
 let adminAccountsRows = [];
 let adminPromptsRows = [];
 let adminWorkersRows = [];
+let adminTaskStatusesRows = [];
 let adminCardExpanded = new Set();
 let adminCardMenuKey = null;
 let appTimezone = 'UTC';
@@ -2416,6 +2431,17 @@ function taskStatusDotClass(status) {
     return `task-${s}`;
   }
   return 'task-pending';
+}
+
+function taskRefStatusColor(t) {
+  if (!t.task_status_id) return null;
+  const rs = adminTaskStatusesRows.find(x => x.id === t.task_status_id);
+  return rs ? rs.color : null;
+}
+
+function taskDotStyle(t) {
+  const c = taskRefStatusColor(t);
+  return c ? ` style="background:${esc(c)};border-color:${esc(c)}"` : '';
 }
 
 function applyLanguage(lang) {
@@ -2816,6 +2842,7 @@ async function loadTasks() {
   const [tasks] = await Promise.all([
     fetchJSON(`${API}/tasks${params}`),
     ensureWorkersRows(),
+    ensureTaskStatusesRows(),
   ]);
   const list = document.getElementById('taskList');
   const mobileList = document.getElementById('taskMobileList');
@@ -2884,7 +2911,7 @@ async function loadTasks() {
             <span class="task-mobile-id">#${t.id}</span>
             ${agentIconInfo ? `<span class="task-mobile-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
             <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
-            <span class="status-dot ${taskStatusDotClass(t.status)}" title="${esc(statusLabel(t.status))}"></span>
+            <span class="status-dot ${taskStatusDotClass(t.status)}"${taskDotStyle(t)} title="${esc(statusLabel(t.status))}"></span>
           </div>
           <div class="task-mobile-head-meta">
             <span class="task-mobile-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
@@ -3694,7 +3721,7 @@ let currentView = 'tasks';
 let lastContentView = 'tasks';
 let currentHelpSection = 'tasks';
 
-const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help', 'workers']);
+const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help', 'workers', 'task-statuses']);
 
 function isMobileLayout() {
   return window.matchMedia('(max-width: 980px)').matches;
@@ -3761,6 +3788,7 @@ function switchView(view, opts = {}) {
   document.getElementById('accountsView').style.display = view === 'accounts' ? 'block' : 'none';
   document.getElementById('promptsView').style.display = view === 'prompts' ? 'block' : 'none';
   document.getElementById('workersView').style.display = view === 'workers' ? 'block' : 'none';
+  document.getElementById('taskStatusesView').style.display = view === 'task-statuses' ? 'block' : 'none';
 
   document.getElementById('menuTasks').classList.toggle('active', view === 'tasks');
   document.getElementById('menuInteractive').classList.toggle('active', view === 'interactive');
@@ -3769,6 +3797,7 @@ function switchView(view, opts = {}) {
   document.getElementById('menuAccounts').classList.toggle('active', view === 'accounts');
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
   document.getElementById('menuWorkers').classList.toggle('active', view === 'workers');
+  document.getElementById('menuTaskStatuses').classList.toggle('active', view === 'task-statuses');
 
   if (view === 'projects') loadProjectsCrud();
   if (view === 'help') loadHelpSection(currentHelpSection || lastContentView || 'tasks');
@@ -3784,6 +3813,7 @@ function switchView(view, opts = {}) {
   if (view === 'accounts') loadAccountsCrud();
   if (view === 'prompts') loadPromptsCrud();
   if (view === 'workers') loadWorkersCrud();
+  if (view === 'task-statuses') loadTaskStatusesCrud();
   adminCardMenuKey = null;
   closeMobileMenu();
 }
@@ -3855,6 +3885,7 @@ function renderCurrentAdminCards() {
   if (currentView === 'accounts') renderAccountsCards(adminAccountsRows);
   if (currentView === 'prompts') renderPromptsCards(adminPromptsRows);
   if (currentView === 'workers') renderWorkersCards(adminWorkersRows);
+  if (currentView === 'task-statuses') renderTaskStatusesCards(adminTaskStatusesRows);
 }
 
 const CRUD_TX = {
@@ -3895,6 +3926,9 @@ const CRUD_TX = {
     worker: 'исполнителя',
     role: 'Роль',
     is_agent_field: 'Является агентом',
+    task_status: 'статус задачи',
+    delete_task_status_confirm: 'Удалить статус задачи',
+    status_to: 'Маппинг на статус (status_to)',
     invalid_json: 'Некорректный JSON в options',
     invalid_color: 'Некорректный цвет. Используйте формат #RRGGBB',
     relogin: 'Войти',
@@ -3938,6 +3972,9 @@ const CRUD_TX = {
     worker: 'worker',
     role: 'Role',
     is_agent_field: 'Is agent',
+    task_status: 'task status',
+    delete_task_status_confirm: 'Delete task status',
+    status_to: 'Map to status (status_to)',
     invalid_json: 'Invalid JSON in options',
     invalid_color: 'Invalid color. Use #RRGGBB format',
     relogin: 'Login',
@@ -4011,6 +4048,7 @@ function entityTitle(entity) {
   if (entity === 'agent') return tc('agent');
   if (entity === 'prompt') return tc('prompt');
   if (entity === 'worker') return tc('worker');
+  if (entity === 'task_status') return tc('task_status');
   return tc('account');
 }
 
@@ -4051,6 +4089,26 @@ function renderCrudFields(entity, row = {}) {
         <select id="crud_status">
           <option value="1" ${(row.status ?? 1) === 1 ? 'selected' : ''}>${tc('active')}</option>
           <option value="0" ${(row.status ?? 1) === 0 ? 'selected' : ''}>${tc('disabled')}</option>
+        </select>
+      </div>
+    `;
+  }
+  if (entity === 'task_status') {
+    return `
+      <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
+      <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field"><label>${tc('status_to')}</label><input id="crud_status_to" placeholder="completed / failed / running / pending …" value="${esc(row.status_to || '')}"></div>
+      <div class="crud-field"><label>${tc('color')}</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="crud_color" type="color" value="${esc(row.color || '#6b7280')}" style="width:44px;height:32px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--bg)">
+          <input id="crud_color_hex" type="text" placeholder="#rrggbb" value="${esc(row.color || '#6b7280')}" style="width:90px" oninput="document.getElementById('crud_color').value=this.value">
+        </div>
+      </div>
+      <div class="crud-field"><label>${tc('status')}</label>
+        <select id="crud_status">
+          <option value="1" ${Number(row.status ?? 1) === 1 ? 'selected' : ''}>1 — Включён</option>
+          <option value="0" ${Number(row.status ?? 1) === 0 ? 'selected' : ''}>0 — Выключен</option>
+          <option value="2" ${Number(row.status ?? 1) === 2 ? 'selected' : ''}>2 — Выключен</option>
         </select>
       </div>
     `;
@@ -4123,6 +4181,7 @@ async function openCrudModal(entity, mode, id = null) {
     if (entity === 'account') row = adminAccountsRows.find(x => x.id === id) || {};
     if (entity === 'prompt') row = adminPromptsRows.find(x => x.id === id) || {};
     if (entity === 'worker') row = adminWorkersRows.find(x => x.id === id) || {};
+    if (entity === 'task_status') row = adminTaskStatusesRows.find(x => x.id === id) || {};
   }
   crudState = { entity, mode, id };
   const title = `${mode === 'create' ? tc('add') : tc('edit')} ${entityTitle(entity)}`;
@@ -4240,6 +4299,25 @@ async function submitCrudModal(e) {
       await fetchJSON(`${API}/admin/agents-accounts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } else {
       await fetchJSON(`${API}/admin/agents-accounts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    }
+    if (crudState.entity === 'task_status') {
+      const colorHex = document.getElementById('crud_color_hex')?.value.trim() || crudValue('crud_color');
+      const body = {
+        name: crudValue('crud_name').trim(),
+        shortname: crudValue('crud_shortname').trim(),
+        status_to: crudValue('crud_status_to').trim() || null,
+        color: colorHex || null,
+        status: parseInt(crudValue('crud_status') || '1', 10),
+      };
+      if (mode === 'create') {
+        await fetchJSON(`${API}/admin/task-statuses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await fetchJSON(`${API}/admin/task-statuses/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      if (isMobileLayout()) closeCrudScreen();
+      else closeCrudModal();
+      await loadTaskStatusesCrud();
+      return;
     }
     if (crudState.entity === 'worker') {
       const agentIdRaw = crudValue('crud_agent_id');
@@ -4601,6 +4679,85 @@ async function deletePromptCrud(id) {
   } catch (e) {
     alert(`${tc('delete_failed')}: ${e.message}`);
   }
+}
+
+// --- CRUD: Task Statuses ---
+
+function taskStatusDot(r) {
+  if (!r || !r.color) return '';
+  return `<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${esc(r.color)};border:1px solid rgba(0,0,0,.15);flex:0 0 12px"></span>`;
+}
+
+async function loadTaskStatusesCrud() {
+  const q = document.getElementById('taskStatusesSearch').value.trim();
+  const rows = await fetchJSON(`${API}/admin/task-statuses${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  adminTaskStatusesRows = rows;
+  const tbody = document.getElementById('taskStatusesTbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="width:32px;text-align:center">${taskStatusDot(r)}</td>
+      <td>${r.id}</td>
+      <td>${esc(r.name || '')}</td>
+      <td><code>${esc(r.shortname || '')}</code></td>
+      <td>${r.status_to ? `<code>${esc(r.status_to)}</code>` : '<span style="color:var(--text2)">—</span>'}</td>
+      <td>${r.status === 1 ? 'Вкл' : 'Выкл'}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" onclick="editTaskStatusCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteTaskStatusCrud(${r.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+  renderTaskStatusesCards(rows);
+}
+
+async function createTaskStatusCrud() { await openCrudModal('task_status', 'create'); }
+async function editTaskStatusCrud(id) { await openCrudModal('task_status', 'edit', id); }
+
+async function deleteTaskStatusCrud(id) {
+  if (!confirm(`${tc('delete_task_status_confirm')} #${id}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/task-statuses/${id}`, { method: 'DELETE' });
+    await loadTaskStatusesCrud();
+  } catch (e) {
+    alert(`${tc('delete_failed')}: ${e.message}`);
+  }
+}
+
+function renderTaskStatusesCards(rows) {
+  const cards = document.getElementById('taskStatusesCards');
+  cards.innerHTML = rows.map(r => {
+    const expanded = isAdminExpanded('task_status', r.id);
+    const on = r.status === 1;
+    return `
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+      <div class="admin-mobile-head" onclick="toggleAdminCard('task_status', ${r.id})">
+        <div class="admin-mobile-icon" style="background:${esc(r.color || '#e5e7eb')}"></div>
+        <div class="admin-mobile-main">
+          <div class="admin-mobile-title">${esc(r.name || '')}</div>
+          <div class="admin-mobile-sub">
+            <span class="admin-mobile-chip"><code>${esc(r.shortname || '')}</code></span>
+            ${r.status_to ? `<span class="admin-mobile-chip">${esc(r.status_to)}</span>` : ''}
+            <span class="admin-mobile-chip">${on ? 'Вкл' : 'Выкл'}</span>
+          </div>
+        </div>
+        <div class="prompt-mobile-inline-actions">
+          <button class="prompt-mobile-icon-btn" type="button" onclick="event.stopPropagation(); editTaskStatusCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" onclick="event.stopPropagation(); deleteTaskStatusCrud(${r.id})">🗑</button>
+        </div>
+      </div>
+      <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Short:</b> <code>${esc(r.shortname || '')}</code></div>
+        <div class="admin-mobile-kv"><b>status_to:</b> ${r.status_to ? `<code>${esc(r.status_to)}</code>` : '—'}</div>
+        <div class="admin-mobile-kv"><b>Цвет:</b> <span style="display:inline-flex;align-items:center;gap:6px">${taskStatusDot(r)} ${esc(r.color || '—')}</span></div>
+        <div class="admin-mobile-kv"><b>Статус:</b> ${on ? 'Включён' : 'Выключен'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function ensureTaskStatusesRows(force = false) {
+  if (!force && adminTaskStatusesRows.length) return;
+  adminTaskStatusesRows = await fetchJSON(`${API}/admin/task-statuses`);
 }
 
 // --- CRUD: Workers ---

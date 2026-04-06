@@ -1075,6 +1075,82 @@ def api_admin_delete_worker(worker_id: int):
         raise HTTPException(400, f"Delete worker failed: {e}")
 
 
+# --- Task Statuses ---
+
+@app.get("/api/admin/task-statuses")
+def api_admin_task_statuses(q: Optional[str] = None):
+    return db.list_task_statuses(search=q, limit=500)
+
+
+@app.post("/api/admin/task-statuses")
+def api_admin_create_task_status(payload: dict):
+    if not str(payload.get("name", "")).strip():
+        raise HTTPException(400, "name is required")
+    if not str(payload.get("shortname", "")).strip():
+        raise HTTPException(400, "shortname is required")
+    status = payload.get("status", 1)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be 0, 1 or 2")
+    if status not in (0, 1, 2):
+        raise HTTPException(400, "status must be 0, 1 or 2")
+    try:
+        return db.create_task_status(
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            status_to=str(payload["status_to"]).strip() if payload.get("status_to") else None,
+            color=str(payload["color"]).strip() if payload.get("color") else None,
+            status=status,
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Create task status failed: {e}")
+
+
+@app.patch("/api/admin/task-statuses/{status_id}")
+def api_admin_update_task_status(status_id: int, payload: dict):
+    if not str(payload.get("name", "")).strip():
+        raise HTTPException(400, "name is required")
+    if not str(payload.get("shortname", "")).strip():
+        raise HTTPException(400, "shortname is required")
+    status = payload.get("status", 1)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be 0, 1 or 2")
+    if status not in (0, 1, 2):
+        raise HTTPException(400, "status must be 0, 1 or 2")
+    try:
+        ok = db.update_task_status(
+            status_id=status_id,
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            status_to=str(payload["status_to"]).strip() if payload.get("status_to") else None,
+            color=str(payload["color"]).strip() if payload.get("color") else None,
+            status=status,
+        )
+        if not ok:
+            raise HTTPException(404, "Task status not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Update task status failed: {e}")
+
+
+@app.delete("/api/admin/task-statuses/{status_id}")
+def api_admin_delete_task_status(status_id: int):
+    try:
+        ok = db.delete_task_status(status_id)
+        if not ok:
+            raise HTTPException(404, "Task status not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Delete task status failed: {e}")
+
+
 # --- Frontend ---
 
 @app.get("/")
