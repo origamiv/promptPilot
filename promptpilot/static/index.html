@@ -2277,6 +2277,7 @@
     <div id="kanbanProjectPicker">
       <div class="kanban-header">
         <div class="kanban-title" id="kanbanTitle">Канбан</div>
+        <input id="kanbanProjectSearch" placeholder="Поиск проекта…" oninput="renderKanbanProjectGrid()" style="max-width:200px">
       </div>
       <div class="kanban-project-grid" id="kanbanProjectGrid"></div>
     </div>
@@ -4967,12 +4968,19 @@ async function loadKanbanProjects() {
   boardWrap.style.display = 'none';
   kanbanSelectedProject = null;
 
+  renderKanbanProjectGrid();
+}
+
+function renderKanbanProjectGrid() {
   const grid = document.getElementById('kanbanProjectGrid');
-  if (!projectsCache.length) {
-    grid.innerHTML = '<div style="color:var(--text2);padding:16px">Нет проектов</div>';
+  if (!grid) return;
+  const q = (document.getElementById('kanbanProjectSearch')?.value || '').trim().toLowerCase();
+  const rows = q ? projectsCache.filter(p => (p.name || '').toLowerCase().includes(q) || (p.shortname || '').toLowerCase().includes(q)) : projectsCache;
+  if (!rows.length) {
+    grid.innerHTML = '<div style="color:var(--text2);padding:16px;grid-column:1/-1">Нет проектов</div>';
     return;
   }
-  grid.innerHTML = projectsCache.map(p => {
+  grid.innerHTML = rows.map(p => {
     const color = normalizeHexColor(p.color) || '#9ca3af';
     return `<div class="kanban-project-card" onclick="selectKanbanProject(${p.id})">
       <span class="kanban-project-dot" style="background:${esc(color)}"></span>
