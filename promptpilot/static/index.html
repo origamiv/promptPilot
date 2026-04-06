@@ -987,22 +987,18 @@
     display: flex;
     gap: 12px;
     overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 12px;
-    align-items: stretch;
-    height: calc(100dvh - 110px);
+    padding-bottom: 24px;
+    align-items: flex-start;
   }
   .kanban-col {
     flex: 0 0 272px;
     width: 272px;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    min-height: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    overflow: hidden;
+    overflow: visible;
   }
   .kanban-col-header {
     padding: 10px 12px 9px;
@@ -1038,9 +1034,6 @@
     flex: 0 0 auto;
   }
   .kanban-col-body {
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
     padding: 6px 8px;
     display: flex;
     flex-direction: column;
@@ -1997,9 +1990,6 @@
     .filter-btn {
       flex: 1 1 calc(50% - 8px);
       text-align: center;
-    }
-    .kanban-board {
-      height: calc(100dvh - 130px);
     }
     .kanban-col {
       flex: 0 0 240px;
@@ -4951,7 +4941,7 @@ function kanbanShowMore(colIdStr) {
   const color = col ? (col.color || '#9ca3af') : '#9ca3af';
   const name = col ? col.name : 'Без статуса';
   const newColHTML = renderKanbanCol(colIdStr === '__none__' ? '__none__' : parseInt(colIdStr, 10), items, color, name);
-  const el = document.querySelector(`.kanban-col[data-col-id="${CSS.escape(colIdStr)}"]`);
+  const el = [...document.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === colIdStr);
   if (el) el.outerHTML = newColHTML;
 }
 
