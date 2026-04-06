@@ -283,6 +283,138 @@ def poll_limits():
     )
 
 
+@cli.command("poll-limits-all")
+def poll_limits_all():
+    """Poll limits for ALL agent accounts: active + inactive with credentials (for cron)."""
+    import json as _json
+    from .limits import fetch_claude_limits, fetch_codex_limits
+    from .relogin import _try_switch_noninteractive
+
+    rows = db.list_agent_accounts_for_limits_all(limit=5000)
+    if not rows:
+        click.echo("No agent accounts found.")
+        return
+
+    # Группируем по agent_id: для каждого агента отдельно фаза 1 и фаза 2
+    agents: dict[int, dict] = {}
+    for row in rows:
+        aid = int(row["agent_id"])
+        if aid not in agents:
+            agents[aid] = {"active": None, "inactive": []}
+        if bool(row.get("is_active")):
+            agents[aid]["active"] = row
+        else:
+            agents[aid]["inactive"].append(row)
+
+    updated_active = 0
+    updated_inactive = 0
+    skipped_no_creds = 0
+    skipped_failed = 0
+    skipped_unknown = 0
+
+    def _save_limits(account_id: int, limits: dict) -> None:
+        db.update_agent_account_limits(
+            account_id,
+            status=limits.get("status"),
+            percent_5h=limits.get("percent_5h"),
+            percent_7d=limits.get("percent_7d"),
+            balance_tokens=limits.get("balance_tokens"),
+            reset_5h=limits.get("reset_5h"),
+            reset_7d=limits.get("reset_7d"),
+        )
+
+    def _agent_key(row: dict) -> str:
+        return str(row.get("agent_shortname") or row.get("agent_name") or "").strip().lower()
+
+    def _extract_token(row: dict) -> str:
+        token = str(row.get("token") or "").strip()
+        if token:
+            return token
+        creds = row.get("claude_credentials")
+        if isinstance(creds, str):
+            try:
+                creds = _json.loads(creds)
+            except Exception:
+                creds = None
+        if isinstance(creds, dict):
+            token = str((creds.get("claudeAiOauth") or {}).get("accessToken") or "").strip()
+        return token
+
+    def _has_credentials(row: dict) -> bool:
+        creds = row.get("claude_credentials")
+        if isinstance(creds, str):
+            try:
+                creds = _json.loads(creds)
+            except Exception:
+                creds = None
+        if isinstance(creds, dict) and creds:
+            return True
+        return bool(str(row.get("token") or "").strip())
+
+    # ── Фаза 1: активные аккаунты ────────────────────────────────────────────
+    for aid, group in agents.items():
+        active = group.get("active")
+        if not active:
+            continue
+        account_id = int(active["id"])
+        key = _agent_key(active)
+
+        if "claude" in key:
+            token = _extract_token(active)
+            if not token:
+                skipped_no_creds += 1
+                continue
+            limits = fetch_claude_limits(token=token)
+            if limits:
+                _save_limits(account_id, limits)
+                updated_active += 1
+            else:
+                skipped_failed += 1
+
+        elif "codex" in key:
+            limits = fetch_codex_limits()
+            if limits:
+                _save_limits(account_id, limits)
+                updated_active += 1
+            else:
+                skipped_failed += 1
+
+        else:
+            skipped_unknown += 1
+
+    # ── Фаза 2: неактивные аккаунты с сохранёнными credentials ───────────────
+    for aid, group in agents.items():
+        original_active = group.get("active")
+        original_active_id = int(original_active["id"]) if original_active else None
+        switched = False  # был ли смен активного аккаунта в этом агенте
+
+        for inactive in group["inactive"]:
+            key = _agent_key(inactive)
+            if "claude" not in key:
+                skipped_unknown += 1
+                continue
+            if not _has_credentials(inactive):
+                skipped_no_creds += 1
+                continue
+
+            result = _try_switch_noninteractive(inactive)
+            if result and result.get("ok"):
+                updated_inactive += 1
+                switched = True
+            else:
+                skipped_failed += 1
+
+        # Восстанавливаем исходный активный аккаунт
+        if switched and original_active_id:
+            db.set_agent_account_active(original_active_id, True)
+
+    click.echo(
+        f"Limits polled: active={updated_active}, inactive={updated_inactive}, "
+        f"skipped_no_creds={skipped_no_creds}, skipped_failed={skipped_failed}, "
+        f"skipped_unknown_agent={skipped_unknown}"
+    )
+
+
 @cli.command()
 def bot():
     """Start the Telegram bot (requires PP_TG_TOKEN env var)."""
