@@ -1095,6 +1095,8 @@ def api_admin_create_task_status(payload: dict):
         raise HTTPException(400, "status must be 0, 1 or 2")
     if status not in (0, 1, 2):
         raise HTTPException(400, "status must be 0, 1 or 2")
+    nom = payload.get("nom")
+    nom = int(nom) if nom is not None and str(nom).strip() else None
     try:
         return db.create_task_status(
             name=str(payload["name"]).strip(),
@@ -1102,6 +1104,7 @@ def api_admin_create_task_status(payload: dict):
             status_to=str(payload["status_to"]).strip() if payload.get("status_to") else None,
             color=str(payload["color"]).strip() if payload.get("color") else None,
             status=status,
+            nom=nom,
         )
     except Exception as e:
         raise HTTPException(400, f"Create task status failed: {e}")
@@ -1120,6 +1123,8 @@ def api_admin_update_task_status(status_id: int, payload: dict):
         raise HTTPException(400, "status must be 0, 1 or 2")
     if status not in (0, 1, 2):
         raise HTTPException(400, "status must be 0, 1 or 2")
+    nom = payload.get("nom")
+    nom = int(nom) if nom is not None and str(nom).strip() else None
     try:
         ok = db.update_task_status(
             status_id=status_id,
@@ -1128,6 +1133,7 @@ def api_admin_update_task_status(status_id: int, payload: dict):
             status_to=str(payload["status_to"]).strip() if payload.get("status_to") else None,
             color=str(payload["color"]).strip() if payload.get("color") else None,
             status=status,
+            nom=nom,
         )
         if not ok:
             raise HTTPException(404, "Task status not found")

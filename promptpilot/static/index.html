@@ -2224,7 +2224,7 @@
     </div>
     <div class="admin-mobile-list" id="taskStatusesCards"></div>
     <table class="admin-table">
-      <thead><tr><th>Цвет</th><th>ID</th><th>Название</th><th>Short</th><th>status_to</th><th>Статус</th><th></th></tr></thead>
+      <thead><tr><th>№</th><th>Цвет</th><th>ID</th><th>Название</th><th>Short</th><th>status_to</th><th>Статус</th><th></th></tr></thead>
       <tbody id="taskStatusesTbody"></tbody>
     </table>
   </div>
@@ -4262,6 +4262,7 @@ function renderCrudFields(entity, row = {}) {
     return `
       <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
       <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field"><label>№ (nom)</label><input id="crud_nom" type="number" min="1" placeholder="Порядковый номер" value="${row.nom != null ? row.nom : ''}"></div>
       <div class="crud-field"><label>${tc('status_to')}</label><input id="crud_status_to" placeholder="completed / failed / running / pending …" value="${esc(row.status_to || '')}"></div>
       <div class="crud-field"><label>${tc('color')}</label>
         <div style="display:flex;align-items:center;gap:8px">
@@ -4467,9 +4468,11 @@ async function submitCrudModal(e) {
     }
     if (crudState.entity === 'task_status') {
       const colorHex = document.getElementById('crud_color_hex')?.value.trim() || crudValue('crud_color');
+      const nomRaw = crudValue('crud_nom').trim();
       const body = {
         name: crudValue('crud_name').trim(),
         shortname: crudValue('crud_shortname').trim(),
+        nom: nomRaw ? parseInt(nomRaw, 10) : null,
         status_to: crudValue('crud_status_to').trim() || null,
         color: colorHex || null,
         status: parseInt(crudValue('crud_status') || '1', 10),
@@ -4957,6 +4960,7 @@ async function loadTaskStatusesCrud() {
   const tbody = document.getElementById('taskStatusesTbody');
   tbody.innerHTML = rows.map(r => `
     <tr>
+      <td style="width:32px;text-align:center;color:var(--text2)">${r.nom ?? '—'}</td>
       <td style="width:32px;text-align:center">${taskStatusDot(r)}</td>
       <td>${r.id}</td>
       <td>${esc(r.name || '')}</td>
@@ -5008,6 +5012,7 @@ function renderTaskStatusesCards(rows) {
         </div>
       </div>
       <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>№:</b> ${r.nom ?? '—'}</div>
         <div class="admin-mobile-kv"><b>Short:</b> <code>${esc(r.shortname || '')}</code></div>
         <div class="admin-mobile-kv"><b>status_to:</b> ${r.status_to ? `<code>${esc(r.status_to)}</code>` : '—'}</div>
         <div class="admin-mobile-kv"><b>Цвет:</b> <span style="display:inline-flex;align-items:center;gap:6px">${taskStatusDot(r)} ${esc(r.color || '—')}</span></div>
