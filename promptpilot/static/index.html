@@ -1118,15 +1118,23 @@
     line-height: 1.35;
     flex: 1;
     min-width: 0;
-    word-break: break-word;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .kanban-card.expanded .kanban-card-title {
+    -webkit-line-clamp: unset;
+    overflow: visible;
   }
   .kanban-card-meta {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 5px;
     margin-top: 5px;
     flex-wrap: wrap;
   }
+  .kanban-card.expanded .kanban-card-meta { display: flex; }
   .kanban-card-badge {
     font-size: 10px;
     color: var(--text2);
