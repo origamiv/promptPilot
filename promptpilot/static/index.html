@@ -989,7 +989,7 @@
     overflow-x: auto;
     overflow-y: hidden;
     padding-bottom: 12px;
-    align-items: flex-start;
+    align-items: stretch;
     height: calc(100dvh - 110px);
   }
   .kanban-col {
@@ -997,7 +997,8 @@
     width: 272px;
     display: flex;
     flex-direction: column;
-    max-height: 100%;
+    height: 100%;
+    min-height: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -1039,7 +1040,8 @@
   .kanban-col-body {
     overflow-y: auto;
     flex: 1;
-    padding: 6px 8px 8px;
+    min-height: 0;
+    padding: 6px 8px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -1052,8 +1054,9 @@
   }
   .kanban-more-btn {
     display: block;
+    flex-shrink: 0;
     width: calc(100% - 16px);
-    margin: 6px 8px 10px;
+    margin: 0 8px 10px;
     font-size: 12px;
     padding: 6px 0;
     border: 1px dashed var(--border);
@@ -4912,7 +4915,7 @@ function toggleKanbanCard(id) {
   });
 }
 
-const KANBAN_PAGE_SIZE = 15;
+const KANBAN_PAGE_SIZE = 10;
 // colId (number | '__none__') → number of visible cards
 const kanbanColVisible = {};
 
