@@ -35,6 +35,7 @@ else:
     STATIC_DIR = Path(__file__).parent / "static"
     HELP_DIR = Path(__file__).resolve().parent.parent / "docs" / "help"
 
+
 _interactive_guard = threading.Lock()
 _interactive_session = None
 _INTERACTIVE_TERM_COLS = 160
@@ -1315,6 +1316,14 @@ def help_page(section: str):
             "Expires": "0",
         },
     )
+
+
+@app.get("/images/{file_path:path}")
+def serve_static_image(file_path: str):
+    path = (STATIC_DIR / "images" / file_path).resolve()
+    if not str(path).startswith(str((STATIC_DIR / "images").resolve())) or not path.exists():
+        raise HTTPException(404)
+    return FileResponse(path)
 
 
 @app.get("/{full_path:path}")

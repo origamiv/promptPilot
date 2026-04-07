@@ -1100,6 +1100,16 @@
     gap: 12px;
     padding-bottom: 24px;
   }
+  @media (min-width: 900px) {
+    .kanban-project-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  @media (min-width: 1200px) {
+    .kanban-project-grid {
+      grid-template-columns: repeat(5, 1fr);
+    }
+  }
   .kanban-project-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -3608,8 +3618,8 @@ function taskPriorityRowsForForm() {
 }
 
 function taskPriorityDefaultValue(rows) {
-  if (!rows.length) return '5';
-  if (rows.some(r => Number(r.id) === 5)) return '5';
+  if (!rows.length) return '6';
+  if (rows.some(r => Number(r.id) === 6)) return '6';
   return String(rows[0].id);
 }
 
@@ -3625,8 +3635,8 @@ function renderTaskPriorityOptions(preferredValue = null) {
       <option value="2">2</option>
       <option value="3">3</option>
       <option value="4">4</option>
-      <option value="5" selected>5</option>
-      <option value="6">6</option>
+      <option value="5">5</option>
+      <option value="6" selected>6</option>
       <option value="7">7</option>
       <option value="8">8</option>
       <option value="9">9</option>
