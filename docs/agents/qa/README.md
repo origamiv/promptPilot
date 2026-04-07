@@ -8,17 +8,22 @@ Unit тесты, Feature тесты (Laravel), компонентные тест
 
 ## Входные данные
 
+Из папки фичи `docs/pm/features/{feature_task_id}/`:
+- `API.md` — читаемый API-контракт
+- `swagger.json` — OpenAPI 3.0 спецификация (основной источник истины)
+- `DB.md` — схема БД
+
+Дополнительно:
 - Реализованный код от Backend, Frontend, Mobile агентов
-- `docs/api/openapi.yaml` — для проверки соответствия API
-- `docs/agents/ux/screens/` — для E2E сценариев
+- `docs/pm/features/{feature_task_id}/ux/` — макеты для E2E сценариев
 
 ## Выходные артефакты
 
 | Артефакт | Путь |
 |----------|------|
 | PHP тесты (Feature/Unit) | `tests/Feature/`, `tests/Unit/` |
-| Vue тесты (Vitest) | `resources/js/tests/` |
-| Тест-план | `docs/agents/qa/test-plans/` |
+| Vue/React тесты (Vitest) | `resources/js/tests/` |
+| Тест-план | `docs/pm/features/{feature_task_id}/TEST_PLAN.md` |
 
 ## Взаимодействует с
 

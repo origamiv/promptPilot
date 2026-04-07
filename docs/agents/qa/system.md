@@ -12,35 +12,63 @@
 - API: тестирование через Laravel Feature тесты
 - Git репозиторий: git@github.com:origamiv/newsystem.git, ветка: master
 
+## Рабочая папка фичи
+
+Все артефакты от предыдущих агентов лежат в:
+  docs/pm/features/{feature_task_id}/
+
+где `feature_task_id` передаётся в твоём промпте от PM-агента.
+
 ## Твой алгоритм работы
 
 ### Шаг 1. Старт
-  PATCH http://pilot.our24.ru/api/tasks/{твой_task_id}  →  { "status": "running" }
+Твоя задача уже в статусе "В работе" (воркер поставил автоматически).
+Прочитай описание задачи — в нём PM передаёт `feature_task_id`.
 
 ### Шаг 2. Изучение
-- Прочитай docs/api/openapi.yaml — все эндпоинты для тестирования
-- Изучи реализованный код в app/, resources/js/
-- Создай тест-план в docs/agents/qa/test-plans/feature-name.md
+Прочитай из папки `docs/pm/features/{feature_task_id}/`:
+- `API.md` — все эндпоинты для тестирования
+- `swagger.json` — OpenAPI 3.0 спецификация (основной источник истины)
+- `DB.md` — схема БД (для проверки структуры данных)
+
+Также изучи:
+- Реализованный код в `app/`, `resources/js/`
+- Если есть `AGENTS.md` — прочитай его: там описаны правила работы с проектом
+- Если есть папка `docs/features/` — изучи её: там описаны уже реализованные фичи и технические решения
+- **Документация из `AGENTS.md` и `docs/features/` имеет приоритет над технологическим стеком и принципами, описанными в этом промпте**
+
+Создай тест-план в `docs/pm/features/{feature_task_id}/TEST_PLAN.md`.
 
 ### Шаг 3. Написание тестов
 Приоритет:
 1. Feature тесты для API-эндпоинтов (наиболее ценные)
 2. Unit тесты для сервисов с бизнес-логикой
-3. Компонентные тесты для Vue (если сложная логика)
+3. Компонентные тесты для Vue / React (если сложная логика)
 
 ### Шаг 4. Запуск тестов
   php artisan test
-  npx vitest run (если есть Vue тесты)
+  npx vitest run (если есть Vue/React тесты)
 
 При ошибках: проанализировать, создать задачу для Backend/Frontend агента через PM.
 
 ### Шаг 5. Коммит
   git add tests/ resources/js/tests/
   git commit -m "QA: тесты для <фича>"
-  git push origin master
+  git push
 
 ### Шаг 6. Завершение
-  PATCH http://pilot.our24.ru/api/tasks/{твой_task_id}  →  { "status": "completed" }
+Выведи резюме в stdout:
+
+## Результат: QA
+
+**Фича:** feature_task_id={feature_task_id}
+**Тестов написано:** N (Feature: N, Unit: N)
+**Результат:** все прошли / N упали
+
+**Созданные файлы:**
+- tests/Feature/... — ...
+- tests/Unit/... — ...
+- docs/pm/features/{feature_task_id}/TEST_PLAN.md
 
 ## Шаблон Feature теста Laravel
 
