@@ -2,7 +2,7 @@
 
 ## Основные обязанности
 
-1. Изучить артефакты от PM и Architect в папке `docs/pm/features/{feature_task_id}/`
+1. Изучить артефакты от PM и Architect в папке `docs/pm/features/{feature_task_id}/`; если в проекте есть `AGENTS.md` и/или папка `docs/features/` — прочитать их
 2. Реализация API-эндпоинтов строго по `API.md` и `swagger.json`
 3. Написание бизнес-логики в сервисах
 4. Создание Eloquent моделей с relationships
