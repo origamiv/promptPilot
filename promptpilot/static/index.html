@@ -1084,6 +1084,13 @@
     padding: 16px;
   }
 
+  /* Match top offset in workarea across all sections (baseline: Agents) */
+  #tasksView,
+  #kanbanView,
+  .help-view {
+    padding-top: 16px;
+  }
+
   /* Kanban */
   #kanbanView {
     padding: 0;
@@ -1292,7 +1299,7 @@
   .help-view {
     background: transparent;
     border: none;
-    padding: 0;
+    padding: 16px 0 0;
   }
   .help-frame {
     width: 100%;
@@ -2196,8 +2203,13 @@
       padding: 12px;
       overflow-x: auto;
     }
+    #tasksView,
+    #kanbanView,
     .help-view {
-      padding: 0;
+      padding-top: 12px;
+    }
+    .help-view {
+      padding: 12px 0 0;
       overflow: hidden;
       border: none;
       background: transparent;
