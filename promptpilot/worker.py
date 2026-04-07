@@ -270,6 +270,71 @@ def build_src_payload(provider: str, stdout: str, stderr: str) -> dict:
     return payload
 
 
+def _load_worker_system_prompt(worker_id: int) -> str | None:
+    """Загрузить системный промпт воркера: из файла или напрямую из поля prompt."""
+    worker = db.get_worker(worker_id)
+    if not worker or not worker.get("prompt"):
+        return None
+    field = worker["prompt"].strip()
+    if field.startswith("/") or field.startswith("./"):
+        try:
+            with open(field, "r", encoding="utf-8") as fh:
+                content = fh.read().strip()
+            print(f"  -> Worker system prompt loaded from: {field}")
+            return content
+        except Exception as e:
+            print(f"  -> Warning: could not read worker prompt file '{field}': {e}")
+            return None
+    return field
+
+
+def _build_prompt_from_list(task) -> str:
+    """Собрать итоговый промпт из task.prompt_list.
+
+    Элементы списка (через запятую):
+      base    → системный промпт воркера (если есть), иначе промпт 'base' из БД
+      current → task.prompt (задача пользователя)
+      project → comment проекта по task.working_dir
+      <other> → промпт из таблицы prompts по shortname
+    """
+    items = [x.strip() for x in task.prompt_list.split(",") if x.strip()]
+
+    # Загружаем системный промпт воркера один раз
+    worker_sys = _load_worker_system_prompt(task.worker_id) if task.worker_id else None
+
+    # Определяем какие shortname нужно тянуть из БД (всё кроме base/current/project если есть воркер)
+    db_keys = [
+        it.lower() for it in items
+        if it.lower() not in ("current", "project")
+        and not (it.lower() == "base" and worker_sys)
+    ]
+    by_short = db.get_prompts_by_shortnames(db_keys) if db_keys else {}
+
+    parts = []
+    missing = []
+    for item in items:
+        key = item.lower()
+        if key == "current":
+            parts.append(task.prompt)
+        elif key == "project":
+            project = db.get_project_by_folder(task.working_dir or "")
+            comment = (project or {}).get("comment") or ""
+            if comment:
+                parts.append(comment)
+        elif key == "base" and worker_sys:
+            parts.append(worker_sys)
+        else:
+            if key in by_short:
+                parts.append(by_short[key])
+            else:
+                missing.append(item)
+
+    if missing:
+        print(f"  -> Warning: prompts not found in DB: {', '.join(missing)}")
+
+    return "\n\n".join(p for p in parts if p)
+
+
 def execute_task(task):
     """Run CLI with the task's prompt."""
     provider = task.provider or DEFAULT_CLI
@@ -467,24 +532,14 @@ def execute_task(task):
         return
 
     base_prompt = task.agent_prompt or task.prompt
-    # If task is assigned to a worker with a system prompt, use it as the base.
-    if task.worker_id:
-        worker = db.get_worker(task.worker_id)
-        if worker and worker.get("prompt"):
-            worker_prompt_field = worker["prompt"].strip()
-            worker_system_prompt = None
-            # Detect file path: absolute path or starts with ./
-            if worker_prompt_field.startswith("/") or worker_prompt_field.startswith("./"):
-                try:
-                    with open(worker_prompt_field, "r", encoding="utf-8") as fh:
-                        worker_system_prompt = fh.read().strip()
-                    print(f"  -> Worker system prompt loaded from: {worker_prompt_field}")
-                except Exception as e:
-                    print(f"  -> Warning: could not read worker prompt file '{worker_prompt_field}': {e}")
-            else:
-                worker_system_prompt = worker_prompt_field
-            if worker_system_prompt:
-                base_prompt = f"{worker_system_prompt}\n\n{task.prompt}"
+    # If task has a prompt_list, rebuild the final prompt from it.
+    if task.prompt_list:
+        base_prompt = _build_prompt_from_list(task)
+    elif task.worker_id:
+        # Fallback for tasks without prompt_list: prepend worker system prompt.
+        worker_sys = _load_worker_system_prompt(task.worker_id)
+        if worker_sys:
+            base_prompt = f"{worker_sys}\n\n{task.prompt}"
     # Guardrail: allow restarting only the web server, never the worker process.
     runtime_guard = (
         "\n\nОбязательное ограничение выполнения:\n"

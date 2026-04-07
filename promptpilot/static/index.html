@@ -3437,6 +3437,7 @@ async function addTask() {
       scheduled_at: schedule ? new Date(schedule).toISOString() : null,
       recurrence,
       worker_id: workerId,
+      prompt_list: promptListRaw || null,
     };
     if (agentPrompt !== currentPrompt) {
       body.agent_prompt = agentPrompt;

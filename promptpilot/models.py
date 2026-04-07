@@ -33,6 +33,7 @@ class TaskCreate(BaseModel):
     recurrence: Optional[str] = None  # e.g. "6h", "daily@09:00"
     worker_id: Optional[int] = None
     task_status_id: Optional[int] = None
+    prompt_list: Optional[str] = None  # e.g. "base, current, project, end"
 
 
 class TaskUpdate(BaseModel):
@@ -77,6 +78,7 @@ class TaskInDB(BaseModel):
     recurrence: Optional[str] = None
     worker_id: Optional[int] = None
     task_status_id: Optional[int] = None
+    prompt_list: Optional[str] = None
 
 
 class Stats(BaseModel):

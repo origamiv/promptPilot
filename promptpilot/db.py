@@ -344,6 +344,7 @@ def init_db():
         # worker_id / task_status_id columns in tasks
         cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS worker_id BIGINT").format(_tasks_ref()))
         cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS task_status_id BIGINT").format(_tasks_ref()))
+        cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS prompt_list TEXT").format(_tasks_ref()))
 
         # Task statuses reference table
         cur.execute(
@@ -600,9 +601,9 @@ def create_task(task: TaskCreate) -> TaskInDB:
                 INSERT INTO {} (
                     prompt, subject, agent_prompt, working_dir, provider, status, priority,
                     scheduled_at, created_at, max_retries, skip_permissions,
-                    model, session_id, parent_task_id, tg_chat_id, recurrence, worker_id, task_status_id
+                    model, session_id, parent_task_id, tg_chat_id, recurrence, worker_id, task_status_id, prompt_list
                 )
-                VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """
             ).format(_tasks_ref()),
@@ -624,6 +625,7 @@ def create_task(task: TaskCreate) -> TaskInDB:
                 task.recurrence,
                 task.worker_id,
                 task_status_id,
+                task.prompt_list or None,
             ),
         )
         task_id = cur.fetchone()["id"]
@@ -2061,6 +2063,35 @@ def list_prompts(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                 (limit,),
             )
         return [dict(r) for r in cur.fetchall()]
+
+
+def get_prompts_by_shortnames(shortnames: list[str]) -> dict[str, str]:
+    """Вернуть {shortname: message} для указанных shortname."""
+    if not shortnames:
+        return {}
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "SELECT shortname, message FROM {}.prompts WHERE shortname = ANY(%s)"
+            ).format(sql.Identifier(SCHEMA_NAME)),
+            (shortnames,),
+        )
+        return {row["shortname"]: row["message"] or "" for row in cur.fetchall()}
+
+
+def get_project_by_folder(folder: str) -> Optional[dict]:
+    """Найти проект по рабочей директории (folder)."""
+    if not folder:
+        return None
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                "SELECT id, name, folder, comment FROM {}.projects WHERE folder = %s AND deleted_at IS NULL LIMIT 1"
+            ).format(sql.Identifier(SCHEMA_NAME)),
+            (folder,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
 
 
 def create_prompt(
