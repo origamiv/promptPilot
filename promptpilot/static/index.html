@@ -5455,6 +5455,15 @@ async function loadCosts() {
   } catch (_) {}
 }
 
+async function refreshKanbanAuto() {
+  if (currentView !== 'kanban') return;
+  if (kanbanSelectedProject) {
+    await loadKanban();
+    return;
+  }
+  await loadKanbanProjects();
+}
+
 window.addEventListener('popstate', (e) => {
   const view = (e.state && VIEW_NAMES.has(e.state.view)) ? e.state.view : parseViewFromPath();
   if (view === 'kanban') {
@@ -5513,6 +5522,7 @@ if (_initKanbanFolder) {
 }
 setTimeout(loadInteractiveState, 200);
 setInterval(refresh, 15000);
+setInterval(refreshKanbanAuto, 15000);
 setInterval(loadWorkerStatus, 10000);
 setInterval(loadCosts, 30000);
 </script>
