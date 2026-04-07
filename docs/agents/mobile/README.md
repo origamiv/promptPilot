@@ -2,17 +2,22 @@
 
 ## Роль
 
-React Native разработчик. Реализует мобильное приложение по макетам UX Designer
+Мобильный разработчик. Реализует мобильное приложение по макетам UX Designer
 и API-контракту от Architect. Отвечает за экраны, навигацию, нативные функции
 и интеграцию с Backend API.
 
+Поддерживаемые технологии: **React Native**, **Flutter**.
+
 ## Входные данные
 
-- `docs/agents/ux/screens/mobile/*.png` — мобильные макеты от UX Designer
-- `docs/agents/ux/screens/README.md` — описание экранов
-- `docs/api/openapi.yaml` — API-контракт от Architect
+Из папки фичи `docs/pm/features/{feature_task_id}/`:
+- `API.md` — читаемый API-контракт от Architect
+- `swagger.json` — OpenAPI 3.0 спецификация от Architect
+- `ux/mobile/*.png` — мобильные макеты от UX Designer (если есть)
 
 ## Выходные артефакты
+
+### React Native
 
 | Артефакт | Путь |
 |----------|------|
@@ -20,11 +25,21 @@ React Native разработчик. Реализует мобильное пр�
 | Компоненты | `mobile/src/components/` |
 | Навигация | `mobile/src/navigation/` |
 | API-клиент | `mobile/src/api/` |
-| Stores (Zustand) | `mobile/src/stores/` |
+| Stores | `mobile/src/stores/` |
+
+### Flutter
+
+| Артефакт | Путь |
+|----------|------|
+| Экраны | `mobile/lib/screens/` |
+| Виджеты | `mobile/lib/widgets/` |
+| Навигация | `mobile/lib/router/` |
+| API-клиент | `mobile/lib/api/` |
+| Providers / BLoC | `mobile/lib/providers/` |
 
 ## Взаимодействует с
 
-- **PM** — получает задачу
+- **PM** — получает задачу с `feature_task_id`
 - **UX Designer** — берёт mobile макеты
 - **Architect** — берёт API-контракт
 - **QA** — предоставляет код для тестирования
@@ -38,4 +53,5 @@ React Native разработчик. Реализует мобильное пр�
 
 - [Системный промпт](system.md)
 - [Детальные обязанности](responsibilities.md)
-- [Конвенции кода](standards/conventions.md)
+- [React Native конвенции](standards/react-native.md)
+- [Flutter конвенции](standards/flutter.md)
