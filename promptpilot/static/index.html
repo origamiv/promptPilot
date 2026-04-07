@@ -728,6 +728,26 @@
     font-family: var(--mono);
     white-space: nowrap;
   }
+  .task-header-status-dot {
+    flex: 0 0 auto;
+  }
+  .task-card-meta {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .task-card-meta .task-agent-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    font-size: 11px;
+  }
+  .task-card-meta .task-agent-icon svg {
+    width: 12px;
+    height: 12px;
+  }
   .priority-badge {
     display: inline-flex;
     align-items: center;
@@ -3207,6 +3227,7 @@ async function loadTasks() {
     const parsed = parseResult(t.result);
     const project = projectByWorkingDir(t.working_dir);
     const projectName = project && project.name ? project.name : '';
+    const agentName = taskAgentName(t);
     const agentAccountName = taskAgentAccountName(t);
     const agentIconInfo = taskAgentIconInfo(t);
     const workerRow = t.worker_id ? adminWorkersRows.find(w => w.id === t.worker_id) : null;
@@ -3217,16 +3238,19 @@ async function loadTasks() {
     <div class="task-row${t.status === 'running' ? ' task-running' : ''}${expanded ? ' expanded' : ''}">
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-id">#${t.id}</span>
-        <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
-        <span class="task-meta worker-avatar-badge" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}"><img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy">${workerRow ? ` ${esc(workerRow.shortname || workerRow.name)}` : ''}</span>
-        ${agentIconInfo ? `<span class="task-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
+        <span class="task-meta worker-avatar-badge" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}"><img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy"></span>
         <span class="task-prompt">${esc(taskCardTitle(t))}</span>
         <span class="task-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
+        ${taskPriorityBadgeHtml(t, { className: 'task-meta' })}
+        <span class="task-meta">${time}</span>
+        <span class="status-dot task-header-status-dot ${taskStatusDotClass(t.status)}"${taskDotStyle(t)} title="${esc(statusLabel(t.status))}"></span>
+      </div>
+      <div class="task-card-meta">
+        ${agentIconInfo ? `<span class="task-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
+        <span class="task-meta">${tr('task_agent')}: ${esc(agentName || '—')}</span>
         <span class="task-meta">${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
         ${scheduleInfo(t)}
-        ${taskPriorityBadgeHtml(t, { className: 'task-meta' })}
-        <span class="task-meta">${time}</span>
       </div>
       <div class="task-detail">
         ${buildTaskDetailHTML(t, resultHTML, { includeSubject: true, includePrompt: true })}
