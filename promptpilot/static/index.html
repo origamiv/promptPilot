@@ -2199,13 +2199,16 @@
       padding-right: 62px;
     }
     .admin-view {
-      padding: 12px;
+      padding: 6px 12px 12px;
       overflow-x: auto;
     }
     #tasksView,
     #kanbanView,
     .help-view {
-      padding-top: 12px;
+      padding-top: 6px;
+    }
+    body.kanban-fullwidth .container {
+      padding-top: 20px;
     }
     .help-view {
       padding: 12px 0 0;
@@ -2614,7 +2617,18 @@
         </div>
         <div class="skills-panel" id="skillsPanel"></div>
         <div class="form-row">
-          <label><span id="providerLabelText">Провайдер</span>
+          <label id="workerLabel"><span id="workerLabelText">Исполнитель</span>
+            <div class="worker-picker" id="workerPicker">
+              <button type="button" class="worker-picker-trigger" id="workerPickerTrigger" onclick="toggleWorkerPicker(event)">
+                <img id="workerSelectAvatar" class="worker-avatar-sm" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e5e7eb'/%3E%3Ccircle cx='50' cy='38' r='17' fill='%239ca3af'/%3E%3Cellipse cx='50' cy='86' rx='28' ry='22' fill='%239ca3af'/%3E%3C/svg%3E" alt="">
+                <span id="workerSelectName" class="worker-picker-name">— без исполнителя —</span>
+                <span class="worker-picker-arrow">▾</span>
+              </button>
+              <div class="worker-picker-dropdown" id="workerPickerDropdown"></div>
+              <input type="hidden" id="workerInput" value="">
+            </div>
+          </label>
+          <label id="providerLabel"><span id="providerLabelText">Провайдер</span>
             <select id="providerInput"></select>
           </label>
           <label id="modelLabel" style="display:none"><span id="modelLabelText">Модель</span>
@@ -2635,17 +2649,6 @@
           </label>
           <label><span id="promptListLabelText">Список промптов</span>
             <input type="text" id="promptListInput" value="base, current, project, end" placeholder="base, current, project, end" style="width:220px">
-          </label>
-          <label id="workerLabel"><span id="workerLabelText">Исполнитель</span>
-            <div class="worker-picker" id="workerPicker">
-              <button type="button" class="worker-picker-trigger" id="workerPickerTrigger" onclick="toggleWorkerPicker(event)">
-                <img id="workerSelectAvatar" class="worker-avatar-sm" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e5e7eb'/%3E%3Ccircle cx='50' cy='38' r='17' fill='%239ca3af'/%3E%3Cellipse cx='50' cy='86' rx='28' ry='22' fill='%239ca3af'/%3E%3C/svg%3E" alt="">
-                <span id="workerSelectName" class="worker-picker-name">— без исполнителя —</span>
-                <span class="worker-picker-arrow">▾</span>
-              </button>
-              <div class="worker-picker-dropdown" id="workerPickerDropdown"></div>
-              <input type="hidden" id="workerInput" value="">
-            </div>
           </label>
           <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="taskBacklog" style="width:auto;margin:0">
@@ -3444,6 +3447,7 @@ function buildTaskDetailHTML(t, resultHTML, opts = {}) {
         <button class="copy-btn" data-copy="${encCopy(t.error)}" onclick="copyTextFromBtn(event, this)">${tr('copy')}</button>
       </div>
     ` : ''}
+    ${t.nom_run != null ? `<div class="detail-info"><span class="label">Очерёдность: </span><span>${esc(String(t.nom_run))}</span></div>` : ''}
     ${t.recurrence ? `<div class="detail-info"><span class="label">${tr('recurrence')}: </span><span>${esc(t.recurrence)}</span></div>` : ''}
     ${t.scheduled_at ? `<div class="detail-info"><span class="label">${tr('scheduled')}: </span><span>${new Date(t.scheduled_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
     ${t.started_at ? `<div class="detail-info"><span class="label">${tr('started')}: </span><span>${new Date(t.started_at).toLocaleString(currentLang === 'ru' ? 'ru-RU' : 'en-US')}</span></div>` : ''}
@@ -4603,7 +4607,15 @@ async function openTaskFormScreen() {
   screen.classList.add('open');
   setDefaultSchedule();
   document.getElementById('taskBacklog').checked = false;
-  await Promise.all([ensurePrioritiesRows(), ensureTaskStatusesRows()]);
+  await Promise.all([ensureWorkersRows(), ensurePrioritiesRows(), ensureTaskStatusesRows()]);
+  const pmWorker = adminWorkersRows.find(
+    w => String((w && w.shortname) || "").trim().toLowerCase() === "pm"
+  );
+  if (pmWorker) {
+    selectWorker(pmWorker.id);
+  } else {
+    selectWorker(null);
+  }
   renderTaskPriorityOptions();
   initProjectSelect2();
   setTimeout(() => {
@@ -4954,8 +4966,9 @@ function renderCrudFields(entity, row = {}) {
       <div class="crud-field"><label>${tc('role')}</label><input id="crud_role" value="${esc(row.role || '')}"></div>
       <div class="crud-field"><label>${tc('is_agent_field')}</label>
         <select id="crud_is_agent">
-          <option value="0" ${row.is_agent ? '' : 'selected'}>Нет</option>
-          <option value="1" ${row.is_agent ? 'selected' : ''}>Да</option>
+          <option value="0" ${Number(row.is_agent) === 0 ? 'selected' : ''}>0 — Не агент</option>
+          <option value="1" ${Number(row.is_agent) === 1 ? 'selected' : ''}>1 — Главный агент (ПМ)</option>
+          <option value="2" ${Number(row.is_agent) === 2 ? 'selected' : ''}>2 — Агент исполнитель</option>
         </select>
       </div>
       <div class="crud-field"><label>${tc('agent_link')}</label><select id="crud_agent_id">${agentOptions}</select></div>
@@ -5168,7 +5181,7 @@ async function submitCrudModal(e) {
         name: crudValue('crud_name').trim(),
         shortname: crudValue('crud_shortname').trim(),
         role: crudValue('crud_role').trim() || null,
-        is_agent: (crudValue('crud_is_agent') || '0') === '1',
+        is_agent: parseInt(crudValue('crud_is_agent') || '0', 10),
         agent_id: agentIdRaw ? parseInt(agentIdRaw, 10) : null,
         status: parseInt(crudValue('crud_status') || '0', 10),
         avatar_url: avatarUrlRaw || null,
@@ -6291,7 +6304,7 @@ function normalizedAvatarUrl(url) {
 function workerAvatarUrl(r) {
   if (r.avatar_url) return r.avatar_url;
   const seed = encodeURIComponent(r.shortname || r.name || String(r.id));
-  if (r.is_agent) return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+  if (r.is_agent > 0) return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
   return `https://api.dicebear.com/7.x/lorelei/svg?seed=${seed}&backgroundColor=b6e3f4,ffdfbf,c0aede`;
 }
 
@@ -6357,7 +6370,7 @@ function populateWorkerSelect() {
   const dropdown = document.getElementById('workerPickerDropdown');
   if (!dropdown) return;
   const currentVal = document.getElementById('workerInput').value;
-  const active = adminWorkersRows.filter(w => w.status === 1 || w.status === 3);
+  const active = adminWorkersRows.filter(w => (w.status === 1 || w.status === 3) && Number(w.is_agent) === 1);
   dropdown.innerHTML =
     `<div class="worker-picker-item${!currentVal ? ' selected' : ''}" onclick="selectWorker(null)">` +
     `<img class="worker-avatar-sm" src="${WORKER_DEFAULT_AVATAR}" alt="">` +
@@ -6388,6 +6401,11 @@ function selectWorker(id) {
   document.getElementById('workerInput').value = id ?? '';
   closeWorkerPicker();
   populateWorkerSelect();
+  const providerLabel = document.getElementById('providerLabel');
+  if (providerLabel) {
+    const worker = id ? adminWorkersRows.find(w => w.id === id) : null;
+    providerLabel.style.display = (worker && worker.agent_id) ? 'none' : '';
+  }
 }
 
 function toggleWorkerPicker(e) {
@@ -6421,7 +6439,7 @@ async function loadWorkersCrud() {
       <td>${esc(r.name || '')}</td>
       <td>${esc(r.shortname || '')}</td>
       <td>${esc(r.role || '')}</td>
-      <td>${r.is_agent ? 'Да' : 'Нет'}</td>
+      <td>${['—', 'ПМ', 'Исп.'][Number(r.is_agent)] ?? r.is_agent}</td>
       <td>${esc(r.agent_name || (r.agent_id ? String(r.agent_id) : ''))}</td>
       <td>${WORKER_STATUS_LABELS[r.status] ?? r.status}</td>
       <td class="admin-actions">
@@ -6479,7 +6497,7 @@ function renderWorkersCards(rows) {
       <div class="admin-mobile-body">
         <div class="admin-mobile-kv"><b>Short:</b> ${esc(r.shortname || '')}</div>
         <div class="admin-mobile-kv"><b>Роль:</b> ${esc(r.role || '—')}</div>
-        <div class="admin-mobile-kv"><b>Агент:</b> ${r.is_agent ? 'Да' : 'Нет'}</div>
+        <div class="admin-mobile-kv"><b>Агент:</b> ${['—', 'ПМ', 'Исполнитель'][Number(r.is_agent)] ?? r.is_agent}</div>
         ${r.agent_name ? `<div class="admin-mobile-kv"><b>Agent:</b> ${esc(r.agent_name)}</div>` : ''}
         <div class="admin-mobile-kv"><b>Статус:</b> ${statusLabel}</div>
         ${r.avatar_url ? `<div class="admin-mobile-kv"><b>Аватар:</b> <a href="${esc(r.avatar_url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;word-break:break-all">${esc(r.avatar_url)}</a></div>` : ''}
