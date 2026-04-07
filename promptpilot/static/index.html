@@ -2145,6 +2145,7 @@
       <div class="side-group-title">Справочники</div>
       <a id="menuAgents" class="side-btn" href="/agents" onclick="return onMenuLinkClick(event, 'agents')">Агенты</a>
       <a id="menuTaskStatuses" class="side-btn" href="/task-statuses" onclick="return onMenuLinkClick(event, 'task-statuses')">Статусы задач</a>
+      <a id="menuPriorities" class="side-btn" href="/priorities" onclick="return onMenuLinkClick(event, 'priorities')">Приоритеты</a>
       <a id="menuPrompts" class="side-btn" href="/prompts" onclick="return onMenuLinkClick(event, 'prompts')">Промпты</a>
       <a id="menuWorkers" class="side-btn" href="/workers" onclick="return onMenuLinkClick(event, 'workers')">Исполнители</a>
     </div>
@@ -2290,6 +2291,19 @@
     <table class="admin-table">
       <thead><tr><th>№</th><th>Цвет</th><th>ID</th><th>Название</th><th>Short</th><th>status_to</th><th>Статус</th><th></th></tr></thead>
       <tbody id="taskStatusesTbody"></tbody>
+    </table>
+  </div>
+
+  <div class="admin-view" id="prioritiesView">
+    <div class="admin-header">
+      <div class="admin-title" id="prioritiesTitle">Приоритеты</div>
+      <input id="prioritiesSearch" placeholder="Поиск..." oninput="loadPrioritiesCrud()">
+      <button class="btn admin-add-btn" type="button" title="Добавить" onclick="createPriorityCrud()">+</button>
+    </div>
+    <div class="admin-mobile-list" id="prioritiesCards"></div>
+    <table class="admin-table">
+      <thead><tr><th></th><th>ID</th><th>Название</th><th>Short</th><th>Иконка</th><th>Статус</th><th></th></tr></thead>
+      <tbody id="prioritiesTbody"></tbody>
     </table>
   </div>
 
@@ -2455,6 +2469,7 @@ let adminAccountsRows = [];
 let adminPromptsRows = [];
 let adminWorkersRows = [];
 let adminTaskStatusesRows = [];
+let adminPrioritiesRows = [];
 let adminCardExpanded = new Set();
 let adminCardMenuKey = null;
 let appTimezone = 'UTC';
@@ -2473,6 +2488,7 @@ const I18N = {
     tasks: 'Задачи',
     projects: 'Проекты',
     agents: 'Агенты',
+    priorities: 'Приоритеты',
     accounts: 'Учётные записи агентов',
     prompts: 'Промпты',
     help: 'Помощь',
@@ -2565,6 +2581,7 @@ const I18N = {
     tasks: 'Tasks',
     projects: 'Projects',
     agents: 'Agents',
+    priorities: 'Priorities',
     accounts: 'Agent Accounts',
     prompts: 'Prompts',
     help: 'Help',
@@ -2706,11 +2723,13 @@ function applyLanguage(lang) {
   document.getElementById('menuInteractive').textContent = tr('interactive');
   document.getElementById('menuProjects').textContent = tr('projects');
   document.getElementById('menuAgents').textContent = tr('agents');
+  document.getElementById('menuPriorities').textContent = tr('priorities');
   document.getElementById('menuAccounts').textContent = tr('accounts');
   document.getElementById('menuPrompts').textContent = tr('prompts');
   document.getElementById('interactiveTitle').textContent = tr('interactive');
   document.getElementById('projectsTitle').textContent = tr('projects');
   document.getElementById('agentsTitle').textContent = tr('agents');
+  document.getElementById('prioritiesTitle').textContent = tr('priorities');
   document.getElementById('accountsTitle').textContent = tr('accounts');
   document.getElementById('promptsTitle').textContent = tr('prompts');
   document.getElementById('menuToggle').setAttribute('aria-label', tr('open_menu'));
@@ -3972,7 +3991,7 @@ let currentView = 'tasks';
 let lastContentView = 'tasks';
 let currentHelpSection = 'tasks';
 
-const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help', 'workers', 'task-statuses', 'kanban']);
+const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help', 'workers', 'task-statuses', 'priorities', 'kanban']);
 
 function isMobileLayout() {
   return window.matchMedia('(max-width: 980px)').matches;
@@ -4059,6 +4078,7 @@ function switchView(view, opts = {}) {
   document.getElementById('promptsView').style.display = view === 'prompts' ? 'block' : 'none';
   document.getElementById('workersView').style.display = view === 'workers' ? 'block' : 'none';
   document.getElementById('taskStatusesView').style.display = view === 'task-statuses' ? 'block' : 'none';
+  document.getElementById('prioritiesView').style.display = view === 'priorities' ? 'block' : 'none';
   const kanbanEl = document.getElementById('kanbanView');
   if (view === 'kanban') { kanbanEl.classList.add('kanban-active'); document.body.classList.add('kanban-fullwidth'); }
   else { kanbanEl.classList.remove('kanban-active'); document.body.classList.remove('kanban-fullwidth'); }
@@ -4071,6 +4091,7 @@ function switchView(view, opts = {}) {
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
   document.getElementById('menuWorkers').classList.toggle('active', view === 'workers');
   document.getElementById('menuTaskStatuses').classList.toggle('active', view === 'task-statuses');
+  document.getElementById('menuPriorities').classList.toggle('active', view === 'priorities');
   document.getElementById('menuKanban').classList.toggle('active', view === 'kanban');
 
   if (view === 'projects') loadProjectsCrud();
@@ -4088,6 +4109,7 @@ function switchView(view, opts = {}) {
   if (view === 'prompts') loadPromptsCrud();
   if (view === 'workers') loadWorkersCrud();
   if (view === 'task-statuses') loadTaskStatusesCrud();
+  if (view === 'priorities') loadPrioritiesCrud();
   if (view === 'kanban') {
     if (kanbanProjectSlug) {
       document.getElementById('kanbanProjectPicker').style.display = 'none';
@@ -4185,6 +4207,7 @@ function renderCurrentAdminCards() {
   if (currentView === 'prompts') renderPromptsCards(adminPromptsRows);
   if (currentView === 'workers') renderWorkersCards(adminWorkersRows);
   if (currentView === 'task-statuses') renderTaskStatusesCards(adminTaskStatusesRows);
+  if (currentView === 'priorities') renderPrioritiesCards(adminPrioritiesRows);
 }
 
 const CRUD_TX = {
@@ -4206,6 +4229,7 @@ const CRUD_TX = {
     comment: 'Комментарий',
     email: 'Email',
     priority: 'Приоритет',
+    priority_ref: 'приоритет',
     status: 'Статус',
     active: 'Активный',
     disabled: 'Отключен',
@@ -4227,7 +4251,9 @@ const CRUD_TX = {
     is_agent_field: 'Является агентом',
     task_status: 'статус задачи',
     delete_task_status_confirm: 'Удалить статус задачи',
+    delete_priority_confirm: 'Удалить приоритет',
     status_to: 'Маппинг на статус (status_to)',
+    icon: 'Иконка',
     invalid_json: 'Некорректный JSON в options',
     invalid_color: 'Некорректный цвет. Используйте формат #RRGGBB',
     relogin: 'Войти',
@@ -4252,6 +4278,7 @@ const CRUD_TX = {
     comment: 'Comment',
     email: 'Email',
     priority: 'Priority',
+    priority_ref: 'priority',
     status: 'Status',
     active: 'Active',
     disabled: 'Disabled',
@@ -4273,7 +4300,9 @@ const CRUD_TX = {
     is_agent_field: 'Is agent',
     task_status: 'task status',
     delete_task_status_confirm: 'Delete task status',
+    delete_priority_confirm: 'Delete priority',
     status_to: 'Map to status (status_to)',
+    icon: 'Icon',
     invalid_json: 'Invalid JSON in options',
     invalid_color: 'Invalid color. Use #RRGGBB format',
     relogin: 'Login',
@@ -4348,6 +4377,7 @@ function entityTitle(entity) {
   if (entity === 'prompt') return tc('prompt');
   if (entity === 'worker') return tc('worker');
   if (entity === 'task_status') return tc('task_status');
+  if (entity === 'priority') return tc('priority_ref');
   return tc('account');
 }
 
@@ -4405,6 +4435,24 @@ function renderCrudFields(entity, row = {}) {
           <input id="crud_color" type="color" value="${esc(row.color || '#6b7280')}" style="width:44px;height:32px;padding:2px;cursor:pointer;border:1px solid var(--border);border-radius:6px;background:var(--bg)">
           <input id="crud_color_hex" type="text" placeholder="#rrggbb" value="${esc(row.color || '#6b7280')}" style="width:90px" oninput="document.getElementById('crud_color').value=this.value">
         </div>
+      </div>
+      <div class="crud-field"><label>${tc('status')}</label>
+        <select id="crud_status">
+          <option value="1" ${Number(row.status ?? 1) === 1 ? 'selected' : ''}>1 — Включён</option>
+          <option value="0" ${Number(row.status ?? 1) === 0 ? 'selected' : ''}>0 — Выключен</option>
+          <option value="2" ${Number(row.status ?? 1) === 2 ? 'selected' : ''}>2 — Выключен</option>
+        </select>
+      </div>
+    `;
+  }
+  if (entity === 'priority') {
+    return `
+      <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
+      <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field">
+        <label>${tc('icon')}</label>
+        <input id="crud_icon" type="url" placeholder="https://..." value="${esc(row.icon || '')}">
+        ${row.icon ? `<div style="margin-top:6px"><img src="${esc(row.icon)}" style="width:18px;height:18px;object-fit:contain" alt="icon"></div>` : ''}
       </div>
       <div class="crud-field"><label>${tc('status')}</label>
         <select id="crud_status">
@@ -4484,6 +4532,7 @@ async function openCrudModal(entity, mode, id = null) {
     if (entity === 'prompt') row = adminPromptsRows.find(x => x.id === id) || {};
     if (entity === 'worker') row = adminWorkersRows.find(x => x.id === id) || {};
     if (entity === 'task_status') row = adminTaskStatusesRows.find(x => x.id === id) || {};
+    if (entity === 'priority') row = adminPrioritiesRows.find(x => x.id === id) || {};
   }
   crudState = { entity, mode, id };
   const title = `${mode === 'create' ? tc('add') : tc('edit')} ${entityTitle(entity)}`;
@@ -4650,6 +4699,24 @@ async function submitCrudModal(e) {
       if (isMobileLayout()) closeCrudScreen();
       else closeCrudModal();
       await loadWorkersCrud();
+      return;
+    }
+    if (crudState.entity === 'priority') {
+      const iconRaw = crudValue('crud_icon').trim();
+      const body = {
+        name: crudValue('crud_name').trim(),
+        shortname: crudValue('crud_shortname').trim(),
+        icon: iconRaw || null,
+        status: parseInt(crudValue('crud_status') || '1', 10),
+      };
+      if (mode === 'create') {
+        await fetchJSON(`${API}/admin/priorities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await fetchJSON(`${API}/admin/priorities/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      if (isMobileLayout()) closeCrudScreen();
+      else closeCrudModal();
+      await loadPrioritiesCrud();
       return;
     }
     if (isMobileLayout()) closeCrudScreen();
@@ -5400,6 +5467,85 @@ function renderTaskStatusesCards(rows) {
 async function ensureTaskStatusesRows(force = false) {
   if (!force && adminTaskStatusesRows.length) return;
   adminTaskStatusesRows = await fetchJSON(`${API}/admin/task-statuses`);
+}
+
+// --- CRUD: Priorities ---
+
+function priorityIconHtml(r, cls = '') {
+  const icon = (r && r.icon) ? String(r.icon).trim() : '';
+  if (!icon) return '<span style="color:var(--text2)">—</span>';
+  const klass = cls ? ` class="${cls}"` : '';
+  return `<img${klass} src="${esc(icon)}" alt="${esc((r && r.name) || '')}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle">`;
+}
+
+async function loadPrioritiesCrud() {
+  const q = document.getElementById('prioritiesSearch').value.trim();
+  const rows = await fetchJSON(`${API}/admin/priorities${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  adminPrioritiesRows = rows;
+  const tbody = document.getElementById('prioritiesTbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="width:28px;text-align:center">${priorityIconHtml(r)}</td>
+      <td>${r.id}</td>
+      <td>${esc(r.name || '')}</td>
+      <td><code>${esc(r.shortname || '')}</code></td>
+      <td>${r.icon ? `<a href="${esc(r.icon)}" target="_blank" rel="noopener noreferrer">${esc(r.icon)}</a>` : '<span style="color:var(--text2)">—</span>'}</td>
+      <td>${r.status === 1 ? 'Вкл' : 'Выкл'}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" onclick="editPriorityCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deletePriorityCrud(${r.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+  renderPrioritiesCards(rows);
+}
+
+async function createPriorityCrud() { await openCrudModal('priority', 'create'); }
+async function editPriorityCrud(id) { await openCrudModal('priority', 'edit', id); }
+
+async function deletePriorityCrud(id) {
+  if (!confirm(`${tc('delete_priority_confirm')} #${id}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/priorities/${id}`, { method: 'DELETE' });
+    await loadPrioritiesCrud();
+  } catch (e) {
+    alert(`${tc('delete_failed')}: ${e.message}`);
+  }
+}
+
+function renderPrioritiesCards(rows) {
+  const cards = document.getElementById('prioritiesCards');
+  cards.innerHTML = rows.map(r => {
+    const expanded = isAdminExpanded('priority', r.id);
+    const on = r.status === 1;
+    return `
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+      <div class="admin-mobile-head" onclick="toggleAdminCard('priority', ${r.id})">
+        <div class="admin-mobile-icon" style="display:flex;align-items:center;justify-content:center;background:var(--surface2)">${priorityIconHtml(r)}</div>
+        <div class="admin-mobile-main">
+          <div class="admin-mobile-title">${esc(r.name || '')}</div>
+          <div class="admin-mobile-sub">
+            <span class="admin-mobile-chip"><code>${esc(r.shortname || '')}</code></span>
+            <span class="admin-mobile-chip">${on ? 'Вкл' : 'Выкл'}</span>
+          </div>
+        </div>
+        <div class="prompt-mobile-inline-actions">
+          <button class="prompt-mobile-icon-btn" type="button" onclick="event.stopPropagation(); editPriorityCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" onclick="event.stopPropagation(); deletePriorityCrud(${r.id})">🗑</button>
+        </div>
+      </div>
+      <div class="admin-mobile-body">
+        <div class="admin-mobile-kv"><b>Short:</b> <code>${esc(r.shortname || '')}</code></div>
+        <div class="admin-mobile-kv"><b>Иконка:</b> ${priorityIconHtml(r)} ${r.icon ? `<a href="${esc(r.icon)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;word-break:break-all">${esc(r.icon)}</a>` : '—'}</div>
+        <div class="admin-mobile-kv"><b>Статус:</b> ${on ? 'Включён' : 'Выключен'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function ensurePrioritiesRows(force = false) {
+  if (!force && adminPrioritiesRows.length) return;
+  adminPrioritiesRows = await fetchJSON(`${API}/admin/priorities`);
 }
 
 // --- CRUD: Workers ---

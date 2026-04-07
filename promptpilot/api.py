@@ -1160,6 +1160,80 @@ def api_admin_delete_task_status(status_id: int):
         raise HTTPException(400, f"Delete task status failed: {e}")
 
 
+# --- Priorities ---
+
+@app.get("/api/admin/priorities")
+def api_admin_priorities(q: Optional[str] = None):
+    return db.list_priorities(search=q, limit=500)
+
+
+@app.post("/api/admin/priorities")
+def api_admin_create_priority(payload: dict):
+    if not str(payload.get("name", "")).strip():
+        raise HTTPException(400, "name is required")
+    if not str(payload.get("shortname", "")).strip():
+        raise HTTPException(400, "shortname is required")
+    status = payload.get("status", 1)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be 0, 1 or 2")
+    if status not in (0, 1, 2):
+        raise HTTPException(400, "status must be 0, 1 or 2")
+    try:
+        return db.create_priority(
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            icon=str(payload["icon"]).strip() if payload.get("icon") else None,
+            status=status,
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Create priority failed: {e}")
+
+
+@app.patch("/api/admin/priorities/{priority_id}")
+def api_admin_update_priority(priority_id: int, payload: dict):
+    if not str(payload.get("name", "")).strip():
+        raise HTTPException(400, "name is required")
+    if not str(payload.get("shortname", "")).strip():
+        raise HTTPException(400, "shortname is required")
+    status = payload.get("status", 1)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be 0, 1 or 2")
+    if status not in (0, 1, 2):
+        raise HTTPException(400, "status must be 0, 1 or 2")
+    try:
+        ok = db.update_priority(
+            priority_id=priority_id,
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            icon=str(payload["icon"]).strip() if payload.get("icon") else None,
+            status=status,
+        )
+        if not ok:
+            raise HTTPException(404, "Priority not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Update priority failed: {e}")
+
+
+@app.delete("/api/admin/priorities/{priority_id}")
+def api_admin_delete_priority(priority_id: int):
+    try:
+        ok = db.delete_priority(priority_id)
+        if not ok:
+            raise HTTPException(404, "Priority not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Delete priority failed: {e}")
+
+
 # --- Frontend ---
 
 @app.get("/")
@@ -1185,6 +1259,7 @@ def help_page(section: str):
         "prompts": "prompts.html",
         "workers": "workers.html",
         "task-statuses": "task-statuses.html",
+        "priorities": "priorities.html",
         "kanban": "kanban.html",
     }
     name = allowed.get(str(section or "").strip().lower())
