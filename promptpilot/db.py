@@ -160,6 +160,28 @@ def _find_ref_task_status_id_by_shortname(cur, shortname: str, *, active_only: b
     return int(row["id"]) if row else None
 
 
+def _find_default_pm_worker_id(cur) -> Optional[int]:
+    """Найти исполнителя PM для назначения по умолчанию."""
+    cur.execute(
+        sql.SQL(
+            """
+            SELECT id
+            FROM {}.workers
+            WHERE
+                LOWER(COALESCE(shortname, '')) = 'pm'
+                OR LOWER(COALESCE(role, '')) IN ('pm', 'project manager')
+            ORDER BY
+                CASE WHEN LOWER(COALESCE(shortname, '')) = 'pm' THEN 0 ELSE 1 END,
+                CASE WHEN status IN (1, 3) THEN 0 ELSE 1 END,
+                id ASC
+            LIMIT 1
+            """
+        ).format(sql.Identifier(SCHEMA_NAME))
+    )
+    row = cur.fetchone()
+    return int(row["id"]) if row else None
+
+
 def _normalize_project_color(color: Optional[str]) -> Optional[str]:
     if color is None:
         return None
@@ -732,6 +754,9 @@ def create_task(task: TaskCreate) -> TaskInDB:
             task_status_id = _find_ref_task_status_id_by_shortname(cur, "new", active_only=True)
         if task_status_id is None:
             task_status_id = _find_ref_task_status_id(cur, TaskStatus.PENDING.value)
+        worker_id = task.worker_id
+        if worker_id is None:
+            worker_id = _find_default_pm_worker_id(cur)
         cur.execute(
             sql.SQL(
                 """
@@ -760,7 +785,7 @@ def create_task(task: TaskCreate) -> TaskInDB:
                 task.parent_task_id,
                 task.tg_chat_id,
                 task.recurrence,
-                task.worker_id,
+                worker_id,
                 task_status_id,
                 task.prompt_list or None,
                 task.nom_run,
