@@ -4,7 +4,7 @@ import json
 import re
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import psycopg
 from psycopg.errors import UndefinedTable
@@ -178,6 +178,27 @@ def _pick_next_project_color(cur) -> str:
     row = cur.fetchone() or {"cnt": 0}
     idx = int(row["cnt"] or 0) % len(PROJECT_PASTEL_COLORS)
     return PROJECT_PASTEL_COLORS[idx]
+
+
+def _task_project_match_sql() -> sql.SQL:
+    """SQL fragment matching task.working_dir to projects.folder."""
+    return sql.SQL(
+        """
+        (
+            REGEXP_REPLACE(TRIM(p.folder), '/+$', '') = t.wd
+            OR REGEXP_REPLACE(
+                TRIM(
+                  CASE
+                    WHEN p.folder LIKE '/%%' THEN p.folder
+                    ELSE %s || '/' || p.folder
+                  END
+                ),
+                '/+$',
+                ''
+            ) = t.wd
+        )
+        """
+    )
 
 
 def _row_to_task(row: dict) -> TaskInDB:
@@ -431,7 +452,7 @@ def init_db():
             sql.SQL(
                 """
                 INSERT INTO {}.tasks_statuses (nom, name, shortname, status_to, color, status, created_at, updated_at)
-                VALUES (1, 'Бэклог', 'backlog', NULL, '#64748b', 1, NOW(), NOW())
+                VALUES (1, 'Бэклог', 'backlog', NULL, '#eab308', 1, NOW(), NOW())
                 ON CONFLICT (shortname) DO UPDATE
                 SET nom = EXCLUDED.nom,
                     name = EXCLUDED.name,
@@ -721,6 +742,7 @@ def create_task(task: TaskCreate) -> TaskInDB:
         task_id = cur.fetchone()["id"]
         result = get_task(task_id, conn=conn)
     touch_project_last_used_by_task(task_id)
+    try_enqueue_task_job(task_id)
     return result
 
 
@@ -799,6 +821,250 @@ def get_next_runnable() -> Optional[TaskInDB]:
         )
         row = cur.fetchone()
         return _row_to_task(row) if row else None
+
+
+def claim_task_for_run(task_id: int) -> Optional[TaskInDB]:
+    """Atomically move one конкретную задачу into running if it is due."""
+    now = _now()
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                WITH candidate AS (
+                    SELECT t.id
+                    FROM {} t
+                    LEFT JOIN {}.tasks_statuses ts ON ts.id = t.task_status_id
+                    WHERE t.id = %s
+                      AND t.status IN ('pending', 'rate_limited')
+                      AND (t.scheduled_at IS NULL OR t.scheduled_at <= %s)
+                      AND (t.next_run_at IS NULL OR t.next_run_at <= %s)
+                      AND (ts.shortname IS NULL OR LOWER(ts.shortname) <> 'backlog')
+                    FOR UPDATE SKIP LOCKED
+                ),
+                running_status AS (
+                    SELECT id
+                    FROM {}.tasks_statuses
+                    WHERE status_to = 'running'
+                    ORDER BY
+                        CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                        nom ASC NULLS LAST,
+                        id ASC
+                    LIMIT 1
+                )
+                UPDATE {} t
+                SET status = 'running',
+                    started_at = %s,
+                    task_status_id = COALESCE(running_status.id, t.task_status_id)
+                FROM candidate
+                LEFT JOIN running_status ON TRUE
+                WHERE t.id = candidate.id
+                RETURNING t.*
+                """
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME), _tasks_ref()),
+            (task_id, now, now, _now()),
+        )
+        row = cur.fetchone()
+        return _row_to_task(row) if row else None
+
+
+def _task_job_row(task_id: int, *, conn=None) -> Optional[dict[str, Any]]:
+    base_root = (PROJECTS_ROOT or "/www/wwwroot").rstrip("/")
+
+    def _query(c):
+        with c.cursor() as cur:
+            cur.execute(
+                sql.SQL(
+                    """
+                    WITH t AS (
+                        SELECT
+                            id,
+                            parent_task_id,
+                            worker_id,
+                            agent_account_id,
+                            NULLIF(REGEXP_REPLACE(TRIM(working_dir), '/+$', ''), '') AS wd
+                        FROM {}
+                        WHERE id = %s
+                        LIMIT 1
+                    )
+                    SELECT
+                        t.id AS task_id,
+                        t.parent_task_id,
+                        t.worker_id AS executor_id,
+                        COALESCE(w.agent_id, aa.agent_id) AS agent_id,
+                        p.id AS project_id
+                    FROM t
+                    LEFT JOIN {}.workers w ON w.id = t.worker_id
+                    LEFT JOIN {}.agents_accounts aa ON aa.id = t.agent_account_id
+                    LEFT JOIN LATERAL (
+                        SELECT p.id
+                        FROM {}.projects p
+                        WHERE p.deleted_at IS NULL
+                          AND t.wd IS NOT NULL
+                          AND {}
+                        ORDER BY p.last_used_at DESC NULLS LAST, p.id ASC
+                        LIMIT 1
+                    ) p ON TRUE
+                    """
+                ).format(
+                    _tasks_ref(),
+                    sql.Identifier(SCHEMA_NAME),
+                    sql.Identifier(SCHEMA_NAME),
+                    sql.Identifier(SCHEMA_NAME),
+                    _task_project_match_sql(),
+                ),
+                (task_id, base_root),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    if conn:
+        return _query(conn)
+    with _connect() as c:
+        return _query(c)
+
+
+def get_task_job_payload(task_id: int) -> Optional[dict]:
+    row = _task_job_row(task_id)
+    if not row:
+        return None
+    return {
+        "task_id": int(row["task_id"]),
+        "parent_task_id": int(row["parent_task_id"]) if row.get("parent_task_id") is not None else None,
+        "executor_id": int(row["executor_id"]) if row.get("executor_id") is not None else None,
+        "agent_id": int(row["agent_id"]) if row.get("agent_id") is not None else None,
+        "project_id": int(row["project_id"]) if row.get("project_id") is not None else None,
+    }
+
+
+def list_due_task_jobs(limit: int = 500) -> list[dict]:
+    """Due pending/rate-limited tasks to be dispatched into RabbitMQ."""
+    now = _now()
+    base_root = (PROJECTS_ROOT or "/www/wwwroot").rstrip("/")
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                WITH due AS (
+                    SELECT
+                        t.id AS task_id,
+                        t.parent_task_id,
+                        t.worker_id AS executor_id,
+                        COALESCE(w.agent_id, aa.agent_id) AS agent_id,
+                        NULLIF(REGEXP_REPLACE(TRIM(t.working_dir), '/+$', ''), '') AS wd
+                    FROM {} t
+                    LEFT JOIN {}.tasks_statuses ts ON ts.id = t.task_status_id
+                    LEFT JOIN {}.workers w ON w.id = t.worker_id
+                    LEFT JOIN {}.agents_accounts aa ON aa.id = t.agent_account_id
+                    WHERE t.status IN ('pending', 'rate_limited')
+                      AND (t.scheduled_at IS NULL OR t.scheduled_at <= %s)
+                      AND (t.next_run_at IS NULL OR t.next_run_at <= %s)
+                      AND (ts.shortname IS NULL OR LOWER(ts.shortname) <> 'backlog')
+                    ORDER BY t.priority ASC, t.created_at ASC
+                    LIMIT %s
+                )
+                SELECT
+                    d.task_id,
+                    d.parent_task_id,
+                    d.executor_id,
+                    d.agent_id,
+                    p.id AS project_id
+                FROM due d
+                LEFT JOIN LATERAL (
+                    SELECT p.id
+                    FROM {}.projects p
+                    WHERE p.deleted_at IS NULL
+                      AND d.wd IS NOT NULL
+                      AND (
+                        REGEXP_REPLACE(TRIM(p.folder), '/+$', '') = d.wd
+                        OR REGEXP_REPLACE(
+                            TRIM(
+                              CASE
+                                WHEN p.folder LIKE '/%%' THEN p.folder
+                                ELSE %s || '/' || p.folder
+                              END
+                            ),
+                            '/+$',
+                            ''
+                        ) = d.wd
+                      )
+                    ORDER BY p.last_used_at DESC NULLS LAST, p.id ASC
+                    LIMIT 1
+                ) p ON TRUE
+                """
+            ).format(
+                _tasks_ref(),
+                sql.Identifier(SCHEMA_NAME),
+                sql.Identifier(SCHEMA_NAME),
+                sql.Identifier(SCHEMA_NAME),
+                sql.Identifier(SCHEMA_NAME),
+            ),
+            (now, now, limit, base_root),
+        )
+        rows = cur.fetchall()
+
+    jobs = []
+    for row in rows:
+        jobs.append(
+            {
+                "task_id": int(row["task_id"]),
+                "parent_task_id": int(row["parent_task_id"]) if row.get("parent_task_id") is not None else None,
+                "executor_id": int(row["executor_id"]) if row.get("executor_id") is not None else None,
+                "agent_id": int(row["agent_id"]) if row.get("agent_id") is not None else None,
+                "project_id": int(row["project_id"]) if row.get("project_id") is not None else None,
+            }
+        )
+    return jobs
+
+
+def get_project_queue_names(include_default: bool = True) -> list[str]:
+    from .rabbitmq import queue_name_for_project
+
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT id
+                FROM {}.projects
+                WHERE deleted_at IS NULL
+                ORDER BY id ASC
+                """
+            ).format(sql.Identifier(SCHEMA_NAME))
+        )
+        rows = cur.fetchall()
+
+    queues = [queue_name_for_project(int(r["id"])) for r in rows]
+    if include_default:
+        default_q = queue_name_for_project(None)
+        if default_q not in queues:
+            queues.append(default_q)
+    return queues
+
+
+def try_enqueue_task_job(task_id: int) -> bool:
+    """Publish one task job to RabbitMQ queue when task is immediately runnable."""
+    try:
+        payload = get_task_job_payload(task_id)
+        if not payload:
+            return False
+        task = get_task(task_id)
+        if not task:
+            return False
+        now = _now()
+        if task.status not in (TaskStatus.PENDING, TaskStatus.RATE_LIMITED):
+            return False
+        if task.scheduled_at and task.scheduled_at > now:
+            return False
+        if task.next_run_at and task.next_run_at > now:
+            return False
+        from .rabbitmq import RabbitQueue, queue_name_for_project
+
+        queue = queue_name_for_project(payload.get("project_id"))
+        rabbit = RabbitQueue()
+        ok = rabbit.publish(queue, payload)
+        rabbit.close()
+        return bool(ok)
+    except Exception:
+        return False
 
 
 def mark_completed(

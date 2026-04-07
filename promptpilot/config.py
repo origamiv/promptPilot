@@ -102,6 +102,17 @@ MAX_DELAY = int(os.environ.get("PP_MAX_DELAY", "3600"))
 MAX_RETRIES = int(os.environ.get("PP_MAX_RETRIES", "5"))
 AGENT_USER = os.environ.get("AGENT_USER", "").strip()
 
+# Queue (RabbitMQ)
+QUEUE_CONNECTION = os.environ.get("PP_QUEUE_CONNECTION", os.environ.get("QUEUE_CONNECTION", "rabbitmq")).strip().lower()
+RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "127.0.0.1")
+RABBITMQ_PORT = int(os.environ.get("RABBITMQ_PORT", "5672"))
+RABBITMQ_USER = os.environ.get("RABBITMQ_USER", "guest")
+RABBITMQ_PASSWORD = os.environ.get("RABBITMQ_PASSWORD", "guest")
+RABBITMQ_VHOST = os.environ.get("RABBITMQ_VHOST", "/")
+RABBITMQ_HEARTBEAT = int(os.environ.get("PP_RABBITMQ_HEARTBEAT", "30"))
+RABBITMQ_PREFETCH = int(os.environ.get("PP_RABBITMQ_PREFETCH", "1"))
+RABBITMQ_QUEUE_PREFIX = os.environ.get("PP_RABBITMQ_QUEUE_PREFIX", "pp_").strip() or "pp_"
+
 # Default CLI command
 DEFAULT_CLI = os.environ.get("PP_DEFAULT_CLI", "claude")
 
@@ -256,7 +267,7 @@ def remove_provider(name: str) -> bool:
     return True
 
 
-def build_cmd(provider: str, prompt: str, skip_permissions: bool = False, session_id: str = None, model: str = None):
+def build_cmd(provider: str, prompt: str, skip_permissions: bool = False, session_id: str = None, model: str = None, system_prompt: str = None):
     """Build the full command list for a provider + prompt."""
     providers = load_providers()
     if provider in providers:
@@ -272,6 +283,9 @@ def build_cmd(provider: str, prompt: str, skip_permissions: bool = False, sessio
         extras += ["--model", model]
     if session_id:
         extras += ["--resume", session_id]
+    if system_prompt and providers.get(provider, {}).get("supports_skills", False):
+        # Pass worker system prompt at true system level (replaces AGENTS.md/CLAUDE.md).
+        extras += ["--system-prompt", system_prompt]
     if skip_permissions:
         # Provider-specific "skip permissions" flags:
         # - Claude Code: --dangerously-skip-permissions
@@ -281,10 +295,22 @@ def build_cmd(provider: str, prompt: str, skip_permissions: bool = False, sessio
         elif providers.get(provider, {}).get("supports_skills", False):
             extras.append("--dangerously-skip-permissions")
     if extras:
-        # Avoid duplicating flags if they are already present in provider template.
-        extras = [x for x in extras if x not in cmd]
+        # Avoid duplicating simple flags already present in provider template.
+        # Note: --system-prompt and --model take values, so skip simple dedup for them.
+        deduped = []
+        i = 0
+        while i < len(extras):
+            flag = extras[i]
+            if flag in ("--system-prompt", "--model", "--resume") and i + 1 < len(extras):
+                deduped += [flag, extras[i + 1]]
+                i += 2
+            elif flag not in cmd:
+                deduped.append(flag)
+                i += 1
+            else:
+                i += 1
         prompt_idx = cmd.index(prompt)
-        cmd[prompt_idx:prompt_idx] = extras
+        cmd[prompt_idx:prompt_idx] = deduped
     return cmd
 
 

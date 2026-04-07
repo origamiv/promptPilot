@@ -28,6 +28,7 @@ from .config import (
 )
 from .limits import refresh_limits_for_provider
 from .models import TaskCreate
+from .rabbitmq import RabbitQueue, queue_name_for_project
 
 RATE_LIMIT_PATTERNS = [
     "rate limit",
@@ -288,7 +289,7 @@ def _load_worker_system_prompt(worker_id: int) -> str | None:
     return field
 
 
-def _build_prompt_from_list(task) -> str:
+def _build_prompt_from_list(task, skip_base: bool = False) -> str:
     """Собрать итоговый промпт из task.prompt_list.
 
     Элементы списка (через запятую):
@@ -296,6 +297,9 @@ def _build_prompt_from_list(task) -> str:
       current → task.prompt (задача пользователя)
       project → comment проекта по task.working_dir
       <other> → промпт из таблицы prompts по shortname
+
+    skip_base=True: не включать 'base' в результат (используется когда worker sys prompt
+    передаётся отдельно через --system-prompt флаг).
     """
     items = [x.strip() for x in task.prompt_list.split(",") if x.strip()]
 
@@ -322,7 +326,8 @@ def _build_prompt_from_list(task) -> str:
             if comment:
                 parts.append(comment)
         elif key == "base" and worker_sys:
-            parts.append(worker_sys)
+            if not skip_base:
+                parts.append(worker_sys)
         else:
             if key in by_short:
                 parts.append(by_short[key])
@@ -531,15 +536,24 @@ def execute_task(task):
         )
         return
 
-    base_prompt = task.agent_prompt or task.prompt
-    # If task has a prompt_list, rebuild the final prompt from it.
-    if task.prompt_list:
-        base_prompt = _build_prompt_from_list(task)
-    elif task.worker_id:
-        # Fallback for tasks without prompt_list: prepend worker system prompt.
+    system_prompt_override = None
+    # For tasks with an assigned worker: pass the worker system prompt via
+    # --system-prompt so it takes precedence over AGENTS.md loaded by Claude Code
+    # CLI from the working directory.  This is critical for PM agent (worker_id=8)
+    # which must orchestrate via API and must NOT follow developer rules from AGENTS.md.
+    if task.worker_id:
         worker_sys = _load_worker_system_prompt(task.worker_id)
         if worker_sys:
-            base_prompt = f"{worker_sys}\n\n{task.prompt}"
+            system_prompt_override = worker_sys
+    # Build the user-level prompt (task instructions only, no duplicated system text).
+    if task.prompt_list and not system_prompt_override:
+        # prompt_list includes 'base' (worker sys) — use it only when not using --system-prompt.
+        base_prompt = _build_prompt_from_list(task)
+    elif task.prompt_list and system_prompt_override:
+        # Worker sys goes via --system-prompt; rebuild list without 'base' component.
+        base_prompt = _build_prompt_from_list(task, skip_base=True)
+    else:
+        base_prompt = task.prompt
     # Inject task metadata so the agent knows its own ID and working directory.
     task_meta = (
         f"\n\nМетаданные текущей задачи:\n"
@@ -556,7 +570,7 @@ def execute_task(task):
         "(`pp server` или `promptpilot-server`).\n"
     )
     effective_prompt = f"{base_prompt}{task_meta}{runtime_guard}"
-    cmd = build_cmd(provider, effective_prompt, skip_permissions=task.skip_permissions, session_id=task.session_id, model=task.model)
+    cmd = build_cmd(provider, effective_prompt, skip_permissions=task.skip_permissions, session_id=task.session_id, model=task.model, system_prompt=system_prompt_override)
 
     env = get_provider_env(provider)
     preexec_fn = None
@@ -787,24 +801,88 @@ def run_worker():
     # Recover any tasks stuck in 'running' from a previous crash
     db.recover_running()
 
+    rabbit = RabbitQueue()
+    queue_names = []
+    queue_refresh_at = 0.0
+    due_dispatch_at = 0.0
+    published_recently: dict[int, float] = {}
+
     print(f"PromptPilot worker started (poll every {POLL_INTERVAL}s)")
     timeout_label = f"{AGENT_TIMEOUT}s (AGENT_TIMEOUT)" if AGENT_TIMEOUT else f"{TASK_TIMEOUT}s"
     print(f"Timeout: {timeout_label} | Backoff: {BASE_DELAY}-{MAX_DELAY}s")
+    if rabbit.enabled:
+        print("Queue backend: RabbitMQ")
+    else:
+        print("Queue backend: DB polling fallback")
     print("Waiting for tasks...\n")
 
-    while running:
-        if db.is_paused():
-            time.sleep(POLL_INTERVAL)
-            continue
+    try:
+        while running:
+            now_ts = time.time()
+            if db.is_paused():
+                rabbit.wait(1.0)
+                continue
 
-        task = db.get_next_runnable()
-        if task is None:
-            time.sleep(POLL_INTERVAL)
-            continue
+            if rabbit.enabled and now_ts >= queue_refresh_at:
+                try:
+                    queue_names = db.get_project_queue_names(include_default=True)
+                    for q in queue_names:
+                        rabbit.ensure_queue(q)
+                    print(f"  -> Queues refreshed: {len(queue_names)}")
+                except Exception as e:
+                    print(f"  -> Queue refresh failed: {e}")
+                    queue_names = [queue_name_for_project(None)]
+                queue_refresh_at = now_ts + 60.0
 
-        provider = task.provider or DEFAULT_CLI
-        prompt_preview = task.prompt[:60].replace("\n", " ")
-        print(f"[#{task.id}] [{provider}] Running: {prompt_preview}...")
-        execute_task(task)
+            if rabbit.enabled and now_ts >= due_dispatch_at:
+                try:
+                    due_jobs = db.list_due_task_jobs(limit=400)
+                    sent = 0
+                    for job in due_jobs:
+                        task_id = int(job["task_id"])
+                        prev = published_recently.get(task_id, 0.0)
+                        if (now_ts - prev) < max(1.0, float(POLL_INTERVAL)):
+                            continue
+                        queue_name = queue_name_for_project(job.get("project_id"))
+                        if rabbit.publish(queue_name, job):
+                            published_recently[task_id] = now_ts
+                            sent += 1
+                    if sent:
+                        print(f"  -> Dispatched due tasks into RabbitMQ: {sent}")
+                    stale_before = now_ts - max(60.0, POLL_INTERVAL * 10.0)
+                    published_recently = {k: v for k, v in published_recently.items() if v >= stale_before}
+                except Exception as e:
+                    print(f"  -> Due-dispatch failed: {e}")
+                due_dispatch_at = now_ts + max(1.0, float(POLL_INTERVAL))
 
-    print("Worker stopped.")
+            if rabbit.enabled:
+                msg = rabbit.get_one(queue_names or [queue_name_for_project(None)])
+                if not msg:
+                    rabbit.wait(0.8)
+                    continue
+                payload = msg.payload if isinstance(msg.payload, dict) else {}
+                raw_task_id = payload.get("task_id")
+                try:
+                    task_id = int(raw_task_id)
+                except Exception:
+                    print(f"  -> Skip malformed queue message from {msg.queue}: {payload!r}")
+                    rabbit.ack(msg.delivery_tag)
+                    continue
+
+                task = db.claim_task_for_run(task_id)
+                rabbit.ack(msg.delivery_tag)
+                if task is None:
+                    continue
+            else:
+                task = db.get_next_runnable()
+                if task is None:
+                    time.sleep(POLL_INTERVAL)
+                    continue
+
+            provider = task.provider or DEFAULT_CLI
+            prompt_preview = task.prompt[:60].replace("\n", " ")
+            print(f"[#{task.id}] [{provider}] Running: {prompt_preview}...")
+            execute_task(task)
+    finally:
+        rabbit.close()
+        print("Worker stopped.")
