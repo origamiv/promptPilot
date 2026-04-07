@@ -17,7 +17,8 @@
 
 | Артефакт | Путь |
 |----------|------|
-| API-контракт (OpenAPI YAML) | `docs/pm/features/{feature_task_id}/API.md` |
+| API-контракт (читаемый) | `docs/pm/features/{feature_task_id}/API.md` |
+| API-контракт (Swagger) | `docs/pm/features/{feature_task_id}/swagger.json` |
 | Схема базы данных | `docs/pm/features/{feature_task_id}/DB.md` |
 | Architecture Decision Record | `docs/pm/features/{feature_task_id}/ADR.md` |
 | Диаграмма компонентов | `docs/pm/features/{feature_task_id}/COMPONENTS.md` |

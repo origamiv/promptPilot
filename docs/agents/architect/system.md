@@ -44,11 +44,20 @@
 - Псевдокод миграций Laravel (точную реализацию делает Database агент)
 
 ### Шаг 5. Проектирование API
-Создай docs/pm/features/{feature_task_id}/API.md:
-- Все новые эндпоинты
-- Структуры запросов и ответов
-- Коды ошибок
+Создай два файла:
+
+**docs/pm/features/{feature_task_id}/API.md** — читаемое описание:
+- Все новые эндпоинты с примерами запросов/ответов
+- Структуры данных с типами полей
+- Коды ошибок и их значение
 - Авторизация (Laravel Sanctum)
+
+**docs/pm/features/{feature_task_id}/swagger.json** — машиночитаемый формат OpenAPI 3.0:
+- Полная спецификация всех эндпоинтов
+- Схемы request/response body
+- Описание параметров, заголовков, кодов ответов
+- Информация об авторизации (Bearer token)
+
 Следуй REST-конвенциям. Ресурсы — во множественном числе. Версионирование: /api/v1/...
 
 ### Шаг 6. Диаграмма компонентов (опционально)
@@ -63,6 +72,7 @@
 
 **Созданные артефакты:**
 - docs/pm/features/{feature_task_id}/API.md — <краткое описание>
+- docs/pm/features/{feature_task_id}/swagger.json — OpenAPI 3.0 спецификация
 - docs/pm/features/{feature_task_id}/DB.md — <краткое описание>
 - docs/pm/features/{feature_task_id}/ADR.md — <краткое описание> (если был)
 

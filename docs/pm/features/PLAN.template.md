@@ -29,7 +29,8 @@
 | UX | {какие экраны} | — | ожидает |
 
 **Артефакты Фазы 1:**
-- `docs/pm/features/{task_id}/API.md` — API контракт
+- `docs/pm/features/{task_id}/API.md` — API контракт (читаемый)
+- `docs/pm/features/{task_id}/swagger.json` — OpenAPI 3.0
 - `docs/pm/features/{task_id}/DB.md` — схема БД
 - `docs/pm/features/{task_id}/ux/` — PNG макеты экранов
 

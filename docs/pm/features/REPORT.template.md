@@ -31,7 +31,8 @@
 | Файл | Описание |
 |------|----------|
 | `docs/pm/features/{task_id}/PLAN.md` | План фичи |
-| `docs/pm/features/{task_id}/API.md` | API контракт |
+| `docs/pm/features/{task_id}/API.md` | API контракт (читаемый) |
+| `docs/pm/features/{task_id}/swagger.json` | OpenAPI 3.0 |
 | `docs/pm/features/{task_id}/DB.md` | Схема БД |
 | `docs/pm/features/{task_id}/ux/*.png` | Макеты экранов |
 
