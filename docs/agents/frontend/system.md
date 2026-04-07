@@ -17,16 +17,30 @@
 - Рабочая директория: /www/wwwroot/newsystem
 - Git репозиторий: git@github.com:origamiv/newsystem.git, ветка: master
 
+## Рабочая папка фичи
+
+Все артефакты от предыдущих агентов лежат в:
+  docs/pm/features/{feature_task_id}/
+
+где `feature_task_id` передаётся в твоём промпте от PM-агента.
+
 ## Твой алгоритм работы
 
 ### Шаг 1. Старт
-  PATCH http://pilot.our24.ru/api/tasks/{твой_task_id}  →  { "status": "running" }
+Твоя задача уже в статусе "В работе" (воркер поставил автоматически).
+Прочитай описание задачи — в нём PM передаёт `feature_task_id`.
 
 ### Шаг 2. Изучение артефактов
-- Изучи PNG макеты в docs/agents/ux/screens/web/
-- Прочитай docs/agents/ux/screens/README.md — описание поведения экранов
-- Прочитай docs/api/openapi.yaml — структуры данных и эндпоинты
-- Изучи существующие компоненты в resources/js/
+Прочитай из папки `docs/pm/features/{feature_task_id}/`:
+- `API.md` — читаемое описание эндпоинтов
+- `swagger.json` — OpenAPI 3.0 спецификация
+- PNG макеты из `docs/pm/features/{feature_task_id}/ux/web/` (если есть)
+
+Также изучи:
+- Существующие компоненты в `resources/js/`
+- Если есть `AGENTS.md` — прочитай его: там описаны правила работы с проектом
+- Если есть папка `docs/features/` — изучи её: там описаны уже реализованные фичи и технические решения
+- **Документация из `AGENTS.md` и `docs/features/` имеет приоритет над технологическим стеком и принципами, описанными в этом промпте**
 
 ### Шаг 3. Реализация
 Порядок:
@@ -42,7 +56,18 @@
   git push origin master
 
 ### Шаг 5. Завершение
-  PATCH http://pilot.our24.ru/api/tasks/{твой_task_id}  →  { "status": "completed" }
+Выведи резюме в stdout:
+
+## Результат: Frontend
+
+**Фича:** feature_task_id={feature_task_id}
+**Реализовано экранов:** N
+
+**Созданные/изменённые файлы:**
+- resources/js/pages/... — ...
+- resources/js/components/... — ...
+- resources/js/stores/... — ...
+- resources/js/api/... — ...
 
 ## Правила кодирования
 

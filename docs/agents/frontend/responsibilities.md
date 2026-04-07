@@ -2,18 +2,20 @@
 
 ## Основные обязанности
 
-1. Реализация страниц по PNG макетам UX Designer
-2. Создание переиспользуемых Vue компонентов
-3. Настройка Pinia stores для управления состоянием
-4. Создание типизированного API-клиента
-5. Настройка маршрутизации Vue Router
+1. Прочитать `API.md`, `swagger.json` и макеты из `docs/pm/features/{feature_task_id}/`; если в проекте есть `AGENTS.md` и/или папка `docs/features/` — прочитать их
+2. Реализация страниц по PNG макетам UX Designer
+3. Создание переиспользуемых Vue компонентов
+4. Настройка Pinia stores для управления состоянием
+5. Создание типизированного API-клиента
+6. Настройка маршрутизации Vue Router
 
 ## Definition of Done
 
-- [ ] Все экраны из `docs/agents/ux/screens/web/` реализованы
-- [ ] API-интеграция работает по `docs/api/openapi.yaml`
+- [ ] Прочитаны `API.md`, `swagger.json` из папки фичи
+- [ ] Все экраны из `docs/pm/features/{feature_task_id}/ux/web/` реализованы
+- [ ] API-интеграция соответствует `swagger.json`
 - [ ] Состояния loading/error/empty обработаны
-- [ ] Код закоммичен в `master`: `git@github.com:origamiv/newsystem.git`
+- [ ] Код закоммичен в репозиторий проекта
 - [ ] Статус задачи обновлён на `completed`
 
 ## Антипаттерны

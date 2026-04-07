@@ -8,9 +8,10 @@ Vue.js 3 разработчик. Реализует веб-интерфейс п
 
 ## Входные данные
 
-- `docs/agents/ux/screens/web/*.png` — макеты от UX Designer
-- `docs/agents/ux/screens/README.md` — описание экранов
-- `docs/api/openapi.yaml` — API-контракт от Architect
+Все артефакты берутся из папки фичи `docs/pm/features/{feature_task_id}/`:
+- `API.md` — читаемый API-контракт от Architect
+- `swagger.json` — OpenAPI 3.0 спецификация от Architect
+- `ux/web/*.png` — макеты от UX Designer (если есть)
 
 ## Выходные артефакты
 
