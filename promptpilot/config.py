@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 
 
 def _load_dotenv():
@@ -359,6 +360,8 @@ def get_skills(working_dir: str = None) -> list:
         for sub in sorted(dir_path.iterdir()):
             if not sub.is_dir():
                 continue
+            if sub.name.endswith(".disabled"):
+                continue
             md_files = sorted(sub.glob("*.md"))
             if not md_files:
                 continue
@@ -392,6 +395,156 @@ def get_skills(working_dir: str = None) -> list:
         _add_from_dir(Path(working_dir) / ".claude" / "skills", "local")
 
     return skills
+
+
+def _claude_user_skill_roots() -> list[tuple[str, Path]]:
+    """Return mutable user skill roots: ~/.claude/commands and ~/.claude/skills."""
+    base = Path.home() / ".claude"
+    return [
+        ("commands", base / "commands"),
+        ("skills", base / "skills"),
+    ]
+
+
+def ensure_skill_dirs() -> None:
+    """Ensure mutable user skill directories exist."""
+    for _, root in _claude_user_skill_roots():
+        root.mkdir(parents=True, exist_ok=True)
+
+
+def _is_under_skill_roots(path: Path) -> bool:
+    """Check that path is under one of mutable user skill roots."""
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    for _, root in _claude_user_skill_roots():
+        try:
+            if resolved == root.resolve() or root.resolve() in resolved.parents:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _pick_skill_frontmatter_source(path: Path) -> Optional[Path]:
+    """Pick markdown file used to read skill metadata for file/dir entries."""
+    if path.is_file():
+        return path
+    if path.is_dir():
+        md_files = sorted(path.glob("*.md"))
+        if md_files:
+            return md_files[0]
+    return None
+
+
+def list_managed_user_skills() -> list[dict]:
+    """Return mutable user skills with filesystem paths and enable/disable state."""
+    rows: list[dict] = []
+    seen: set[str] = set()
+
+    def _append_row(name: str, root_name: str, source_path: Path, enabled: bool, layout: str):
+        dedupe_key = f"{root_name}:{name}:{layout}:{source_path.name}"
+        if dedupe_key in seen:
+            return
+        seen.add(dedupe_key)
+        fm_source = _pick_skill_frontmatter_source(source_path)
+        fm = _parse_frontmatter(fm_source) if fm_source else {}
+        rows.append(
+            {
+                "name": name,
+                "description": fm.get("description", ""),
+                "argument_hint": fm.get("argument-hint", ""),
+                "source": "user",
+                "location": root_name,
+                "layout": layout,
+                "enabled": enabled,
+                "path": str(source_path.resolve()),
+            }
+        )
+
+    for root_name, root in _claude_user_skill_roots():
+        if not root.is_dir():
+            continue
+
+        for item in sorted(root.iterdir()):
+            if item.is_file():
+                filename = item.name
+                low = filename.lower()
+                if low == "readme.md":
+                    continue
+                if low.endswith(".md"):
+                    stem = item.stem
+                    if stem.upper() == "SKILL":
+                        continue
+                    _append_row(stem, root_name, item, True, "file")
+                    continue
+                if low.endswith(".md.disabled"):
+                    stem = filename[: -len(".md.disabled")]
+                    if stem and stem.upper() != "SKILL":
+                        _append_row(stem, root_name, item, False, "file")
+                    continue
+
+            if item.is_dir():
+                dirname = item.name
+                is_disabled = dirname.endswith(".disabled")
+                name = dirname[: -len(".disabled")] if is_disabled else dirname
+                if not name:
+                    continue
+                md_files = sorted(item.glob("*.md"))
+                if not md_files:
+                    continue
+                _append_row(name, root_name, item, not is_disabled, "directory")
+
+    rows.sort(key=lambda x: (x["name"].lower(), x["location"], x["layout"]))
+    return rows
+
+
+def _validate_mutable_skill_path(path: str) -> Path:
+    raw_text = str(path or "").strip()
+    if not raw_text:
+        raise ValueError("path is required")
+    raw = Path(raw_text)
+    resolved = raw.resolve()
+    if not _is_under_skill_roots(resolved):
+        raise ValueError("Path is outside of mutable skill directories")
+    if not resolved.exists():
+        raise ValueError("Skill path does not exist")
+    return resolved
+
+
+def set_skill_enabled(path: str, enabled: bool) -> dict:
+    """Enable/disable a mutable user skill by renaming file/dir."""
+    target = _validate_mutable_skill_path(path)
+    name = target.name
+    changed = False
+
+    if target.is_file():
+        if name.endswith(".md.disabled") and enabled:
+            new_path = target.with_name(name[: -len(".disabled")])
+            target.rename(new_path)
+            target = new_path
+            changed = True
+        elif name.endswith(".md") and not enabled:
+            new_path = target.with_name(name + ".disabled")
+            target.rename(new_path)
+            target = new_path
+            changed = True
+    elif target.is_dir():
+        if name.endswith(".disabled") and enabled:
+            new_path = target.with_name(name[: -len(".disabled")])
+            target.rename(new_path)
+            target = new_path
+            changed = True
+        elif (not name.endswith(".disabled")) and not enabled:
+            new_path = target.with_name(name + ".disabled")
+            target.rename(new_path)
+            target = new_path
+            changed = True
+    else:
+        raise ValueError("Unsupported skill path type")
+
+    return {"path": str(target.resolve()), "enabled": bool(enabled), "changed": changed}
 
 
 # Projects root — optional directory whose subdirectories are offered as project choices

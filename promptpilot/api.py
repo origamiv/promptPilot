@@ -1,14 +1,21 @@
 """FastAPI web API + static file serving."""
 
+import base64
+import io
 import os
 import pwd
+import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
+import urllib.parse
+import urllib.request
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +28,7 @@ import pyte
 from . import db
 from .config import APP_TIMEZONE, AGENT_USER, get_skills, load_providers, PROJECTS_ROOT
 from .config import get_provider_env
+from .config import ensure_skill_dirs, list_managed_user_skills, set_skill_enabled
 from .models import CostStats, Stats, TaskCreate, TaskInDB, TaskStatus, TaskUpdate
 from . import relogin
 from .version import check_for_update
@@ -56,6 +64,93 @@ class InteractiveStartRequest(BaseModel):
 class InteractiveInputRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20000)
     append_newline: bool = True
+
+
+def _skills_base_dir() -> Path:
+    return (Path.home() / ".claude" / "skills").resolve()
+
+
+def _normalize_archive_member(member_name: str) -> Optional[Path]:
+    """Normalize archived path to relative destination under ~/.claude/skills."""
+    raw = str(member_name or "").replace("\\", "/").strip().lstrip("/")
+    if not raw:
+        return None
+    parts = [p for p in raw.split("/") if p and p not in (".", "..")]
+    if not parts:
+        return None
+    if len(parts) >= 2 and parts[0] in (".claude", "claude") and parts[1] in ("skills", "commands"):
+        parts = parts[2:]
+    elif parts[0] in ("skills", "commands"):
+        parts = parts[1:]
+    if not parts:
+        return None
+    return Path(*parts)
+
+
+def _safe_join_under(base_dir: Path, relative_path: Path) -> Path:
+    dst = (base_dir / relative_path).resolve()
+    if base_dir != dst and base_dir not in dst.parents:
+        raise ValueError("Unsafe archive path")
+    return dst
+
+
+def _extract_archive_bytes(payload: bytes, filename: str, dest_dir: Path) -> int:
+    """Extract zip/tar archive bytes under dest_dir. Returns extracted file count."""
+    extracted = 0
+
+    def _ensure_parent(path: Path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    if zipfile.is_zipfile(io.BytesIO(payload)):
+        with zipfile.ZipFile(io.BytesIO(payload)) as zf:
+            for info in zf.infolist():
+                rel = _normalize_archive_member(info.filename)
+                if rel is None:
+                    continue
+                target = _safe_join_under(dest_dir, rel)
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                _ensure_parent(target)
+                with zf.open(info, "r") as src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                extracted += 1
+        return extracted
+
+    try:
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as tf:
+            for info in tf.getmembers():
+                rel = _normalize_archive_member(info.name)
+                if rel is None:
+                    continue
+                target = _safe_join_under(dest_dir, rel)
+                if info.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                if not info.isfile():
+                    continue
+                src = tf.extractfile(info)
+                if src is None:
+                    continue
+                _ensure_parent(target)
+                with src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                extracted += 1
+        return extracted
+    except tarfile.TarError:
+        pass
+
+    raise ValueError(f"Unsupported archive format: {filename or 'unknown file'}")
+
+
+def _decode_b64_content(encoded: str) -> bytes:
+    raw = str(encoded or "").strip()
+    if "," in raw and raw.lower().startswith("data:"):
+        raw = raw.split(",", 1)[1]
+    try:
+        return base64.b64decode(raw, validate=True)
+    except Exception as e:
+        raise ValueError(f"Invalid base64 payload: {e}")
 
 
 def _interactive_read_output_locked(session: dict):
@@ -516,6 +611,147 @@ def api_skills(provider: Optional[str] = None, workdir: Optional[str] = None):
         if not providers.get(provider, {}).get("supports_skills", False):
             return []
     return get_skills(working_dir=workdir)
+
+
+@app.get("/api/admin/skills/agents")
+def api_admin_skills_agents():
+    providers = load_providers()
+    agents = db.list_active_agents(limit=500)
+    rows = []
+    for agent in agents:
+        shortname = str(agent.get("shortname") or "").strip()
+        if not shortname:
+            continue
+        info = providers.get(shortname, {})
+        if not info.get("supports_skills", False):
+            continue
+        rows.append(
+            {
+                "shortname": shortname,
+                "name": agent.get("name") or info.get("description") or shortname,
+                "supports_skills": True,
+            }
+        )
+    return rows
+
+
+@app.get("/api/admin/skills")
+def api_admin_skills():
+    return list_managed_user_skills()
+
+
+@app.patch("/api/admin/skills/toggle")
+def api_admin_skills_toggle(payload: dict):
+    if "path" not in payload:
+        raise HTTPException(400, "path is required")
+    enabled_raw = payload.get("enabled")
+    if isinstance(enabled_raw, bool):
+        enabled = enabled_raw
+    elif isinstance(enabled_raw, (int, float)):
+        enabled = bool(int(enabled_raw))
+    elif isinstance(enabled_raw, str):
+        enabled = enabled_raw.strip().lower() in ("1", "true", "yes", "on")
+    else:
+        enabled = False
+    try:
+        return set_skill_enabled(str(payload.get("path")), enabled=enabled)
+    except Exception as e:
+        raise HTTPException(400, f"Toggle skill failed: {e}")
+
+
+@app.delete("/api/admin/skills")
+def api_admin_skills_delete(path: str):
+    target = Path(str(path or "").strip())
+    if not str(target):
+        raise HTTPException(400, "path is required")
+    try:
+        resolved = target.resolve()
+        roots = {(Path.home() / ".claude" / "skills").resolve(), (Path.home() / ".claude" / "commands").resolve()}
+        if not any(resolved == root or root in resolved.parents for root in roots):
+            raise ValueError("Path is outside of mutable skill directories")
+        if not resolved.exists():
+            raise ValueError("Skill path does not exist")
+        if resolved.is_dir():
+            shutil.rmtree(resolved)
+        else:
+            resolved.unlink()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(400, f"Delete skill failed: {e}")
+
+
+@app.post("/api/admin/skills/archive")
+def api_admin_skills_upload_archive(payload: dict):
+    filename = str(payload.get("filename") or "").strip() or "skills-archive"
+    encoded = payload.get("content_base64")
+    if not encoded:
+        raise HTTPException(400, "content_base64 is required")
+    try:
+        data = _decode_b64_content(str(encoded))
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    if len(data) > 30 * 1024 * 1024:
+        raise HTTPException(400, "Archive is too large (max 30 MB)")
+    ensure_skill_dirs()
+    base = _skills_base_dir()
+    try:
+        count = _extract_archive_bytes(data, filename=filename, dest_dir=base)
+    except Exception as e:
+        raise HTTPException(400, f"Archive import failed: {e}")
+    if count == 0:
+        raise HTTPException(400, "Archive imported but no files were extracted")
+    return {"ok": True, "files_extracted": count}
+
+
+@app.post("/api/admin/skills/url")
+def api_admin_skills_upload_url(payload: dict):
+    url = str(payload.get("url") or "").strip()
+    if not url:
+        raise HTTPException(400, "url is required")
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(400, "Only http/https URLs are allowed")
+
+    req = urllib.request.Request(url, headers={"User-Agent": "PromptPilot/skills-import"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            blob = resp.read()
+            content_type = str(resp.headers.get("Content-Type") or "").lower()
+    except Exception as e:
+        raise HTTPException(400, f"Download failed: {e}")
+
+    if len(blob) > 30 * 1024 * 1024:
+        raise HTTPException(400, "Downloaded file is too large (max 30 MB)")
+
+    ensure_skill_dirs()
+    base = _skills_base_dir()
+    filename = Path(parsed.path).name or "skill-from-url"
+    lower_name = filename.lower()
+
+    is_archive_hint = any(lower_name.endswith(s) for s in (".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2"))
+    is_text_hint = lower_name.endswith(".md") or "text/markdown" in content_type or content_type.startswith("text/plain")
+
+    if is_archive_hint or (not is_text_hint):
+        try:
+            count = _extract_archive_bytes(blob, filename=filename, dest_dir=base)
+        except Exception as e:
+            raise HTTPException(400, f"Import from URL failed: {e}")
+        if count == 0:
+            raise HTTPException(400, "URL archive imported but no files were extracted")
+        return {"ok": True, "files_extracted": count}
+
+    # Plain markdown file import
+    safe_stem = re.sub(r"[^a-zA-Z0-9._-]+", "-", Path(filename).stem or "skill").strip("-") or "skill"
+    target = base / f"{safe_stem}.md"
+    i = 1
+    while target.exists():
+        target = base / f"{safe_stem}-{i}.md"
+        i += 1
+    try:
+        target.write_bytes(blob)
+    except Exception as e:
+        raise HTTPException(400, f"Failed to save skill file: {e}")
+    return {"ok": True, "files_extracted": 1, "path": str(target.resolve())}
 
 
 @app.get("/api/projects")
@@ -1311,6 +1547,7 @@ def help_page(section: str):
         "accounts": "accounts.html",
         "projects": "projects.html",
         "prompts": "prompts.html",
+        "skills": "skills.html",
         "workers": "workers.html",
         "task-statuses": "task-statuses.html",
         "priorities": "priorities.html",

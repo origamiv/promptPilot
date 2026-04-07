@@ -127,6 +127,7 @@
   .side-btn#menuAccounts::before { content: "◉"; }
   .side-btn#menuInteractive::before { content: "⌨"; }
   .side-btn#menuAgents::before { content: "⚙"; }
+  .side-btn#menuSkills::before { content: "⚡"; }
   .side-btn#menuTaskStatuses::before { content: "☰"; }
   .side-btn#menuPriorities::before { content: "▲"; }
   .side-btn#menuPrompts::before { content: "✎"; }
@@ -1301,6 +1302,22 @@
     border-collapse: collapse;
     font-size: 12px;
   }
+  .skills-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .skills-upload-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .skills-upload-row input[type="text"] {
+    min-width: 220px;
+    flex: 1 1 260px;
+  }
   .admin-table th, .admin-table td {
     border-bottom: 1px solid var(--border);
     padding: 8px 6px;
@@ -2301,6 +2318,7 @@
     <div class="side-group">
       <div class="side-group-title">Справочники</div>
       <a id="menuAgents" class="side-btn" href="/agents" onclick="return onMenuLinkClick(event, 'agents')">Агенты</a>
+      <a id="menuSkills" class="side-btn" href="/skills" onclick="return onMenuLinkClick(event, 'skills')">Скиллы</a>
       <a id="menuTaskStatuses" class="side-btn" href="/task-statuses" onclick="return onMenuLinkClick(event, 'task-statuses')">Статусы задач</a>
       <a id="menuPriorities" class="side-btn" href="/priorities" onclick="return onMenuLinkClick(event, 'priorities')">Приоритеты</a>
       <a id="menuPrompts" class="side-btn" href="/prompts" onclick="return onMenuLinkClick(event, 'prompts')">Промпты</a>
@@ -2409,6 +2427,27 @@
     <table class="admin-table">
       <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Email</th><th>Priority</th><th>Status</th><th>Color</th><th>Avatar</th><th></th></tr></thead>
       <tbody id="agentsTbody"></tbody>
+    </table>
+  </div>
+
+  <div class="admin-view" id="skillsView">
+    <div class="admin-header">
+      <div class="admin-title" id="skillsTitle">Скиллы AI-агентов</div>
+      <input id="skillsSearch" placeholder="Поиск..." oninput="renderSkillsRows()">
+      <button class="btn btn-ghost" type="button" onclick="loadSkillsCrud(true)">Обновить</button>
+    </div>
+    <div class="skills-meta" id="skillsAgentsMeta"></div>
+    <div class="skills-upload-row">
+      <input id="skillsArchiveInput" type="file" accept=".zip,.tar,.gz,.tgz,.bz2,.xz,.md">
+      <button class="btn btn-primary" type="button" onclick="uploadSkillsArchive()">Загрузить архив</button>
+    </div>
+    <div class="skills-upload-row">
+      <input id="skillsUrlInput" type="text" placeholder="https://example.com/skills.zip">
+      <button class="btn btn-primary" type="button" onclick="uploadSkillsUrl()">Загрузить по URL</button>
+    </div>
+    <table class="admin-table">
+      <thead><tr><th>Name</th><th>Location</th><th>Layout</th><th>Enabled</th><th>Description</th><th>Path</th><th></th></tr></thead>
+      <tbody id="skillsTbody"></tbody>
     </table>
   </div>
 
@@ -2612,6 +2651,7 @@ let currentLang = 'ru';
 let projectsCache = [];
 let adminProjectsRows = [];
 let adminAgentsRows = [];
+let adminSkillsRows = [];
 let adminAccountsRows = [];
 let adminPromptsRows = [];
 let adminWorkersRows = [];
@@ -2635,6 +2675,7 @@ const I18N = {
     tasks: 'Задачи',
     projects: 'Проекты',
     agents: 'Агенты',
+    skills: 'Скиллы',
     priorities: 'Приоритеты',
     accounts: 'Учётные записи агентов',
     prompts: 'Промпты',
@@ -2728,6 +2769,7 @@ const I18N = {
     tasks: 'Tasks',
     projects: 'Projects',
     agents: 'Agents',
+    skills: 'Skills',
     priorities: 'Priorities',
     accounts: 'Agent Accounts',
     prompts: 'Prompts',
@@ -2890,12 +2932,14 @@ function applyLanguage(lang) {
   document.getElementById('menuInteractive').textContent = tr('interactive');
   document.getElementById('menuProjects').textContent = tr('projects');
   document.getElementById('menuAgents').textContent = tr('agents');
+  document.getElementById('menuSkills').textContent = tr('skills');
   document.getElementById('menuPriorities').textContent = tr('priorities');
   document.getElementById('menuAccounts').textContent = tr('accounts');
   document.getElementById('menuPrompts').textContent = tr('prompts');
   document.getElementById('interactiveTitle').textContent = tr('interactive');
   document.getElementById('projectsTitle').textContent = tr('projects');
   document.getElementById('agentsTitle').textContent = tr('agents');
+  document.getElementById('skillsTitle').textContent = tr('skills');
   document.getElementById('prioritiesTitle').textContent = tr('priorities');
   document.getElementById('accountsTitle').textContent = tr('accounts');
   document.getElementById('promptsTitle').textContent = tr('prompts');
@@ -4274,7 +4318,7 @@ let currentView = 'tasks';
 let lastContentView = 'tasks';
 let currentHelpSection = 'tasks';
 
-const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'accounts', 'prompts', 'help', 'workers', 'task-statuses', 'priorities', 'kanban']);
+const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'skills', 'accounts', 'prompts', 'help', 'workers', 'task-statuses', 'priorities', 'kanban']);
 
 function isMobileLayout() {
   return window.matchMedia('(max-width: 980px)').matches;
@@ -4357,6 +4401,7 @@ function switchView(view, opts = {}) {
   document.getElementById('helpView').style.display = view === 'help' ? 'block' : 'none';
   document.getElementById('projectsView').style.display = view === 'projects' ? 'block' : 'none';
   document.getElementById('agentsView').style.display = view === 'agents' ? 'block' : 'none';
+  document.getElementById('skillsView').style.display = view === 'skills' ? 'block' : 'none';
   document.getElementById('accountsView').style.display = view === 'accounts' ? 'block' : 'none';
   document.getElementById('promptsView').style.display = view === 'prompts' ? 'block' : 'none';
   document.getElementById('workersView').style.display = view === 'workers' ? 'block' : 'none';
@@ -4370,6 +4415,7 @@ function switchView(view, opts = {}) {
   document.getElementById('menuInteractive').classList.toggle('active', view === 'interactive');
   document.getElementById('menuProjects').classList.toggle('active', view === 'projects');
   document.getElementById('menuAgents').classList.toggle('active', view === 'agents');
+  document.getElementById('menuSkills').classList.toggle('active', view === 'skills');
   document.getElementById('menuAccounts').classList.toggle('active', view === 'accounts');
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
   document.getElementById('menuWorkers').classList.toggle('active', view === 'workers');
@@ -4388,6 +4434,7 @@ function switchView(view, opts = {}) {
     loadInteractiveState();
   }
   if (view === 'agents') loadAgentsCrud();
+  if (view === 'skills') loadSkillsCrud();
   if (view === 'accounts') loadAccountsCrud();
   if (view === 'prompts') loadPromptsCrud();
   if (view === 'workers') loadWorkersCrud();
@@ -4530,6 +4577,7 @@ const CRUD_TX = {
     delete_agent_confirm: 'Удалить агента',
     delete_account_confirm: 'Удалить аккаунт',
     delete_prompt_confirm: 'Удалить промпт',
+    delete_skill_confirm: 'Удалить скилл',
     delete_worker_confirm: 'Удалить исполнителя',
     worker: 'исполнителя',
     role: 'Роль',
@@ -4542,6 +4590,11 @@ const CRUD_TX = {
     invalid_json: 'Некорректный JSON в options',
     invalid_color: 'Некорректный цвет. Используйте формат #RRGGBB',
     relogin: 'Войти',
+    enable: 'Включить',
+    disable: 'Выключить',
+    yes: 'Да',
+    no: 'Нет',
+    skills_agents: 'Доступные агенты для скиллов',
     relogin_code: 'Код авторизации',
     relogin_enter_code: 'Вставьте код из страницы авторизации',
   },
@@ -4579,6 +4632,7 @@ const CRUD_TX = {
     delete_agent_confirm: 'Delete agent',
     delete_account_confirm: 'Delete account',
     delete_prompt_confirm: 'Delete prompt',
+    delete_skill_confirm: 'Delete skill',
     delete_worker_confirm: 'Delete worker',
     worker: 'worker',
     role: 'Role',
@@ -4591,6 +4645,11 @@ const CRUD_TX = {
     invalid_json: 'Invalid JSON in options',
     invalid_color: 'Invalid color. Use #RRGGBB format',
     relogin: 'Login',
+    enable: 'Enable',
+    disable: 'Disable',
+    yes: 'Yes',
+    no: 'No',
+    skills_agents: 'Available skill-capable agents',
     relogin_code: 'Authorization code',
     relogin_enter_code: 'Paste code from authorization page',
   },
@@ -5278,6 +5337,144 @@ async function deleteAgentCrud(id) {
   try {
     await fetchJSON(`${API}/admin/agents/${id}`, { method: 'DELETE' });
     await loadAgentsCrud();
+  } catch (e) {
+    alert(`${tc('delete_failed')}: ${e.message}`);
+  }
+}
+
+// --- CRUD: Skills ---
+function renderSkillsAgentsMeta(rows) {
+  const box = document.getElementById('skillsAgentsMeta');
+  if (!box) return;
+  if (!rows.length) {
+    box.innerHTML = `<span class="admin-mobile-chip">${esc(tc('skills_agents'))}: —</span>`;
+    return;
+  }
+  box.innerHTML = [
+    `<span class="admin-mobile-chip">${esc(tc('skills_agents'))}:</span>`,
+    ...rows.map(r => `<span class="admin-mobile-chip">${esc(r.name || r.shortname || '')}</span>`),
+  ].join('');
+}
+
+function renderSkillsRows() {
+  const tbody = document.getElementById('skillsTbody');
+  if (!tbody) return;
+  const q = (document.getElementById('skillsSearch')?.value || '').trim().toLowerCase();
+  const rows = q
+    ? adminSkillsRows.filter(r =>
+      String(r.name || '').toLowerCase().includes(q) ||
+      String(r.description || '').toLowerCase().includes(q) ||
+      String(r.path || '').toLowerCase().includes(q) ||
+      String(r.location || '').toLowerCase().includes(q),
+    )
+    : adminSkillsRows;
+
+  tbody.innerHTML = rows.map(r => {
+    const enabled = !!r.enabled;
+    const toggleLabel = enabled ? tc('disable') : tc('enable');
+    return `
+    <tr>
+      <td>${esc(r.name || '')}</td>
+      <td>${esc(r.location || '')}</td>
+      <td>${esc(r.layout || '')}</td>
+      <td>${enabled ? tc('yes') : tc('no')}</td>
+      <td>${esc(r.description || '')}</td>
+      <td style="font-size:11px;word-break:break-all">${esc(r.path || '')}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" data-path="${esc(String(r.path || ''))}" data-enabled="${enabled ? '0' : '1'}" onclick="toggleSkillCrud(this)">${toggleLabel}</button>
+        <button class="btn btn-sm btn-danger" data-path="${esc(String(r.path || ''))}" data-name="${esc(String(r.name || ''))}" onclick="deleteSkillCrud(this)">${tc('delete')}</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadSkillsCrud(force = false) {
+  if (!force && adminSkillsRows.length) {
+    renderSkillsRows();
+    return;
+  }
+  const [skills, agents] = await Promise.all([
+    fetchJSON(`${API}/admin/skills`),
+    fetchJSON(`${API}/admin/skills/agents`),
+  ]);
+  adminSkillsRows = Array.isArray(skills) ? skills : [];
+  renderSkillsAgentsMeta(Array.isArray(agents) ? agents : []);
+  renderSkillsRows();
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadSkillsArchive() {
+  const input = document.getElementById('skillsArchiveInput');
+  const file = input && input.files && input.files[0];
+  if (!file) {
+    alert('Выберите архив или .md файл');
+    return;
+  }
+  try {
+    const contentBase64 = await fileToBase64(file);
+    await fetchJSON(`${API}/admin/skills/archive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: file.name, content_base64: contentBase64 }),
+    });
+    if (input) input.value = '';
+    await loadSkillsCrud(true);
+  } catch (e) {
+    alert(`${tc('save_failed')}: ${e.message}`);
+  }
+}
+
+async function uploadSkillsUrl() {
+  const input = document.getElementById('skillsUrlInput');
+  const url = String(input?.value || '').trim();
+  if (!url) {
+    alert('Укажите URL');
+    return;
+  }
+  try {
+    await fetchJSON(`${API}/admin/skills/url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    input.value = '';
+    await loadSkillsCrud(true);
+  } catch (e) {
+    alert(`${tc('save_failed')}: ${e.message}`);
+  }
+}
+
+async function toggleSkillCrud(btn) {
+  const path = String(btn?.dataset?.path || '').trim();
+  const enabled = String(btn?.dataset?.enabled || '0') === '1';
+  try {
+    await fetchJSON(`${API}/admin/skills/toggle`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, enabled }),
+    });
+    await loadSkillsCrud(true);
+  } catch (e) {
+    alert(`${tc('save_failed')}: ${e.message}`);
+  }
+}
+
+async function deleteSkillCrud(btn) {
+  const path = String(btn?.dataset?.path || '').trim();
+  const name = String(btn?.dataset?.name || '').trim();
+  const label = name ? `${name}` : path;
+  if (!confirm(`${tc('delete_skill_confirm')}: ${label}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/skills?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+    await loadSkillsCrud(true);
   } catch (e) {
     alert(`${tc('delete_failed')}: ${e.message}`);
   }
