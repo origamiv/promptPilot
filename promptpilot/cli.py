@@ -145,6 +145,14 @@ def purge(days):
     click.echo(f"Purged {count} task(s).")
 
 
+@cli.command("move-ready")
+@click.option("--days", default=7, show_default=True, type=int, help="Move completed+done tasks older than N days")
+def move_ready(days):
+    """Move completed tasks from ref-status 'done' to hidden ref-status 'ready' (for cron)."""
+    moved = db.move_completed_done_to_ready(before_days=days)
+    click.echo(f"Moved to ready: {moved} task(s).")
+
+
 @cli.command()
 def stats():
     """Show task statistics."""

@@ -356,6 +356,22 @@ def init_db():
                 """
             ).format(sql.Identifier(SCHEMA_NAME))
         )
+        # Hidden archive-like status: not shown in kanban (status=0).
+        cur.execute(
+            sql.SQL(
+                """
+                INSERT INTO {}.tasks_statuses (nom, name, shortname, status_to, color, status, created_at, updated_at)
+                VALUES (7, 'Готово', 'ready', 'completed', '#10b981', 0, NOW(), NOW())
+                ON CONFLICT (shortname) DO UPDATE
+                SET nom = EXCLUDED.nom,
+                    name = EXCLUDED.name,
+                    status_to = EXCLUDED.status_to,
+                    color = EXCLUDED.color,
+                    status = EXCLUDED.status,
+                    updated_at = NOW()
+                """
+            ).format(sql.Identifier(SCHEMA_NAME))
+        )
         # Back-fill nom for seed rows where nom is still NULL
         cur.execute(
             sql.SQL(
@@ -369,6 +385,15 @@ def init_db():
                 sql.Identifier(SCHEMA_NAME),
                 sql.Identifier(SCHEMA_NAME),
             )
+        )
+        cur.execute(
+            sql.SQL(
+                """
+                UPDATE {}.tasks_statuses
+                SET nom = 7
+                WHERE shortname = 'ready' AND nom IS NULL
+                """
+            ).format(sql.Identifier(SCHEMA_NAME))
         )
 
         # Priorities reference table
@@ -883,6 +908,40 @@ def purge_old(before_days: int = 7) -> int:
             sql.SQL(
                 "DELETE FROM {} WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < %s"
             ).format(_tasks_ref()),
+            (cutoff,),
+        )
+        return cur.rowcount
+
+
+def move_completed_done_to_ready(before_days: int = 7) -> int:
+    """Move completed tasks from ref status 'done' to ref status 'ready' after N days."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=before_days)
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                WITH done_status AS (
+                    SELECT id
+                    FROM {}.tasks_statuses
+                    WHERE shortname = 'done'
+                    LIMIT 1
+                ),
+                ready_status AS (
+                    SELECT id
+                    FROM {}.tasks_statuses
+                    WHERE shortname = 'ready'
+                    LIMIT 1
+                )
+                UPDATE {} t
+                SET task_status_id = ready_status.id
+                FROM done_status, ready_status
+                WHERE t.status = 'completed'
+                  AND t.completed_at IS NOT NULL
+                  AND t.completed_at <= %s
+                  AND t.task_status_id = done_status.id
+                  AND t.task_status_id <> ready_status.id
+                """
+            ).format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME), _tasks_ref()),
             (cutoff,),
         )
         return cur.rowcount

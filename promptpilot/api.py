@@ -40,6 +40,11 @@ _interactive_session = None
 _INTERACTIVE_TERM_COLS = 160
 _INTERACTIVE_TERM_ROWS = 40
 _INTERACTIVE_TERM_HISTORY = 5000
+_DONE_TO_READY_DAYS = 7
+_DONE_TO_READY_INTERVAL_SEC = 3600
+_done_to_ready_guard = threading.Lock()
+_done_to_ready_stop = threading.Event()
+_done_to_ready_thread = None
 
 
 class InteractiveStartRequest(BaseModel):
@@ -347,6 +352,40 @@ def _interactive_runtime_env(base_env: dict) -> tuple[dict, Optional[object], st
     preexec_fn = _drop_privileges
     runtime_user = target_user
     return env, preexec_fn, runtime_user, runtime_notice
+
+
+def _run_done_to_ready_once():
+    try:
+        moved = db.move_completed_done_to_ready(before_days=_DONE_TO_READY_DAYS)
+        if moved:
+            print(f"[cron] moved {moved} task(s) to ref status 'ready'")
+    except Exception as e:
+        print(f"[cron] move completed->ready failed: {e}")
+
+
+def _done_to_ready_loop():
+    while not _done_to_ready_stop.wait(_DONE_TO_READY_INTERVAL_SEC):
+        _run_done_to_ready_once()
+
+
+@app.on_event("startup")
+def _startup_done_to_ready_cron():
+    global _done_to_ready_thread
+    with _done_to_ready_guard:
+        if _done_to_ready_thread and _done_to_ready_thread.is_alive():
+            return
+        _done_to_ready_stop.clear()
+        _run_done_to_ready_once()
+        _done_to_ready_thread = threading.Thread(target=_done_to_ready_loop, name="done-to-ready-cron", daemon=True)
+        _done_to_ready_thread.start()
+
+
+@app.on_event("shutdown")
+def _shutdown_done_to_ready_cron():
+    global _done_to_ready_thread
+    with _done_to_ready_guard:
+        _done_to_ready_stop.set()
+        _done_to_ready_thread = None
 
 
 # --- API ---

@@ -5064,7 +5064,11 @@ async function deletePromptCrud(id) {
 // --- Kanban ---
 
 function taskKanbanColId(t) {
-  if (t.task_status_id) return t.task_status_id;
+  if (t.task_status_id) {
+    const direct = adminTaskStatusesRows.find(s => s.id === t.task_status_id);
+    if (direct) return direct.status === 1 ? direct.id : '__hidden__';
+    return '__none__';
+  }
   const rs = adminTaskStatusesRows.find(s => s.status === 1 && s.status_to === t.status);
   return rs ? rs.id : '__none__';
 }
@@ -5313,6 +5317,7 @@ async function loadKanban() {
   const unassigned = [];
   tasks.forEach(t => {
     const cid = taskKanbanColId(t);
+    if (cid === '__hidden__') return;
     if (cid !== '__none__' && colMap[cid] !== undefined) colMap[cid].push(t);
     else unassigned.push(t);
   });
@@ -5351,6 +5356,16 @@ async function syncKanban() {
     nextById[t.id] = t;
     const nextCol = String(taskKanbanColId(t));
     const prevCol = kanbanTaskColById[t.id];
+
+    if (nextCol === '__hidden__') {
+      if (prevCol) {
+        removeTaskFromColItems(t.id, prevCol);
+        delete kanbanTaskColById[t.id];
+        delete kanbanTaskById[t.id];
+        changedCols.add(prevCol);
+      }
+      return;
+    }
 
     if (!prevCol) {
       upsertTaskInColItems(t, nextCol);
