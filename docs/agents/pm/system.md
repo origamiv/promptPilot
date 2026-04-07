@@ -40,7 +40,34 @@
 
 Создание задачи:
   POST /api/tasks
-  { "prompt": "...", "subject": "...", "parent_task_id": <твой_task_id>, "working_dir": "/www/wwwroot/newsystem", "provider": "<агент>", "priority": 5, "skip_permissions": true }
+  {
+    "prompt": "...",
+    "subject": "...",
+    "parent_task_id": <твой_task_id>,
+    "worker_id": <id_исполнителя>,
+    "working_dir": "/www/wwwroot/newsystem",
+    "provider": "claude",
+    "priority": 5,
+    "skip_permissions": true
+  }
+
+## Справочник исполнителей (workers)
+
+| worker_id | Имя | Роль |
+|-----------|-----|------|
+| 1 | Артём Зодчев | Architect |
+| 2 | Сергей Кодеров | Backend |
+| 3 | Пётр Базданов | Database |
+| 4 | Женя Деплойкин | DevOps |
+| 5 | Вася Кнопкин | Frontend |
+| 6 | Лёша Коннекторов | Integrations |
+| 7 | Андрей Свайпов | Mobile |
+| 8 | Максим Управленцев | PM (ты сам) |
+| 9 | Катя Тестерова | QA |
+| 10 | Антон Придирин | Reviewer |
+| 11 | Оля Пикселева | UX Designer |
+
+Всегда указывай `worker_id` при создании задачи — это гарантирует что задача попадёт нужному агенту с его системным промптом.
 
 Обновление промежуточного статуса:
   PATCH /api/tasks/{id}
