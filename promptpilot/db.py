@@ -493,6 +493,13 @@ def init_db():
             )
         )
 
+        # prompt column in workers
+        cur.execute(
+            sql.SQL("ALTER TABLE {}.workers ADD COLUMN IF NOT EXISTS prompt TEXT").format(
+                sql.Identifier(SCHEMA_NAME)
+            )
+        )
+
         try:
             cur.execute(
                 sql.SQL(
@@ -1696,7 +1703,7 @@ def list_workers(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                     """
                     SELECT w.id, w.name, w.shortname, w.role, w.is_agent, w.agent_id,
                            a.name AS agent_name, a.color AS agent_color,
-                           w.status, w.avatar_url, w.created_at, w.updated_at
+                           w.status, w.avatar_url, w.prompt, w.created_at, w.updated_at
                     FROM {}.workers w
                     LEFT JOIN {}.agents a ON a.id = w.agent_id
                     WHERE w.name ILIKE %s OR w.shortname ILIKE %s
@@ -1713,7 +1720,7 @@ def list_workers(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                     """
                     SELECT w.id, w.name, w.shortname, w.role, w.is_agent, w.agent_id,
                            a.name AS agent_name, a.color AS agent_color,
-                           w.status, w.avatar_url, w.created_at, w.updated_at
+                           w.status, w.avatar_url, w.prompt, w.created_at, w.updated_at
                     FROM {}.workers w
                     LEFT JOIN {}.agents a ON a.id = w.agent_id
                     ORDER BY w.id DESC
@@ -1733,6 +1740,7 @@ def create_worker(
     agent_id: Optional[int] = None,
     status: int = 0,
     avatar_url: Optional[str] = None,
+    prompt: Optional[str] = None,
 ) -> dict:
     now = datetime.utcnow().replace(microsecond=0)
     with _connect() as conn, conn.cursor() as cur:
@@ -1740,12 +1748,12 @@ def create_worker(
             sql.SQL(
                 """
                 INSERT INTO {}.workers
-                    (name, shortname, role, is_agent, agent_id, status, avatar_url, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, name, shortname, role, is_agent, agent_id, status, avatar_url, created_at, updated_at
+                    (name, shortname, role, is_agent, agent_id, status, avatar_url, prompt, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, name, shortname, role, is_agent, agent_id, status, avatar_url, prompt, created_at, updated_at
                 """
             ).format(sql.Identifier(SCHEMA_NAME)),
-            (name, shortname, role, is_agent, agent_id, status, avatar_url, now, now),
+            (name, shortname, role, is_agent, agent_id, status, avatar_url, prompt, now, now),
         )
         return dict(cur.fetchone())
 
@@ -1759,6 +1767,7 @@ def update_worker(
     agent_id: Optional[int] = None,
     status: int = 0,
     avatar_url: Optional[str] = None,
+    prompt: Optional[str] = None,
 ) -> bool:
     now = datetime.utcnow().replace(microsecond=0)
     with _connect() as conn, conn.cursor() as cur:
@@ -1773,11 +1782,12 @@ def update_worker(
                     agent_id = %s,
                     status = %s,
                     avatar_url = %s,
+                    prompt = %s,
                     updated_at = %s
                 WHERE id = %s
                 """
             ).format(sql.Identifier(SCHEMA_NAME)),
-            (name, shortname, role, is_agent, agent_id, status, avatar_url, now, worker_id),
+            (name, shortname, role, is_agent, agent_id, status, avatar_url, prompt, now, worker_id),
         )
         return cur.rowcount > 0
 

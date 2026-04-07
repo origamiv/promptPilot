@@ -1063,6 +1063,7 @@ def api_admin_create_worker(payload: dict):
         raise HTTPException(400, "status must be integer 0..3")
     agent_id = payload.get("agent_id")
     avatar_url = payload.get("avatar_url")
+    prompt = payload.get("prompt")
     try:
         return db.create_worker(
             name=str(payload["name"]).strip(),
@@ -1072,6 +1073,7 @@ def api_admin_create_worker(payload: dict):
             agent_id=int(agent_id) if agent_id else None,
             status=status,
             avatar_url=str(avatar_url).strip() if avatar_url else None,
+            prompt=str(prompt).strip() if prompt else None,
         )
     except Exception as e:
         raise HTTPException(400, f"Create worker failed: {e}")
@@ -1091,6 +1093,7 @@ def api_admin_update_worker(worker_id: int, payload: dict):
         raise HTTPException(400, "status must be integer 0..3")
     agent_id = payload.get("agent_id")
     avatar_url = payload.get("avatar_url")
+    prompt = payload.get("prompt")
     try:
         ok = db.update_worker(
             worker_id=worker_id,
@@ -1101,6 +1104,7 @@ def api_admin_update_worker(worker_id: int, payload: dict):
             agent_id=int(agent_id) if agent_id else None,
             status=status,
             avatar_url=str(avatar_url).strip() if avatar_url else None,
+            prompt=str(prompt).strip() if prompt else None,
         )
         if not ok:
             raise HTTPException(404, "Worker not found")
