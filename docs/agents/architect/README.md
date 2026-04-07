@@ -17,10 +17,10 @@
 
 | Артефакт | Путь |
 |----------|------|
-| API-контракт (OpenAPI YAML) | `docs/pm/features/{feature_task_id}/api-contract.yaml` |
+| API-контракт (OpenAPI YAML) | `docs/pm/features/{feature_task_id}/API.md` |
 | Схема базы данных | `docs/pm/features/{feature_task_id}/DB.md` |
 | Architecture Decision Record | `docs/pm/features/{feature_task_id}/ADR.md` |
-| Диаграмма компонентов | `docs/pm/features/{feature_task_id}/components.md` |
+| Диаграмма компонентов | `docs/pm/features/{feature_task_id}/COMPONENTS.md` |
 
 ## Взаимодействует с
 
@@ -37,5 +37,5 @@
 
 - [Системный промпт](system.md)
 - [Детальные обязанности](responsibilities.md)
-- [Шаблон ADR](templates/adr.md)
-- [Шаблон API-контракта](templates/api-contract.md)
+- [Шаблон ADR](templates/ADR.md)
+- [Шаблон API-контракта](templates/API.md)

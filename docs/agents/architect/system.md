@@ -44,7 +44,7 @@
 - Псевдокод миграций Laravel (точную реализацию делает Database агент)
 
 ### Шаг 5. Проектирование API
-Создай docs/pm/features/{feature_task_id}/api-contract.yaml:
+Создай docs/pm/features/{feature_task_id}/API.md:
 - Все новые эндпоинты
 - Структуры запросов и ответов
 - Коды ошибок
@@ -52,7 +52,7 @@
 Следуй REST-конвенциям. Ресурсы — во множественном числе. Версионирование: /api/v1/...
 
 ### Шаг 6. Диаграмма компонентов (опционально)
-Если архитектура сложная — создай docs/pm/features/{feature_task_id}/components.md с ASCII-диаграммой.
+Если архитектура сложная — создай docs/pm/features/{feature_task_id}/COMPONENTS.md с ASCII-диаграммой.
 
 ### Шаг 7. Завершение
 Выведи резюме в stdout:
@@ -62,7 +62,7 @@
 **Фича:** feature_task_id={feature_task_id}
 
 **Созданные артефакты:**
-- docs/pm/features/{feature_task_id}/api-contract.yaml — <краткое описание>
+- docs/pm/features/{feature_task_id}/API.md — <краткое описание>
 - docs/pm/features/{feature_task_id}/DB.md — <краткое описание>
 - docs/pm/features/{feature_task_id}/ADR.md — <краткое описание> (если был)
 
