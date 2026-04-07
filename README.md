@@ -10,29 +10,87 @@
 
 Работает с **любым** AI CLI: Claude Code, Codex, Qwen Code и другими.
 
+## Скриншоты
+
+> Интерфейс — dark-theme, работает на десктопе и мобильном.
+
+### Список задач
+
+![Список задач](docs/screenshots/tasks.png)
+
+### Канбан-доска
+
+![Канбан-доска](docs/screenshots/kanban.png)
+
+### Исполнители
+
+![Исполнители](docs/screenshots/workers.png)
+
+### Справочник приоритетов
+
+![Приоритеты](docs/screenshots/priorities.png)
+
+### Интерактивный терминал
+
+![Интерактив](docs/screenshots/interactive.png)
+
+---
+
 ## Возможности
 
+### Очередь задач и планирование
+
 - **Мульти-провайдер** — Claude, Codex, Qwen, Cursor Agent, или любой свой CLI
-- **Очередь задач** с приоритетами (1 — высший, 10 — низший)
+- **Очередь задач** с приоритетами (1 — высший, 10 — низший); приоритеты из справочника с иконками (Jira-style)
 - **Планирование** — запуск промптов в заданное время
 - **Выбор модели** — для Claude Code провайдеров: sonnet / opus / haiku (Web UI + бот)
 - **Rate limit detection** — автоматическое определение лимитов API
 - **Exponential backoff** — retry с нарастающей задержкой (60s → 1h)
 - **Crash recovery** — при перезапуске воркера зависшие задачи возвращаются в очередь
-- **CLI + Web UI** — два интерфейса на выбор
-- **Telegram бот** — управление задачами через Telegram с авторизацией по номеру телефона
-- **Пароль на создание задач в боте** — опциональная защита через `PP_TASK_PASSWORD`
-- **`--dangerously-skip-permissions`** — флаг на задачу для запуска Claude без интерактивных подтверждений
-- **Уведомления** — Telegram бот присылает сообщение как только задача завершилась (с результатом или ошибкой)
-- **Скилы Claude Code** — запуск `/skill-name` через Web UI и бота (для всех Claude Code провайдеров)
-- **Продолжение сессии** — кнопка 💬 в боте после завершённой задачи для диалога в той же сессии
-- **Пауза воркера** — кнопка ⏸ в Web UI и боте, чтобы временно остановить обработку без потери задач
 - **Повторяющиеся задачи** — поле Recur: `6h`, `30m`, `daily@09:00` — новая задача создаётся автоматически
-- **Уведомления об обновлениях** — баннер в Web UI когда выходит новая версия
-- **Дашборд стоимости** — статистика расходов за сегодня / неделю / всего по провайдерам
-- **Tray-приложение** — двойной клик на `pp.exe`, иконка в трее, всё управление мышью
+
+### Веб-интерфейс
+
+- **Список задач** — фильтры по статусу, раскрытие деталей, аватары исполнителей, иконки приоритетов
+- **Канбан-доска** — per-project доска с настраиваемыми статусами, автообновление каждые 15 сек, пагинация (15 карточек + «Ещё»), URL `/kanban/<project>`
+- **Интерактивный терминал** — запуск AI CLI прямо в браузере (через tmux + pyte), поддержка клавиш управления
+- **Дашборд стоимости** — затраты за сегодня / неделю / всего по провайдерам
+- **History API** — URL-адресация (`/tasks`, `/kanban`, `/workers`, `/priorities`) без hash-маршрутизации
+- **⚡ Skills** — раскрывает список скилов Claude Code
+- **Пауза воркера** — кнопка ⏸ для временной остановки без потери задач
+- **Уведомления об обновлениях** — баннер когда выходит новая версия
+- **Ctrl+Enter** — быстрая отправка задачи из формы
+
+### Справочники
+
+- **Статусы задач** — настраиваемые статусы с цветом, порядком отображения в Канбане; статус «Готово» с крон-переносом завершённых задач (через N дней)
+- **Приоритеты** — справочник с иконками (SVG, Jira-style), отображаются в карточках задач и канбане
+- **Исполнители (Workers)** — таблица исполнителей с аватарами, ролями; привязка исполнителя к задаче; CRUD
+- **Промпты** — библиотека шаблонных промптов с быстрым выбором при создании задачи
+
+### Мультиагентная система
+
+- **Агенты** — специализированные AI-агенты: PM, Architect, Backend, Frontend, Mobile, Database, UX, QA, Reviewer, DevOps, Integrations
+- **Учётные записи агентов** — управление несколькими аккаунтами на агента, relogin-процедура прямо из Web UI
+- **Проекты с цветами** — проекты с уникальными цветами и shortname; агент-цвет в карточках Канбана
+- **Иерархия задач** — дочерние задачи через `parent_task_id`; PM-агент создаёт подзадачи для каждого исполнителя
+
+### Telegram бот
+
+- **Список задач** с пагинацией и статусами
+- **Создание задачи** через диалог: промпт → провайдер → модель → приоритет → skip-permissions → директория → расписание
+- **Продолжение сессии** (💬 Ответить) — диалог с моделью в той же сессии
+- **⚡ Скилы** — список и запуск Claude Code скилов
+- **Уведомления** — результат или ошибка автоматически после завершения задачи
+- **Авторизация по номеру телефона**
+- **Пароль на создание задач** (`PP_TASK_PASSWORD`)
+
+### Инфраструктура
+
+- **PostgreSQL** — хранение данных; схема и имена таблиц настраиваются через env
+- **CLI + Web UI + Telegram бот** — три интерфейса на выбор
+- **Tray-приложение** — двойной клик на `pp.exe`, иконка в трее
 - **Standalone .exe** — сборка без зависимостей через PyInstaller
-- **SQLite** — данные хранятся локально в `~/.promptpilot/`
 
 ## Установка
 
@@ -57,7 +115,7 @@ pip install -e .
 pip install promptpilot-X.X.X-py3-none-any.whl
 ```
 
-Требования: Python 3.10+, хотя бы один AI CLI в PATH (claude, codex, qwen и т.д.).
+Требования: Python 3.10+, PostgreSQL, хотя бы один AI CLI в PATH (claude, codex, qwen и т.д.).
 
 ## Быстрый старт
 
@@ -129,8 +187,21 @@ notepad .env
 `.env` рядом с `pp.exe` (или рядом со скриптом):
 
 ```ini
+# База данных (PostgreSQL)
+PP_DB_DSN=postgresql://user:password@localhost:5432/dbname
+# или по частям:
+PP_DB_HOST=localhost
+PP_DB_PORT=5432
+PP_DB_DATABASE=promptpilot
+PP_DB_USER=pp
+PP_DB_PASSWORD=secret
+PP_DB_SCHEMA=hubstaff
+
+# Telegram бот
 PP_TG_TOKEN=7123456789:AAF...
 PP_TG_ALLOWED_PHONES=+79001234567,+79007654321
+
+# AI CLI
 PP_CLAUDE_EXE=C:\Users\YourName\.local\bin\claude.exe
 PP_DEFAULT_CLI=claude
 ```
@@ -211,6 +282,7 @@ pp worker                              # запустить воркер
 pp server                              # запустить веб-UI
 pp server -p 9000                      # на другом порту
 pp bot                                 # запустить Telegram бот
+pp poll-limits-all                     # опросить лимиты всех аккаунтов
 ```
 
 ## Telegram бот
@@ -362,40 +434,197 @@ GET /api/skills?provider=claude                — только если про�
 GET /api/skills?provider=claude&workdir=/path  — + локальные скилы проекта
 ```
 
+## Канбан-доска
+
+Полноценный Канбан для отслеживания задач по проектам.
+
+- Выбор проекта → переход на `/kanban/<shortname>` — прямая ссылка на доску
+- Колонки = настраиваемые статусы задач (справочник **Статусы задач**)
+- Порядок колонок задаётся полем `nom` в справочнике
+- Пагинация: 15 карточек на колонку + кнопка «Ещё N»
+- Автообновление каждые 15 секунд (инкрементальное, без мерцания)
+- На карточках: аватар исполнителя, иконка приоритета, бейджи
+- Кнопка «+» над доской — быстрое добавление задачи
+
+```
+GET  /api/admin/tasks-statuses          — список статусов для Канбана
+POST /api/admin/tasks-statuses          — создать статус
+```
+
+## Исполнители (Workers)
+
+Справочник исполнителей — реальных людей или AI-агентов, которым назначаются задачи.
+
+- Аватары (изображения из `static/images/workers/`)
+- Роль исполнителя
+- Привязка к задаче через поле `worker_id`
+- Аватар исполнителя отображается в списке задач и на карточках Канбана
+- CRUD через Web UI (раздел «Исполнители»)
+
+## Мультиагентная система
+
+PromptPilot используется как планировщик в мультиагентной системе разработки. Подробная документация в [`docs/README.md`](docs/README.md).
+
+### Агенты
+
+| Агент | Описание |
+|-------|----------|
+| PM / Orchestrator | Декомпозиция задач, координация агентов |
+| Architect | Системный дизайн, API-контракты |
+| Backend | Laravel / PHP |
+| Frontend | Vue.js |
+| Mobile | React Native |
+| Database | PostgreSQL, миграции |
+| UX Designer | Figma макеты |
+| QA | Тесты, тест-планы |
+| Reviewer | Code review |
+| DevOps | Docker, CI/CD |
+| Integrations | Python/Node.js воркеры |
+
+### Учётные записи агентов
+
+У каждого агента может быть несколько учётных записей (claude-аккаунтов). Управление через Web UI (раздел «Учётные записи»):
+- CRUD аккаунтов
+- Процедура relogin прямо в браузере (через интерактивный терминал)
+- Опрос rate limits: `pp poll-limits-all`
+
+### Иерархия задач
+
+- PM-агент получает высокоуровневую задачу
+- Создаёт дочерние задачи (`parent_task_id`) для каждого нужного агента
+- Статус фичи отслеживается через список дочерних задач
+
+## Интерактивный терминал
+
+Запуск AI CLI прямо в браузере без SSH.
+
+- Требует **tmux** на сервере
+- Рендеринг через **pyte** (VT100-эмулятор)
+- Поддержка клавиш: Enter, Ctrl+C, Escape, стрелки, Tab
+- Панель быстрых клавиш над терминалом
+- Автоматическое сворачивание формы при старте
+
+```
+GET  /api/interactive/state   — текущее состояние сессии
+POST /api/interactive/start   — запустить сессию (provider, workdir)
+POST /api/interactive/input   — отправить ввод
+GET  /api/interactive/output  — получить вывод (cursor-based polling)
+POST /api/interactive/stop    — завершить сессию
+```
+
+## Статус «Готово» и крон-перенос
+
+- Статус «Готово» (`shortname: ready`) — архивный статус, не отображается в Канбане
+- Крон-задача автоматически переносит задачи из статуса «Успешно завершена» в «Готово» через N дней (по умолчанию 7)
+- Запускается в фоне при старте сервера
+
 ## Веб-интерфейс
 
-Минималистичный dark-theme UI на `http://127.0.0.1:8420`:
+Минималистичный dark-theme UI на `http://127.0.0.1:8420`.
 
-- Выбор провайдера и модели (дропдаун модели появляется автоматически для Claude Code провайдеров)
-- Добавление задач с приоритетом и расписанием (Ctrl+Enter для отправки)
+### Разделы меню
+
+| Раздел | Путь | Описание |
+|--------|------|----------|
+| Задачи | `/tasks` | Список задач с фильтрами и деталями |
+| Канбан | `/kanban` | Выбор проекта → Канбан-доска |
+| Интерактив | `/interactive` | Интерактивный терминал |
+| Агенты | `/agents` | Управление агентами |
+| Учётные записи | `/accounts` | Аккаунты агентов, relogin |
+| Проекты | `/projects` | Список проектов |
+| Статусы задач | `/task-statuses` | Справочник статусов для Канбана |
+| Приоритеты | `/priorities` | Справочник приоритетов с иконками |
+| Промпты | `/prompts` | Библиотека шаблонных промптов |
+| Исполнители | `/workers` | Управление исполнителями |
+
+### Форма добавления задачи
+
+- Выбор провайдера и модели (дропдаун модели — автоматически для Claude Code)
+- Выбор приоритета из справочника (с иконкой)
+- Выбор исполнителя из справочника
 - Чекбокс `--dangerously-skip-permissions`
-- **⚡ Skills** — раскрывает список доступных скилов
-- Фильтры по статусу, раскрытие деталей задачи
-- Отмена и удаление задач
-- Автообновление каждые 5 секунд
+- **⚡ Skills** — раскрывает список скилов
+- Поля: расписание, рабочая директория, повторение
+- **Ctrl+Enter** — быстрая отправка
 
 ## REST API
 
 ```
-GET    /api/tasks              — список задач (?status=pending&limit=50)
-POST   /api/tasks              — создать задачу
-GET    /api/tasks/{id}         — детали задачи
-PATCH  /api/tasks/{id}         — обновить (отменить, сменить приоритет)
-DELETE /api/tasks/{id}         — удалить
-POST   /api/tasks/{id}/reset   — сбросить зависшую задачу в pending
-GET    /api/stats              — статистика по статусам
-GET    /api/providers          — провайдеры (description, supports_skills, models)
-GET    /api/skills             — скилы (?provider=claude&workdir=/path)
-GET    /api/projects           — проекты из PP_PROJECTS_ROOT
+GET    /api/tasks                      — список задач (?status=pending&limit=50&offset=0)
+POST   /api/tasks                      — создать задачу
+GET    /api/tasks/{id}                 — детали задачи
+PATCH  /api/tasks/{id}                 — обновить (отменить, сменить приоритет)
+DELETE /api/tasks/{id}                 — удалить
+POST   /api/tasks/{id}/reset           — сбросить зависшую задачу в pending
+
+GET    /api/stats                      — статистика по статусам
+GET    /api/stats/costs                — затраты по провайдерам (сегодня / неделя / всего)
+
+GET    /api/worker/status              — состояние воркера (paused/running)
+POST   /api/worker/pause               — приостановить воркер
+POST   /api/worker/resume              — возобновить воркер
+
+GET    /api/providers                  — провайдеры (description, supports_skills, models)
+GET    /api/skills                     — скилы (?provider=claude&workdir=/path)
+GET    /api/projects                   — проекты из PP_PROJECTS_ROOT
+GET    /api/version                    — текущая версия и наличие обновления
+GET    /api/config                     — конфигурация (провайдеры, настройки)
+
+GET    /api/interactive/state          — состояние интерактивной сессии
+POST   /api/interactive/start          — запустить сессию
+POST   /api/interactive/input          — отправить ввод
+GET    /api/interactive/output         — получить вывод (cursor-based)
+POST   /api/interactive/stop           — завершить сессию
+
+GET    /api/admin/projects             — CRUD проектов
+POST   /api/admin/projects
+PATCH  /api/admin/projects/{id}
+DELETE /api/admin/projects/{id}
+
+GET    /api/admin/agents               — CRUD агентов
+POST   /api/admin/agents
+PATCH  /api/admin/agents/{id}
+DELETE /api/admin/agents/{id}
+
+GET    /api/admin/agents-accounts      — CRUD учётных записей агентов
+POST   /api/admin/agents-accounts
+PATCH  /api/admin/agents-accounts/{id}
+DELETE /api/admin/agents-accounts/{id}
+POST   /api/admin/agents-accounts/{id}/relogin/start
+POST   /api/admin/agents-accounts/{id}/relogin/finish
+POST   /api/admin/agents-accounts/{id}/relogin/cancel
+
+GET    /api/admin/prompts              — CRUD библиотеки промптов
+POST   /api/admin/prompts
+PATCH  /api/admin/prompts/{id}
+DELETE /api/admin/prompts/{id}
+
+GET    /api/admin/workers              — CRUD исполнителей
+POST   /api/admin/workers
+PATCH  /api/admin/workers/{id}
+DELETE /api/admin/workers/{id}
+
+GET    /api/admin/priorities           — CRUD приоритетов
+POST   /api/admin/priorities
+PATCH  /api/admin/priorities/{id}
+DELETE /api/admin/priorities/{id}
 ```
 
 ## Конфигурация
 
 | Переменная | По умолчанию | Описание |
 |---|---|---|
-| `PP_DATA_DIR` | `~/.promptpilot` | Директория для БД |
+| `PP_DB_DSN` | — | DSN для подключения к PostgreSQL |
+| `PP_DB_HOST` | `localhost` | Хост PostgreSQL |
+| `PP_DB_PORT` | `5432` | Порт PostgreSQL |
+| `PP_DB_DATABASE` | — | Имя базы данных |
+| `PP_DB_USER` | — | Пользователь БД |
+| `PP_DB_PASSWORD` | — | Пароль БД |
+| `PP_DB_SCHEMA` | `hubstaff` | Схема PostgreSQL |
+| `PP_DB_TASKS_TABLE` | `tasks` | Имя таблицы задач |
+| `PP_DB_SETTINGS_TABLE` | `settings` | Имя таблицы настроек |
 | `PP_POLL_INTERVAL` | `5` | Интервал опроса очереди (сек) |
-| `AGENT_TIMEOUT` | — | Единый таймаут для всех провайдеров (напр. `900`, `15 min`, `15 мин`) |
+| `AGENT_TIMEOUT` | — | Единый таймаут для всех провайдеров (напр. `900`, `15 min`) |
 | `PP_TASK_TIMEOUT` | `300` | Таймаут выполнения задачи (сек) |
 | `PP_BASE_DELAY` | `60` | Начальная задержка retry (сек) |
 | `PP_MAX_DELAY` | `3600` | Максимальная задержка retry (сек) |
@@ -420,25 +649,47 @@ GET    /api/projects           — проекты из PP_PROJECTS_ROOT
 | `rate_limited` | Ожидает retry после rate limit |
 | `cancelled` | Отменена |
 
+Дополнительно — настраиваемые **статусы задач** из справочника (`tasks_statuses`), которые отображаются в Канбане. По умолчанию:
+
+| Shortname | Название | Отображение в Канбане |
+|-----------|----------|-----------------------|
+| `done` | Успешно завершена | Да |
+| `ready` | Готово | Нет (архивный) |
+
 ## Архитектура
 
 ```
 promptpilot/
 ├── config.py       — настройки, провайдеры, скилы, build_cmd
-├── models.py       — Pydantic-модели
-├── db.py           — SQLite (очередь, CRUD, планирование)
-├── worker.py       — воркер (subprocess → любой AI CLI)
+├── models.py       — Pydantic-модели (TaskCreate, TaskInDB, Stats, CostStats…)
+├── db.py           — PostgreSQL-слой (schema init, CRUD задач, справочники)
+├── worker.py       — воркер (subprocess → любой AI CLI, retry/backoff)
 ├── cli.py          — CLI (Click)
-├── api.py          — REST API (FastAPI)
+├── api.py          — REST API (FastAPI): задачи, статистика, интерактив, admin
 ├── bot.py          — Telegram бот (python-telegram-bot)
 ├── tg_auth.py      — авторизация по номеру телефона
+├── tray.py         — tray-управление worker/server/bot
+├── limits.py       — опрос rate limits аккаунтов
+├── relogin.py      — процедура relogin через интерактив
+├── version.py      — версия и проверка обновлений
 └── static/
-    └── index.html  — веб-интерфейс
+    ├── index.html          — веб-интерфейс (SPA, History API)
+    └── images/
+        ├── priorities/     — иконки приоритетов (SVG + PNG)
+        └── workers/        — аватары исполнителей
+
+docs/
+├── README.md               — документация мультиагентной системы
+├── agents/                 — инструкции для каждого агента
+├── agents-guide.md         — общее руководство по агентам
+├── system/                 — схемы, протоколы, жизненный цикл задачи
+└── help/                   — контекстная справка для Web UI
 
 start.ps1           — запустить все сервисы
 stop.ps1            — остановить все сервисы
 build.ps1           — собрать dist\pp.exe
 pp.spec             — конфиг PyInstaller
+AGENTS.md           — карта проекта для агентной разработки
 ```
 
-Воркер и сервер — два отдельных процесса, работающих с одной SQLite БД. Воркер выполняет задачи последовательно (одна за раз), чтобы не упираться в rate limits.
+Воркер и сервер — два отдельных процесса, работающих с одной PostgreSQL БД. Воркер выполняет задачи последовательно (одна за раз), чтобы не упираться в rate limits.
