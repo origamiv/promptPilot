@@ -1319,6 +1319,13 @@
     vertical-align: middle;
     flex: 0 0 24px;
   }
+  @media (min-width: 981px) {
+    .worker-avatar-workers-table {
+      width: 36px;
+      height: 36px;
+      flex: 0 0 36px;
+    }
+  }
   .worker-avatar-lg {
     width: 56px;
     height: 56px;
@@ -5653,7 +5660,7 @@ async function loadWorkersCrud() {
   const tbody = document.getElementById('workersTbody');
   tbody.innerHTML = rows.map(r => `
     <tr>
-      <td style="width:36px;text-align:center">${workerAvatarImg(r, 'worker-avatar-sm')}</td>
+      <td style="width:54px;text-align:center">${workerAvatarImg(r, 'worker-avatar-sm worker-avatar-workers-table')}</td>
       <td>${r.id}</td>
       <td>${esc(r.name || '')}</td>
       <td>${esc(r.shortname || '')}</td>
