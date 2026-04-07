@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 
 from . import db
@@ -22,6 +23,7 @@ from .config import (
     DEFAULT_CLI,
     MAX_DELAY,
     POLL_INTERVAL,
+    WORKER_CONCURRENCY,
     TASK_TIMEOUT,
     build_cmd,
     get_provider_env,
@@ -342,7 +344,20 @@ def _build_prompt_from_list(task, skip_base: bool = False) -> str:
 
 def execute_task(task):
     """Run CLI with the task's prompt."""
+    # Determine provider: worker's linked agent takes priority over task's agent.
     provider = task.provider or DEFAULT_CLI
+    if task.worker_id:
+        worker = db.get_worker(int(task.worker_id))
+        if worker and worker.get("agent_shortname"):
+            provider = worker["agent_shortname"]
+            print(f"  -> Provider from worker #{task.worker_id} agent: {provider}")
+        elif worker and not worker.get("agent_shortname"):
+            # Worker has no agent linked — fall back to task's agent account
+            if task.agent_account_id:
+                acc = db.get_agent_account(int(task.agent_account_id))
+                if acc and acc.get("agent_shortname"):
+                    provider = acc["agent_shortname"]
+                    print(f"  -> Provider from task agent account: {provider}")
     provider_key = provider.strip().lower()
 
     account = None
@@ -808,6 +823,7 @@ def run_worker():
     published_recently: dict[int, float] = {}
 
     print(f"PromptPilot worker started (poll every {POLL_INTERVAL}s)")
+    print(f"Concurrency: {WORKER_CONCURRENCY} tasks")
     timeout_label = f"{AGENT_TIMEOUT}s (AGENT_TIMEOUT)" if AGENT_TIMEOUT else f"{TASK_TIMEOUT}s"
     print(f"Timeout: {timeout_label} | Backoff: {BASE_DELAY}-{MAX_DELAY}s")
     if rabbit.enabled:
@@ -816,73 +832,113 @@ def run_worker():
         print("Queue backend: DB polling fallback")
     print("Waiting for tasks...\n")
 
+    def _drain_done(active):
+        done = [f for f in list(active.keys()) if f.done()]
+        for f in done:
+            task_id = active.pop(f)
+            try:
+                f.result()
+            except Exception as e:
+                print(f"[#{task_id}] Worker execution error: {e}")
+
     try:
-        while running:
-            now_ts = time.time()
-            if db.is_paused():
-                rabbit.wait(1.0)
-                continue
+        with ThreadPoolExecutor(max_workers=WORKER_CONCURRENCY, thread_name_prefix="pp-task") as pool:
+            active = {}
+            while running or active:
+                _drain_done(active)
 
-            if rabbit.enabled and now_ts >= queue_refresh_at:
-                try:
-                    queue_names = db.get_project_queue_names(include_default=True)
-                    for q in queue_names:
-                        rabbit.ensure_queue(q)
-                    print(f"  -> Queues refreshed: {len(queue_names)}")
-                except Exception as e:
-                    print(f"  -> Queue refresh failed: {e}")
-                    queue_names = [queue_name_for_project(None)]
-                queue_refresh_at = now_ts + 60.0
+                if not running:
+                    if active:
+                        wait(list(active.keys()), timeout=0.5, return_when=FIRST_COMPLETED)
+                    continue
 
-            if rabbit.enabled and now_ts >= due_dispatch_at:
-                try:
-                    due_jobs = db.list_due_task_jobs(limit=400)
-                    sent = 0
-                    for job in due_jobs:
-                        task_id = int(job["task_id"])
-                        prev = published_recently.get(task_id, 0.0)
-                        if (now_ts - prev) < max(1.0, float(POLL_INTERVAL)):
+                now_ts = time.time()
+                if db.is_paused():
+                    if active:
+                        wait(list(active.keys()), timeout=1.0, return_when=FIRST_COMPLETED)
+                    else:
+                        rabbit.wait(1.0)
+                    continue
+
+                if rabbit.enabled and now_ts >= queue_refresh_at:
+                    try:
+                        queue_names = db.get_project_queue_names(include_default=True)
+                        for q in queue_names:
+                            rabbit.ensure_queue(q)
+                        print(f"  -> Queues refreshed: {len(queue_names)}")
+                    except Exception as e:
+                        print(f"  -> Queue refresh failed: {e}")
+                        queue_names = [queue_name_for_project(None)]
+                    queue_refresh_at = now_ts + 60.0
+
+                if rabbit.enabled and now_ts >= due_dispatch_at:
+                    try:
+                        due_jobs = db.list_due_task_jobs(limit=400)
+                        sent = 0
+                        for job in due_jobs:
+                            task_id = int(job["task_id"])
+                            prev = published_recently.get(task_id, 0.0)
+                            if (now_ts - prev) < max(1.0, float(POLL_INTERVAL)):
+                                continue
+                            queue_name = queue_name_for_project(job.get("project_id"))
+                            if rabbit.publish(queue_name, job):
+                                published_recently[task_id] = now_ts
+                                sent += 1
+                        if sent:
+                            print(f"  -> Dispatched due tasks into RabbitMQ: {sent}")
+                        stale_before = now_ts - max(60.0, POLL_INTERVAL * 10.0)
+                        published_recently = {k: v for k, v in published_recently.items() if v >= stale_before}
+                    except Exception as e:
+                        print(f"  -> Due-dispatch failed: {e}")
+                    due_dispatch_at = now_ts + max(1.0, float(POLL_INTERVAL))
+
+                slots = max(0, WORKER_CONCURRENCY - len(active))
+                if slots <= 0:
+                    wait(list(active.keys()), timeout=0.5, return_when=FIRST_COMPLETED)
+                    continue
+
+                claimed = 0
+                for _ in range(slots):
+                    if rabbit.enabled:
+                        msg = rabbit.get_one(queue_names or [queue_name_for_project(None)])
+                        if not msg:
+                            break
+                        payload = msg.payload if isinstance(msg.payload, dict) else {}
+                        raw_task_id = payload.get("task_id")
+                        try:
+                            task_id = int(raw_task_id)
+                        except Exception:
+                            print(f"  -> Skip malformed queue message from {msg.queue}: {payload!r}")
+                            rabbit.ack(msg.delivery_tag)
                             continue
-                        queue_name = queue_name_for_project(job.get("project_id"))
-                        if rabbit.publish(queue_name, job):
-                            published_recently[task_id] = now_ts
-                            sent += 1
-                    if sent:
-                        print(f"  -> Dispatched due tasks into RabbitMQ: {sent}")
-                    stale_before = now_ts - max(60.0, POLL_INTERVAL * 10.0)
-                    published_recently = {k: v for k, v in published_recently.items() if v >= stale_before}
-                except Exception as e:
-                    print(f"  -> Due-dispatch failed: {e}")
-                due_dispatch_at = now_ts + max(1.0, float(POLL_INTERVAL))
 
-            if rabbit.enabled:
-                msg = rabbit.get_one(queue_names or [queue_name_for_project(None)])
-                if not msg:
-                    rabbit.wait(0.8)
-                    continue
-                payload = msg.payload if isinstance(msg.payload, dict) else {}
-                raw_task_id = payload.get("task_id")
-                try:
-                    task_id = int(raw_task_id)
-                except Exception:
-                    print(f"  -> Skip malformed queue message from {msg.queue}: {payload!r}")
-                    rabbit.ack(msg.delivery_tag)
-                    continue
+                        task = db.claim_task_for_run(task_id)
+                        rabbit.ack(msg.delivery_tag)
+                        if task is None:
+                            continue
+                    else:
+                        task = db.get_next_runnable()
+                        if task is None:
+                            break
 
-                task = db.claim_task_for_run(task_id)
-                rabbit.ack(msg.delivery_tag)
-                if task is None:
-                    continue
-            else:
-                task = db.get_next_runnable()
-                if task is None:
-                    time.sleep(POLL_INTERVAL)
-                    continue
+                    provider = task.provider or DEFAULT_CLI
+                    prompt_preview = task.prompt[:60].replace("\n", " ")
+                    print(f"[#{task.id}] [{provider}] Running: {prompt_preview}...")
+                    fut = pool.submit(execute_task, task)
+                    active[fut] = task.id
+                    claimed += 1
 
-            provider = task.provider or DEFAULT_CLI
-            prompt_preview = task.prompt[:60].replace("\n", " ")
-            print(f"[#{task.id}] [{provider}] Running: {prompt_preview}...")
-            execute_task(task)
+                if claimed == 0:
+                    if rabbit.enabled:
+                        if active:
+                            wait(list(active.keys()), timeout=0.8, return_when=FIRST_COMPLETED)
+                        else:
+                            rabbit.wait(0.8)
+                    else:
+                        if active:
+                            wait(list(active.keys()), timeout=max(0.3, float(POLL_INTERVAL) / 2), return_when=FIRST_COMPLETED)
+                        else:
+                            time.sleep(POLL_INTERVAL)
     finally:
         rabbit.close()
         print("Worker stopped.")

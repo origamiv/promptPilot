@@ -94,6 +94,7 @@ PG_SETTINGS_TABLE = os.environ.get("PP_DB_SETTINGS_TABLE", "promptpilot_settings
 
 # Worker
 POLL_INTERVAL = int(os.environ.get("PP_POLL_INTERVAL", "5"))
+WORKER_CONCURRENCY = max(1, int(os.environ.get("PP_WORKER_CONCURRENCY", "4")))
 TASK_TIMEOUT = int(os.environ.get("PP_TASK_TIMEOUT", "300"))
 CLAUDE_TASK_TIMEOUT = int(os.environ.get("PP_CLAUDE_TASK_TIMEOUT", "900"))
 AGENT_TIMEOUT = _parse_duration_seconds(os.environ.get("AGENT_TIMEOUT", ""), 0)

@@ -376,7 +376,7 @@ def init_db():
                     name VARCHAR(255) NOT NULL,
                     shortname VARCHAR(255) NOT NULL UNIQUE,
                     role VARCHAR(255),
-                    is_agent BOOLEAN NOT NULL DEFAULT FALSE,
+                    is_agent SMALLINT NOT NULL DEFAULT 0,
                     agent_id BIGINT,
                     status SMALLINT NOT NULL DEFAULT 0,
                     avatar_url VARCHAR(512),
@@ -392,6 +392,32 @@ def init_db():
         cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS task_status_id BIGINT").format(_tasks_ref()))
         cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS prompt_list TEXT").format(_tasks_ref()))
         cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS questions TEXT").format(_tasks_ref()))
+        cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS nom_run SMALLINT").format(_tasks_ref()))
+
+        # Migrate is_agent from BOOLEAN to SMALLINT in workers
+        cur.execute(
+            sql.SQL(
+                """
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = {schema_lit} AND table_name = 'workers' AND column_name = 'is_agent'
+                        AND data_type = 'boolean'
+                    ) THEN
+                        ALTER TABLE {schema}.workers
+                            ALTER COLUMN is_agent DROP DEFAULT,
+                            ALTER COLUMN is_agent TYPE SMALLINT USING (is_agent::int),
+                            ALTER COLUMN is_agent SET DEFAULT 0;
+                        UPDATE {schema}.workers SET is_agent = CASE WHEN shortname = 'pm' THEN 1 ELSE 2 END
+                            WHERE is_agent = 1;
+                    END IF;
+                END $$;
+                """
+            ).format(
+                schema_lit=sql.Literal(SCHEMA_NAME),
+                schema=sql.Identifier(SCHEMA_NAME),
+            )
+        )
 
         # Task statuses reference table
         cur.execute(
@@ -712,9 +738,9 @@ def create_task(task: TaskCreate) -> TaskInDB:
                 INSERT INTO {} (
                     prompt, subject, agent_prompt, working_dir, provider, status, priority,
                     scheduled_at, created_at, max_retries, skip_permissions,
-                    model, session_id, parent_task_id, tg_chat_id, recurrence, worker_id, task_status_id, prompt_list
+                    model, session_id, parent_task_id, tg_chat_id, recurrence, worker_id, task_status_id, prompt_list, nom_run
                 )
-                VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """
             ).format(_tasks_ref()),
@@ -737,6 +763,7 @@ def create_task(task: TaskCreate) -> TaskInDB:
                 task.worker_id,
                 task_status_id,
                 task.prompt_list or None,
+                task.nom_run,
             ),
         )
         task_id = cur.fetchone()["id"]
@@ -793,8 +820,13 @@ def get_next_runnable() -> Optional[TaskInDB]:
                       AND (t.scheduled_at IS NULL OR t.scheduled_at <= %s)
                       AND (t.next_run_at IS NULL OR t.next_run_at <= %s)
                       AND (ts.shortname IS NULL OR LOWER(ts.shortname) <> 'backlog')
-                    ORDER BY t.priority ASC, t.created_at ASC
-                    FOR UPDATE SKIP LOCKED
+                    ORDER BY
+                        CASE WHEN t.nom_run IS NULL THEN 1 ELSE 0 END ASC,
+                        t.nom_run ASC NULLS LAST,
+                        t.priority ASC,
+                        t.created_at ASC,
+                        t.id ASC
+                    FOR UPDATE OF t SKIP LOCKED
                     LIMIT 1
                 ),
                 running_status AS (
@@ -830,16 +862,27 @@ def claim_task_for_run(task_id: int) -> Optional[TaskInDB]:
         cur.execute(
             sql.SQL(
                 """
-                WITH candidate AS (
+                WITH next_task AS (
                     SELECT t.id
                     FROM {} t
                     LEFT JOIN {}.tasks_statuses ts ON ts.id = t.task_status_id
-                    WHERE t.id = %s
-                      AND t.status IN ('pending', 'rate_limited')
+                    WHERE t.status IN ('pending', 'rate_limited')
                       AND (t.scheduled_at IS NULL OR t.scheduled_at <= %s)
                       AND (t.next_run_at IS NULL OR t.next_run_at <= %s)
                       AND (ts.shortname IS NULL OR LOWER(ts.shortname) <> 'backlog')
-                    FOR UPDATE SKIP LOCKED
+                    ORDER BY
+                        CASE WHEN t.nom_run IS NULL THEN 1 ELSE 0 END ASC,
+                        t.nom_run ASC NULLS LAST,
+                        t.priority ASC,
+                        t.created_at ASC,
+                        t.id ASC
+                    FOR UPDATE OF t SKIP LOCKED
+                    LIMIT 1
+                ),
+                candidate AS (
+                    SELECT id
+                    FROM next_task
+                    WHERE id = %s
                 ),
                 running_status AS (
                     SELECT id
@@ -861,7 +904,7 @@ def claim_task_for_run(task_id: int) -> Optional[TaskInDB]:
                 RETURNING t.*
                 """
             ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME), _tasks_ref()),
-            (task_id, now, now, _now()),
+            (now, now, task_id, _now()),
         )
         row = cur.fetchone()
         return _row_to_task(row) if row else None
@@ -959,7 +1002,12 @@ def list_due_task_jobs(limit: int = 500) -> list[dict]:
                       AND (t.scheduled_at IS NULL OR t.scheduled_at <= %s)
                       AND (t.next_run_at IS NULL OR t.next_run_at <= %s)
                       AND (ts.shortname IS NULL OR LOWER(ts.shortname) <> 'backlog')
-                    ORDER BY t.priority ASC, t.created_at ASC
+                    ORDER BY
+                        CASE WHEN t.nom_run IS NULL THEN 1 ELSE 0 END ASC,
+                        t.nom_run ASC NULLS LAST,
+                        t.priority ASC,
+                        t.created_at ASC,
+                        t.id ASC
                     LIMIT %s
                 )
                 SELECT
@@ -1256,6 +1304,16 @@ def update_task_questions(task_id: int, questions: str) -> bool:
         cur.execute(
             sql.SQL("UPDATE {} SET questions = %s WHERE id = %s").format(_tasks_ref()),
             (questions, task_id),
+        )
+        return cur.rowcount > 0
+
+
+def update_task_nom_run(task_id: int, nom_run: int) -> bool:
+    """Установить порядковый номер запуска агента в мультиагентной системе."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("UPDATE {} SET nom_run = %s WHERE id = %s").format(_tasks_ref()),
+            (nom_run, task_id),
         )
         return cur.rowcount > 0
 
@@ -2070,7 +2128,7 @@ def get_worker(worker_id: int) -> Optional[dict]:
             sql.SQL(
                 """
                 SELECT w.id, w.name, w.shortname, w.role, w.is_agent, w.agent_id,
-                       a.name AS agent_name, a.color AS agent_color,
+                       a.name AS agent_name, a.shortname AS agent_shortname, a.color AS agent_color,
                        w.status, w.avatar_url, w.prompt, w.created_at, w.updated_at
                 FROM {}.workers w
                 LEFT JOIN {}.agents a ON a.id = w.agent_id
@@ -2125,7 +2183,7 @@ def create_worker(
     name: str,
     shortname: str,
     role: Optional[str] = None,
-    is_agent: bool = False,
+    is_agent: int = 0,
     agent_id: Optional[int] = None,
     status: int = 0,
     avatar_url: Optional[str] = None,
@@ -2152,7 +2210,7 @@ def update_worker(
     name: str,
     shortname: str,
     role: Optional[str] = None,
-    is_agent: bool = False,
+    is_agent: int = 0,
     agent_id: Optional[int] = None,
     status: int = 0,
     avatar_url: Optional[str] = None,
