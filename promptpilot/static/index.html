@@ -1738,6 +1738,57 @@
     background: color-mix(in oklab, var(--green) 14%, var(--bg));
     border-color: color-mix(in oklab, var(--green) 42%, var(--border));
   }
+  .accounts-desktop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 10px;
+  }
+  .account-desktop-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+  }
+  .account-desktop-card.active {
+    background: color-mix(in oklab, var(--green) 14%, var(--bg));
+    border-color: color-mix(in oklab, var(--green) 42%, var(--border));
+  }
+  .account-desktop-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .account-desktop-title {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+    word-break: break-word;
+  }
+  .account-desktop-sub {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+  .account-desktop-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+  }
+  .account-desktop-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 10px;
+  }
+  .account-desktop-meta .admin-mobile-kv {
+    margin-top: 0;
+  }
+  #accountsView .admin-table {
+    display: none;
+  }
   #accountsTbody tr.active-account-row td {
     background: color-mix(in oklab, var(--green) 10%, transparent);
   }
@@ -2129,6 +2180,9 @@
     .admin-mobile-list {
       display: block;
     }
+    .accounts-desktop-grid {
+      display: none;
+    }
     .crud-dialog {
       width: 100%;
       max-height: 90dvh;
@@ -2365,6 +2419,7 @@
       <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createAccountCrud()">+</button>
     </div>
     <div class="admin-mobile-list" id="accountsCards"></div>
+    <div class="accounts-desktop-grid" id="accountsDesktopGrid"></div>
     <table class="admin-table">
       <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Agent</th><th>Active</th><th>Status</th><th>5h %</th><th>7d %</th><th>Tokens</th><th>Reset 5h</th><th>Reset 7d</th><th>Login</th><th>Mode</th><th></th></tr></thead>
       <tbody id="accountsTbody"></tbody>
@@ -3290,7 +3345,6 @@ async function loadTasks() {
         <span class="status-dot task-header-status-dot ${taskRefStatusDotClass(t)}"${taskDotStyle(t)} title="${esc(taskRefStatusLabel(t))}"></span>
       </div>
       <div class="task-card-meta">
-        ${agentIconInfo ? `<span class="task-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
         <span class="task-meta">${tr('task_agent')}: ${esc(agentName || '—')}</span>
         <span class="task-meta">${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
@@ -3321,7 +3375,6 @@ async function loadTasks() {
         <div class="admin-mobile-main">
           <div class="task-mobile-head-line1">
             <span class="task-mobile-id">#${t.id}</span>
-            ${agentIconInfo ? `<span class="task-mobile-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
             <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
             <span class="status-dot ${taskRefStatusDotClass(t)}"${taskDotStyle(t)} title="${esc(taskRefStatusLabel(t))}"></span>
           </div>
@@ -5073,6 +5126,44 @@ function renderAccountsCards(rows) {
   }).join('');
 }
 
+function renderAccountsDesktopCards(rows) {
+  const grid = document.getElementById('accountsDesktopGrid');
+  if (!grid) return;
+  grid.innerHTML = rows.map(r => {
+    const statusRaw = Number.isFinite(Number(r.status)) ? Number(r.status) : 0;
+    const status = [0, 1, 2, 3].includes(statusRaw) ? statusRaw : 0;
+    const title = [`#${r.id}`, esc(r.name || '')]
+      .filter(Boolean)
+      .join(' · ');
+    return `
+    <div class="account-desktop-card${r.is_active ? ' active' : ''}">
+      <div class="account-desktop-head">
+        <div>
+          <div class="account-desktop-title">${title}</div>
+          <div class="account-desktop-sub">${esc(r.shortname || '')} · ${esc(r.agent_name || String(r.agent_id || ''))}</div>
+        </div>
+        <div class="account-desktop-actions">
+          <span class="status-dot s${status}" title="status ${status}"></span>
+          ${r.is_active ? '' : `<button class="prompt-mobile-icon-btn login" type="button" aria-label="${tc('relogin')}" title="${tc('relogin')}" onclick="reloginAccountCrud(${r.id})">🔑</button>`}
+          <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit account" onclick="editAccountCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" aria-label="Delete account" onclick="deleteAccountCrud(${r.id})">🗑</button>
+        </div>
+      </div>
+      <div class="account-desktop-meta">
+        <div class="admin-mobile-kv"><b>Active:</b> ${r.is_active ? '1' : '0'}</div>
+        <div class="admin-mobile-kv"><b>Status:</b> ${r.status ?? ''}</div>
+        <div class="admin-mobile-kv"><b>5h:</b> ${limitValueHtml(r.percent_5h)}</div>
+        <div class="admin-mobile-kv"><b>7d:</b> ${limitValueHtml(r.percent_7d)}</div>
+        <div class="admin-mobile-kv"><b>Tokens:</b> ${r.balance_tokens ?? '—'}</div>
+        <div class="admin-mobile-kv"><b>Mode:</b> ${esc(r.login_mode || '') || '—'}</div>
+        <div class="admin-mobile-kv"><b>Reset 5h:</b> ${humanReset(r.reset_5h)}</div>
+        <div class="admin-mobile-kv"><b>Reset 7d:</b> ${humanReset(r.reset_7d)}</div>
+        <div class="admin-mobile-kv" style="grid-column: 1 / -1;"><b>Login:</b> ${esc(r.login || '') || '—'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderPromptsCards(rows) {
   const cards = document.getElementById('promptsCards');
   cards.innerHTML = rows.map(r => {
@@ -5198,7 +5289,8 @@ async function loadAccountsCrud() {
   const rows = await fetchJSON(`${API}/admin/agents-accounts${q ? `?q=${encodeURIComponent(q)}` : ''}`);
   adminAccountsRows = rows;
   const tbody = document.getElementById('accountsTbody');
-  tbody.innerHTML = rows.map(r => `
+  if (tbody) {
+    tbody.innerHTML = rows.map(r => `
     <tr class="${r.is_active ? 'active-account-row' : ''}">
       <td>${r.id}</td>
       <td>${esc(r.name || '')}</td>
@@ -5220,6 +5312,8 @@ async function loadAccountsCrud() {
       </td>
     </tr>
   `).join('');
+  }
+  renderAccountsDesktopCards(rows);
   renderAccountsCards(rows);
 }
 
@@ -5325,7 +5419,6 @@ function renderKanbanCard(t) {
       <div style="flex:1;min-width:0">
         <div class="kanban-card-title"><span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}</div>
         <div class="kanban-card-meta">
-          ${agentIconInfo ? `<span class="kanban-card-badge" title="${esc(agentIconInfo.label)}"><span class="status-dot"${agentDotStyleAttr(agentIconInfo)}></span></span>` : ''}
           ${taskPriorityBadgeHtml(t, { className: 'kanban-card-badge' })}
           <span class="kanban-card-badge">${timeAgo(t.created_at)}</span>
         </div>
