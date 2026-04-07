@@ -1,6 +1,6 @@
 # Отчёт по фиче: {Название фичи}
 
-**Задача PM:** #{task_id}  
+**Задача PM:** [#{task_id}](http://pilot.our24.ru/tasks)  
 **Дата завершения:** {YYYY-MM-DD HH:MM}  
 **Итог:** ✅ Успешно / ❌ С ошибками
 
@@ -14,17 +14,17 @@
 
 ## Выполненные задачи
 
-| Агент | Задача | task_id | Статус | Завершено |
-|-------|--------|---------|--------|-----------|
-| Architect | {описание} | #{id} | ✅ completed | {HH:MM} |
-| UX | {описание} | #{id} | ✅ completed | {HH:MM} |
-| Database | {описание} | #{id} | ✅ completed | {HH:MM} |
-| Backend | {описание} | #{id} | ✅ completed | {HH:MM} |
-| Frontend | {описание} | #{id} | ✅ completed | {HH:MM} |
-| Mobile | {описание} | #{id} | ✅ completed | {HH:MM} |
-| QA | {описание} | #{id} | ✅ completed | {HH:MM} |
-| Reviewer | {описание} | #{id} | ✅ completed | {HH:MM} |
-| DevOps | {описание} | #{id} | ✅ completed | {HH:MM} |
+| Агент | Задача | Задача PM | Статус | Завершено |
+|-------|--------|-----------|--------|-----------|
+| Architect | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
+| UX | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
+| Database | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
+| Backend | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
+| Frontend | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
+| Mobile | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
+| QA | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
+| Reviewer | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
+| DevOps | {описание} | [#{id}](http://pilot.our24.ru/tasks) | ✅ completed | {HH:MM} |
 
 ## Созданные артефакты
 
