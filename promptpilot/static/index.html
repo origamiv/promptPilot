@@ -3231,14 +3231,10 @@ async function addTask() {
     document.getElementById('subjectInput').value = '';
     document.getElementById('recurrenceInput').value = '';
     setDefaultSchedule();
+    const cb = _afterAddTaskCallback;
     closeTaskFormScreen();
-    if (_afterAddTaskCallback) {
-      const cb = _afterAddTaskCallback;
-      _afterAddTaskCallback = null;
-      cb();
-    } else {
-      refresh();
-    }
+    if (cb) cb();
+    else refresh();
   } catch (err) {
     alert(err.message);
   }
