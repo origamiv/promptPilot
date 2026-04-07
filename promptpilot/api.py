@@ -755,6 +755,7 @@ def api_admin_create_agent(payload: dict):
             email=(str(payload.get("email")).strip() if payload.get("email") is not None else None),
             priority=int(payload.get("priority", 0) or 0),
             status=int(payload.get("status", 1) or 1),
+            color=(str(payload.get("color")).strip() if payload.get("color") is not None else None),
         )
     except Exception as e:
         raise HTTPException(400, f"Create agent failed: {e}")
@@ -773,6 +774,7 @@ def api_admin_update_agent(agent_id: int, payload: dict):
             email=(str(payload.get("email")).strip() if payload.get("email") is not None else None),
             priority=int(payload.get("priority", 0) or 0),
             status=int(payload.get("status", 1) or 1),
+            color=(str(payload.get("color")).strip() if payload.get("color") is not None else None),
         )
         if not ok:
             raise HTTPException(404, "Agent not found")

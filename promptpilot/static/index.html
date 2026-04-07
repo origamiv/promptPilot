@@ -2247,7 +2247,7 @@
     </div>
     <div class="admin-mobile-list" id="agentsCards"></div>
     <table class="admin-table">
-      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Email</th><th>Priority</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Email</th><th>Priority</th><th>Status</th><th>Color</th><th></th></tr></thead>
       <tbody id="agentsTbody"></tbody>
     </table>
   </div>
@@ -2965,13 +2965,16 @@ function taskAgentIconInfo(t) {
   const agent = taskAgentName(t);
   const source = provider || agent;
   if (!source) return null;
+  const explicitAgentColor = normalizeHexColor(t.agent_color || '');
   const key = source.toLowerCase();
   let color = '#64748b';
-  if (key.includes('claude')) color = '#8b5cf6';
+  if (key.includes('openclaude')) color = '#a16207';
+  else if (key.includes('claude')) color = '#8b5cf6';
   else if (key.includes('codex')) color = '#0ea5e9';
   else if (key.includes('qwen')) color = '#f97316';
   else if (key.includes('cursor')) color = '#14b8a6';
   else if (key.includes('gpt') || key.includes('openai')) color = '#10b981';
+  if (explicitAgentColor) color = explicitAgentColor;
   return {
     icon: providerIcon(source),
     label: source,
@@ -2984,6 +2987,11 @@ function taskAgentIconInfo(t) {
 function agentIconStyleAttr(info) {
   if (!info) return '';
   return ` style="color:${info.color};background:${info.bg};border-color:${info.border};"`;
+}
+
+function agentDotStyleAttr(info) {
+  if (!info) return '';
+  return ` style="background:${info.color};"`;
 }
 
 function taskWorkedMinutes(t) {
@@ -4354,11 +4362,13 @@ function renderCrudFields(entity, row = {}) {
     `;
   }
   if (entity === 'agent') {
+    const agentColor = normalizeHexColor(row.color) || '#38bdf8';
     return `
       <div class="crud-field"><label>${tc('name')}</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
       <div class="crud-field"><label>${tc('shortname')}</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
       <div class="crud-field"><label>${tc('email')}</label><input id="crud_email" value="${esc(row.email || '')}"></div>
       <div class="crud-field"><label>${tc('priority')}</label><input id="crud_priority" type="number" value="${esc(String(row.priority ?? 0))}"></div>
+      <div class="crud-field"><label>${tc('color')}</label><input id="crud_color" required value="${esc(agentColor)}" placeholder="#38bdf8"></div>
       <div class="crud-field"><label>${tc('status')}</label>
         <select id="crud_status">
           <option value="1" ${(row.status ?? 1) === 1 ? 'selected' : ''}>${tc('active')}</option>
@@ -4542,12 +4552,19 @@ async function submitCrudModal(e) {
       return;
     }
     if (crudState.entity === 'agent') {
+      const colorRaw = crudValue('crud_color').trim();
+      const color = normalizeHexColor(colorRaw);
+      if (!color) {
+        alert(tc('invalid_color'));
+        return;
+      }
       const body = {
         name: crudValue('crud_name').trim(),
         shortname: crudValue('crud_shortname').trim(),
         email: crudValue('crud_email').trim() || null,
         priority: parseInt(crudValue('crud_priority') || '0', 10),
         status: parseInt(crudValue('crud_status') || '1', 10),
+        color,
       };
       if (mode === 'create') {
         await fetchJSON(`${API}/admin/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -4690,6 +4707,7 @@ function renderAgentsCards(rows) {
         <div class="admin-mobile-kv"><b>Email:</b> ${esc(r.email || '')}</div>
         <div class="admin-mobile-kv"><b>Priority:</b> ${r.priority ?? 0}</div>
         <div class="admin-mobile-kv"><b>Status:</b> ${r.status ?? 1}</div>
+        <div class="admin-mobile-kv"><b>Color:</b> ${normalizeHexColor(r.color || '') ? `<span style="display:inline-flex;align-items:center;gap:6px"><span class="status-dot" style="background:${esc(normalizeHexColor(r.color || ''))}"></span>${esc(r.color || '')}</span>` : '—'}</div>
       </div>
     </div>`;
   }).join('');
@@ -4822,6 +4840,7 @@ async function loadAgentsCrud() {
       <td>${esc(r.email || '')}</td>
       <td>${r.priority ?? 0}</td>
       <td>${r.status ?? 1}</td>
+      <td>${normalizeHexColor(r.color || '') ? `<span class="status-dot" style="background:${esc(normalizeHexColor(r.color || ''))}" title="${esc(r.color)}"></span> ${esc(r.color || '')}` : '—'}</td>
       <td class="admin-actions">
         <button class="btn btn-sm btn-ghost" onclick="editAgentCrud(${r.id})">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteAgentCrud(${r.id})">Delete</button>
@@ -4981,7 +5000,7 @@ function renderKanbanCard(t) {
       <div style="flex:1;min-width:0">
         <div class="kanban-card-title"><span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}</div>
         <div class="kanban-card-meta">
-          ${agentIconInfo ? `<span class="kanban-card-badge" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
+          ${agentIconInfo ? `<span class="kanban-card-badge" title="${esc(agentIconInfo.label)}"><span class="status-dot"${agentDotStyleAttr(agentIconInfo)}></span></span>` : ''}
           <span class="kanban-card-badge">P${t.priority}</span>
           <span class="kanban-card-badge">${timeAgo(t.created_at)}</span>
         </div>

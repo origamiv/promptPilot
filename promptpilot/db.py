@@ -67,7 +67,8 @@ def _tasks_with_agent_select():
             t.*,
             aa.name AS agent_account_name,
             aa.shortname AS agent_account_shortname,
-            COALESCE(a.name, aa.name, aa.shortname) AS agent_name
+            COALESCE(a.name, aa.name, aa.shortname) AS agent_name,
+            a.color AS agent_color
         FROM {} t
         LEFT JOIN {}.agents_accounts aa ON aa.id = t.agent_account_id
         LEFT JOIN {}.agents a ON a.id = aa.agent_id
@@ -404,6 +405,30 @@ def init_db():
                     sql.SQL("UPDATE {}.projects SET color = %s WHERE id = %s").format(sql.Identifier(SCHEMA_NAME)),
                     (PROJECT_PASTEL_COLORS[idx % len(PROJECT_PASTEL_COLORS)], row["id"]),
                 )
+        except UndefinedTable:
+            pass
+
+        try:
+            cur.execute(
+                sql.SQL(
+                    "ALTER TABLE {}.agents ADD COLUMN IF NOT EXISTS color VARCHAR(7)"
+                ).format(sql.Identifier(SCHEMA_NAME))
+            )
+            cur.execute(
+                sql.SQL(
+                    """
+                    UPDATE {}.agents
+                    SET color = CASE
+                        WHEN LOWER(shortname) = 'codex' THEN '#38bdf8'
+                        WHEN LOWER(shortname) = 'claude' THEN '#8b5cf6'
+                        WHEN LOWER(shortname) = 'openclaude' THEN '#a16207'
+                        ELSE color
+                    END
+                    WHERE COALESCE(TRIM(color), '') = ''
+                      AND LOWER(shortname) IN ('codex', 'claude', 'openclaude')
+                    """
+                ).format(sql.Identifier(SCHEMA_NAME))
+            )
         except UndefinedTable:
             pass
 
@@ -971,7 +996,7 @@ def list_agents(search: Optional[str] = None, limit: int = 200) -> list[dict]:
             cur.execute(
                 sql.SQL(
                     """
-                    SELECT id, name, shortname, email, priority, status, created_at, updated_at
+                    SELECT id, name, shortname, email, priority, status, color, created_at, updated_at
                     FROM {}.agents
                     WHERE deleted_at IS NULL
                       AND (name ILIKE %s OR shortname ILIKE %s OR COALESCE(email, '') ILIKE %s)
@@ -985,7 +1010,7 @@ def list_agents(search: Optional[str] = None, limit: int = 200) -> list[dict]:
             cur.execute(
                 sql.SQL(
                     """
-                    SELECT id, name, shortname, email, priority, status, created_at, updated_at
+                    SELECT id, name, shortname, email, priority, status, color, created_at, updated_at
                     FROM {}.agents
                     WHERE deleted_at IS NULL
                     ORDER BY id DESC
@@ -1002,7 +1027,7 @@ def list_active_agents(limit: int = 200) -> list[dict]:
         cur.execute(
             sql.SQL(
                 """
-                SELECT id, name, shortname, email, priority, status, created_at, updated_at
+                SELECT id, name, shortname, email, priority, status, color, created_at, updated_at
                 FROM {}.agents
                 WHERE deleted_at IS NULL
                   AND status = 1
@@ -1015,25 +1040,42 @@ def list_active_agents(limit: int = 200) -> list[dict]:
         return [dict(r) for r in cur.fetchall()]
 
 
-def create_agent(name: str, shortname: str, email: Optional[str] = None, priority: int = 0, status: int = 1) -> dict:
+def create_agent(
+    name: str,
+    shortname: str,
+    email: Optional[str] = None,
+    priority: int = 0,
+    status: int = 1,
+    color: Optional[str] = None,
+) -> dict:
     now = datetime.utcnow().replace(microsecond=0)
+    normalized_color = _normalize_project_color(color)
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
                 """
                 INSERT INTO {}.agents
-                    (name, shortname, email, priority, status, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, name, shortname, email, priority, status, created_at, updated_at
+                    (name, shortname, email, priority, status, color, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, name, shortname, email, priority, status, color, created_at, updated_at
                 """
             ).format(sql.Identifier(SCHEMA_NAME)),
-            (name, shortname, email, priority, status, now, now),
+            (name, shortname, email, priority, status, normalized_color, now, now),
         )
         return dict(cur.fetchone())
 
 
-def update_agent(agent_id: int, name: str, shortname: str, email: Optional[str], priority: int, status: int) -> bool:
+def update_agent(
+    agent_id: int,
+    name: str,
+    shortname: str,
+    email: Optional[str],
+    priority: int,
+    status: int,
+    color: Optional[str] = None,
+) -> bool:
     now = datetime.utcnow().replace(microsecond=0)
+    normalized_color = _normalize_project_color(color)
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
@@ -1044,11 +1086,12 @@ def update_agent(agent_id: int, name: str, shortname: str, email: Optional[str],
                     email = %s,
                     priority = %s,
                     status = %s,
+                    color = %s,
                     updated_at = %s
                 WHERE id = %s
                 """
             ).format(sql.Identifier(SCHEMA_NAME)),
-            (name, shortname, email, priority, status, now, agent_id),
+            (name, shortname, email, priority, status, normalized_color, now, agent_id),
         )
         return cur.rowcount > 0
 
