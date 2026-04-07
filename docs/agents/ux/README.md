@@ -7,17 +7,17 @@ UX/UI дизайнер. Проектирует экраны в Figma и эксп
 
 ## Входные данные
 
-- Описание требуемых экранов от PM-агента
-- `docs/api/openapi.yaml` — для понимания данных (от Architect, если уже готов)
+- Описание требуемых экранов от PM-агента (`feature_task_id`)
+- `docs/pm/features/{feature_task_id}/API.md` и `swagger.json` — структура данных (если уже готовы)
 - Существующий Figma-проект (ссылка передаётся в промпте)
 
 ## Выходные артефакты
 
 | Артефакт | Путь |
 |----------|------|
-| PNG экраны Web (desktop) | `docs/agents/ux/screens/web/` |
-| PNG экраны Mobile (375px) | `docs/agents/ux/screens/mobile/` |
-| Описание экранов | `docs/agents/ux/screens/README.md` |
+| PNG экраны Web (desktop) | `docs/pm/features/{feature_task_id}/ux/web/` |
+| PNG экраны Mobile (375px) | `docs/pm/features/{feature_task_id}/ux/mobile/` |
+| Описание экранов | `docs/pm/features/{feature_task_id}/ux/README.md` |
 
 ## Взаимодействует с
 
@@ -30,10 +30,10 @@ UX/UI дизайнер. Проектирует экраны в Figma и эксп
 
 В Фазе 1 (проектирование), параллельно с Architect.
 
-## Структура папки screens/
+## Структура папки ux/
 
 ```
-docs/agents/ux/screens/
+docs/pm/features/{feature_task_id}/ux/
 ├── README.md              # Описание каждого экрана
 ├── web/                   # Десктопные макеты (1440px)
 │   ├── 01-dashboard.png
