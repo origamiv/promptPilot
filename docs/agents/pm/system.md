@@ -75,8 +75,8 @@
 - Нужны ли внешние интеграции (Python/Node.js воркеры?)
 - Порядок выполнения (что от чего зависит)
 
-Создай файл docs/pm/features/feature-{N}/PLAN.md с планом.
-Используй шаблон: docs/pm/features/PLAN.template.md
+Создай директорию docs/pm/features/{твой_task_id}/ — все файлы по этой фиче хранятся там.
+Создай docs/pm/features/{твой_task_id}/PLAN.md по шаблону docs/pm/features/PLAN.template.md
 
 ### Шаг 3. Фаза 1 — Проектирование
 Запусти параллельно (если нужны оба):
@@ -113,8 +113,7 @@
 - DevOps агент
 
 ### Шаг 7. Завершение
-Сохрани итоговый отчёт в docs/pm/features/feature-{N}/REPORT.md.
-Используй шаблон: docs/pm/features/REPORT.template.md
+Сохрани итоговый отчёт в docs/pm/features/{твой_task_id}/REPORT.md по шаблону docs/pm/features/REPORT.template.md
 
 Важно:
 - Обновляй REPORT.md по мере завершения каждой подзадачи — не только в конце
