@@ -540,6 +540,13 @@ def execute_task(task):
         worker_sys = _load_worker_system_prompt(task.worker_id)
         if worker_sys:
             base_prompt = f"{worker_sys}\n\n{task.prompt}"
+    # Inject task metadata so the agent knows its own ID and working directory.
+    task_meta = (
+        f"\n\nМетаданные текущей задачи:\n"
+        f"- Твой task_id: {task.id}\n"
+        f"- working_dir: {task.working_dir or '(не указана)'}\n"
+        f"- parent_task_id: {task.parent_task_id or '(нет, ты корневая задача)'}\n"
+    )
     # Guardrail: allow restarting only the web server, never the worker process.
     runtime_guard = (
         "\n\nОбязательное ограничение выполнения:\n"
@@ -548,7 +555,7 @@ def execute_task(task):
         "- Если нужно перезапустить проект, перезапускай только веб-сервер "
         "(`pp server` или `promptpilot-server`).\n"
     )
-    effective_prompt = f"{base_prompt}{runtime_guard}"
+    effective_prompt = f"{base_prompt}{task_meta}{runtime_guard}"
     cmd = build_cmd(provider, effective_prompt, skip_permissions=task.skip_permissions, session_id=task.session_id, model=task.model)
 
     env = get_provider_env(provider)
