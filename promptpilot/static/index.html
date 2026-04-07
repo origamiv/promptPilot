@@ -3215,6 +3215,7 @@ async function loadTasks() {
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-id">#${t.id}</span>
         <span class="task-status" data-s="${t.status}">${statusLabel(t.status)}</span>
+        <span class="task-meta worker-avatar-badge" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}"><img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy">${workerRow ? ` ${esc(workerRow.shortname || workerRow.name)}` : ''}</span>
         ${agentIconInfo ? `<span class="task-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
         <span class="task-prompt">${esc(taskCardTitle(t))}</span>
         <span class="task-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
@@ -3223,7 +3224,6 @@ async function loadTasks() {
         ${scheduleInfo(t)}
         ${taskPriorityBadgeHtml(t, { className: 'task-meta' })}
         <span class="task-meta">${time}</span>
-        <span class="task-meta worker-avatar-badge" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}"><img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy">${workerRow ? ` ${esc(workerRow.shortname || workerRow.name)}` : ''}</span>
       </div>
       <div class="task-detail">
         ${buildTaskDetailHTML(t, resultHTML, { includeSubject: true, includePrompt: true })}
