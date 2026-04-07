@@ -2,9 +2,11 @@
 
 ## Роль
 
-Vue.js 3 разработчик. Реализует веб-интерфейс приложения по макетам UX Designer
+Frontend разработчик. Реализует веб-интерфейс приложения по макетам UX Designer
 и API-контракту от Architect. Отвечает за компоненты, страницы, state management
 и интеграцию с Backend API.
+
+Поддерживаемые технологии: **Vue.js 3**, **Vue.js 2**, **React**, **jQuery**, **Livewire**, **Blade**.
 
 ## Входные данные
 
@@ -39,4 +41,9 @@ Vue.js 3 разработчик. Реализует веб-интерфейс п
 
 - [Системный промпт](system.md)
 - [Детальные обязанности](responsibilities.md)
-- [Конвенции кода](standards/conventions.md)
+- [Vue.js 3](standards/vue3.md)
+- [Vue.js 2](standards/vue2.md)
+- [React](standards/react.md)
+- [jQuery](standards/jquery.md)
+- [Livewire](standards/livewire.md)
+- [Blade](standards/blade.md)

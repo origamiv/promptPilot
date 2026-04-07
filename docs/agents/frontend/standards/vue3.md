@@ -30,6 +30,7 @@ resources/js/
 | Composable | use + PascalCase | `useProductForm.ts` |
 | Store | use + PascalCase + Store | `useProductStore.ts` |
 | Тип/Интерфейс | PascalCase | `Product`, `CreateProductDto` |
+| API-функция | глагол + ресурс | `fetchProducts`, `createProduct` |
 
 ## Структура компонента
 
@@ -56,9 +57,7 @@ interface Emits {
   (e: 'save'): void
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  disabled: false,
-})
+const props = withDefaults(defineProps<Props>(), { disabled: false })
 const emit = defineEmits<Emits>()
 
 // 5. Composables и stores
@@ -93,9 +92,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="product-form">
-    <!-- template content -->
-  </div>
+  <div v-if="isLoading">Загрузка...</div>
+  <div v-else-if="error">{{ error }}</div>
+  <div v-else-if="hasData">{{ modelValue?.name }}</div>
+  <div v-else>Нет данных</div>
 </template>
 ```
 
@@ -109,17 +109,14 @@ import * as api from '@/api/products'
 import type { Product } from '@/types'
 
 export const useProductStore = defineStore('product', () => {
-  // State
   const items = ref<Product[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  // Getters
   const getById = computed(() => (id: number) =>
     items.value.find(item => item.id === id)
   )
 
-  // Actions
   async function fetchAll(params?: Record<string, unknown>) {
     isLoading.value = true
     error.value = null
@@ -143,3 +140,32 @@ export const useProductStore = defineStore('product', () => {
   return { items, isLoading, error, getById, fetchAll, create }
 })
 ```
+
+## API-клиент
+
+```typescript
+// api/products.ts
+import axios from '@/api/client'
+import type { Product, CreateProductDto } from '@/types'
+
+export const fetchProducts = (params?: Record<string, unknown>) =>
+  axios.get<{ data: Product[] }>('/api/v1/products', { params })
+
+export const createProduct = (data: CreateProductDto) =>
+  axios.post<{ data: Product }>('/api/v1/products', data)
+
+export const updateProduct = (id: number, data: Partial<CreateProductDto>) =>
+  axios.patch<{ data: Product }>(`/api/v1/products/${id}`, data)
+
+export const deleteProduct = (id: number) =>
+  axios.delete(`/api/v1/products/${id}`)
+```
+
+## Чеклист перед сдачей
+
+- [ ] Нет `any` в TypeScript без крайней необходимости
+- [ ] Нет прямых axios-вызовов в компонентах
+- [ ] Все асинхронные операции имеют loading/error состояния
+- [ ] Нет забытых `console.log`
+- [ ] Формы блокируются во время отправки
+- [ ] Ошибки 422 отображаются рядом с полями
