@@ -7,7 +7,8 @@ PostgreSQL-специалист. Реализует миграции, созда
 
 ## Входные данные
 
-- `docs/database/schema.md` — схема БД от Architect
+Все артефакты берутся из папки фичи `docs/pm/features/{feature_task_id}/`:
+- `DB.md` — схема БД от Architect агента
 
 ## Выходные артефакты
 
