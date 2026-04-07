@@ -100,12 +100,14 @@
   }
   .side-group:first-child .side-group-title { margin-top: 0; }
   .side-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     text-align: left;
     background: transparent;
     color: var(--text);
-    border: 1px solid var(--border);
+    border: none;
     border-radius: 8px;
     padding: 9px 10px;
     margin-bottom: 8px;
@@ -113,11 +115,27 @@
     cursor: pointer;
     text-decoration: none;
   }
+  .side-btn::before {
+    width: 1.2em;
+    text-align: center;
+    color: var(--text2);
+    flex: 0 0 1.2em;
+  }
+  .side-btn#menuKanban::before { content: "▦"; }
+  .side-btn#menuTasks::before { content: "✓"; }
+  .side-btn#menuProjects::before { content: "◫"; }
+  .side-btn#menuAccounts::before { content: "◉"; }
+  .side-btn#menuInteractive::before { content: "⌨"; }
+  .side-btn#menuAgents::before { content: "⚙"; }
+  .side-btn#menuTaskStatuses::before { content: "☰"; }
+  .side-btn#menuPriorities::before { content: "▲"; }
+  .side-btn#menuPrompts::before { content: "✎"; }
+  .side-btn#menuWorkers::before { content: "⚒"; }
   .side-btn.active {
-    border-color: var(--accent);
     background: color-mix(in oklab, var(--accent) 14%, transparent);
     color: var(--text);
   }
+  .side-btn.active::before { color: var(--text); }
 
   .container { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
   @media (min-width: 981px) {
