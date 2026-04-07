@@ -7,17 +7,24 @@
 
 ## Входные данные
 
+Из папки фичи `docs/pm/features/{feature_task_id}/`:
+- `API.md` — читаемый API-контракт
+- `swagger.json` — OpenAPI 3.0 спецификация (основной источник истины)
+- `DB.md` — схема БД
+
+Конвенции проекта:
+- `docs/agents/backend/standards/` — стандарты Backend
+- `docs/agents/frontend/standards/` — стандарты Frontend
+- `docs/agents/mobile/standards/` — стандарты Mobile
+
+Дополнительно:
 - Реализованный код от Backend, Frontend, Mobile, Integrations агентов
-- `docs/agents/backend/standards/conventions.md`
-- `docs/agents/frontend/standards/conventions.md`
-- `docs/agents/mobile/standards/conventions.md`
-- `docs/api/openapi.yaml` — для проверки соответствия реализации контракту
 
 ## Выходные артефакты
 
 | Артефакт | Путь |
 |----------|------|
-| Отчёт ревью | `docs/agents/reviewer/reviews/feature-name.md` |
+| Отчёт ревью | `docs/pm/features/{feature_task_id}/REVIEW.md` |
 
 ## Взаимодействует с
 
