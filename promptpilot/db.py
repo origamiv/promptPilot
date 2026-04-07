@@ -67,13 +67,19 @@ def _tasks_with_agent_select():
             t.*,
             aa.name AS agent_account_name,
             aa.shortname AS agent_account_shortname,
-            COALESCE(a.name, aa.name, aa.shortname) AS agent_name,
-            a.color AS agent_color
+            COALESCE(task_agent.name, aa.name, aa.shortname) AS agent_name,
+            task_agent.id AS agent_id,
+            task_agent.color AS agent_color,
+            task_agent.avatar_url AS agent_avatar_url
         FROM {} t
         LEFT JOIN {}.agents_accounts aa ON aa.id = t.agent_account_id
-        LEFT JOIN {}.agents a ON a.id = aa.agent_id
+        LEFT JOIN {}.agents task_agent ON task_agent.id = aa.agent_id
         """
-    ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME))
+    ).format(
+        _tasks_ref(),
+        sql.Identifier(SCHEMA_NAME),
+        sql.Identifier(SCHEMA_NAME),
+    )
 
 
 def _db_kwargs() -> dict:
@@ -521,6 +527,11 @@ def init_db():
             cur.execute(
                 sql.SQL(
                     "ALTER TABLE {}.agents ADD COLUMN IF NOT EXISTS color VARCHAR(7)"
+                ).format(sql.Identifier(SCHEMA_NAME))
+            )
+            cur.execute(
+                sql.SQL(
+                    "ALTER TABLE {}.agents ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(512)"
                 ).format(sql.Identifier(SCHEMA_NAME))
             )
             cur.execute(
@@ -1236,7 +1247,7 @@ def list_agents(search: Optional[str] = None, limit: int = 200) -> list[dict]:
             cur.execute(
                 sql.SQL(
                     """
-                    SELECT id, name, shortname, email, priority, status, color, created_at, updated_at
+                    SELECT id, name, shortname, email, priority, status, color, avatar_url, created_at, updated_at
                     FROM {}.agents
                     WHERE deleted_at IS NULL
                       AND (name ILIKE %s OR shortname ILIKE %s OR COALESCE(email, '') ILIKE %s)
@@ -1250,7 +1261,7 @@ def list_agents(search: Optional[str] = None, limit: int = 200) -> list[dict]:
             cur.execute(
                 sql.SQL(
                     """
-                    SELECT id, name, shortname, email, priority, status, color, created_at, updated_at
+                    SELECT id, name, shortname, email, priority, status, color, avatar_url, created_at, updated_at
                     FROM {}.agents
                     WHERE deleted_at IS NULL
                     ORDER BY id DESC
@@ -1267,7 +1278,7 @@ def list_active_agents(limit: int = 200) -> list[dict]:
         cur.execute(
             sql.SQL(
                 """
-                SELECT id, name, shortname, email, priority, status, color, created_at, updated_at
+                SELECT id, name, shortname, email, priority, status, color, avatar_url, created_at, updated_at
                 FROM {}.agents
                 WHERE deleted_at IS NULL
                   AND status = 1
@@ -1287,6 +1298,7 @@ def create_agent(
     priority: int = 0,
     status: int = 1,
     color: Optional[str] = None,
+    avatar_url: Optional[str] = None,
 ) -> dict:
     now = datetime.utcnow().replace(microsecond=0)
     normalized_color = _normalize_project_color(color)
@@ -1295,12 +1307,12 @@ def create_agent(
             sql.SQL(
                 """
                 INSERT INTO {}.agents
-                    (name, shortname, email, priority, status, color, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, name, shortname, email, priority, status, color, created_at, updated_at
+                    (name, shortname, email, priority, status, color, avatar_url, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, name, shortname, email, priority, status, color, avatar_url, created_at, updated_at
                 """
             ).format(sql.Identifier(SCHEMA_NAME)),
-            (name, shortname, email, priority, status, normalized_color, now, now),
+            (name, shortname, email, priority, status, normalized_color, avatar_url, now, now),
         )
         return dict(cur.fetchone())
 
@@ -1313,6 +1325,7 @@ def update_agent(
     priority: int,
     status: int,
     color: Optional[str] = None,
+    avatar_url: Optional[str] = None,
 ) -> bool:
     now = datetime.utcnow().replace(microsecond=0)
     normalized_color = _normalize_project_color(color)
@@ -1327,11 +1340,12 @@ def update_agent(
                     priority = %s,
                     status = %s,
                     color = %s,
+                    avatar_url = %s,
                     updated_at = %s
                 WHERE id = %s
                 """
             ).format(sql.Identifier(SCHEMA_NAME)),
-            (name, shortname, email, priority, status, normalized_color, now, agent_id),
+            (name, shortname, email, priority, status, normalized_color, avatar_url, now, agent_id),
         )
         return cur.rowcount > 0
 
@@ -1671,7 +1685,8 @@ def list_workers(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                 sql.SQL(
                     """
                     SELECT w.id, w.name, w.shortname, w.role, w.is_agent, w.agent_id,
-                           a.name AS agent_name, w.status, w.avatar_url, w.created_at, w.updated_at
+                           a.name AS agent_name, a.color AS agent_color,
+                           w.status, w.avatar_url, w.created_at, w.updated_at
                     FROM {}.workers w
                     LEFT JOIN {}.agents a ON a.id = w.agent_id
                     WHERE w.name ILIKE %s OR w.shortname ILIKE %s
@@ -1687,7 +1702,8 @@ def list_workers(search: Optional[str] = None, limit: int = 200) -> list[dict]:
                 sql.SQL(
                     """
                     SELECT w.id, w.name, w.shortname, w.role, w.is_agent, w.agent_id,
-                           a.name AS agent_name, w.status, w.avatar_url, w.created_at, w.updated_at
+                           a.name AS agent_name, a.color AS agent_color,
+                           w.status, w.avatar_url, w.created_at, w.updated_at
                     FROM {}.workers w
                     LEFT JOIN {}.agents a ON a.id = w.agent_id
                     ORDER BY w.id DESC

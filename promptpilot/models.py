@@ -46,8 +46,10 @@ class TaskInDB(BaseModel):
     subject: Optional[str] = None
     agent_prompt: Optional[str] = None
     agent_account_id: Optional[int] = None
+    agent_id: Optional[int] = None
     agent_name: Optional[str] = None
     agent_color: Optional[str] = None
+    agent_avatar_url: Optional[str] = None
     agent_account_name: Optional[str] = None
     agent_account_shortname: Optional[str] = None
     working_dir: Optional[str] = None

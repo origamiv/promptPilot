@@ -455,12 +455,37 @@
     vertical-align: middle;
     flex: 0 0 22px;
   }
+  .task-avatar-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+  }
+  .task-avatar-wrap .task-worker-avatar {
+    display: block;
+  }
+  .task-avatar-agent-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1px solid var(--bg);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--border) 80%, #000 20%);
+  }
   @media (min-width: 981px) {
     #tasksView #taskList .task-worker-avatar,
     #kanbanView .kanban-card .task-worker-avatar {
       width: 33px;
       height: 33px;
       flex: 0 0 33px;
+    }
+    #tasksView #taskList .task-avatar-agent-dot,
+    #kanbanView .kanban-card .task-avatar-agent-dot {
+      width: 11px;
+      height: 11px;
     }
   }
 
@@ -2328,7 +2353,7 @@
     </div>
     <div class="admin-mobile-list" id="agentsCards"></div>
     <table class="admin-table">
-      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Email</th><th>Priority</th><th>Status</th><th>Color</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Name</th><th>Short</th><th>Email</th><th>Priority</th><th>Status</th><th>Color</th><th>Avatar</th><th></th></tr></thead>
       <tbody id="agentsTbody"></tbody>
     </table>
   </div>
@@ -2767,6 +2792,23 @@ function taskRefStatusColor(t) {
   return mapped ? mapped.color : null;
 }
 
+function taskRefStatusLabel(t) {
+  if (t.task_status_id) {
+    const direct = adminTaskStatusesRows.find(x => x.id === t.task_status_id);
+    if (direct && direct.name) return direct.name;
+  }
+  const mapped = adminTaskStatusesRows.find(x => x.status === 1 && x.status_to === t.status);
+  return mapped ? mapped.name : statusLabel(t.status);
+}
+
+function taskRefStatusDotClass(t) {
+  if (t.task_status_id) {
+    const direct = adminTaskStatusesRows.find(x => x.id === t.task_status_id);
+    if (direct && direct.status_to) return taskStatusDotClass(direct.status_to);
+  }
+  return taskStatusDotClass(t.status);
+}
+
 function taskDotStyle(t) {
   const c = taskRefStatusColor(t);
   return c ? ` style="background:${esc(c)};border-color:${esc(c)}"` : '';
@@ -3157,13 +3199,15 @@ function buildTaskDetailHTML(t, resultHTML, opts = {}) {
   const includeSubject = opts.includeSubject ?? false;
   const includePrompt = opts.includePrompt ?? true;
   const workerRow = t.worker_id ? adminWorkersRows.find(w => w.id === t.worker_id) : null;
+  const avatarMeta = taskAvatarMeta(t, workerRow);
   const workerHTML = (() => {
-    const av = workerRow ? workerAvatarUrl(workerRow) : WORKER_DEFAULT_AVATAR;
-    const name = workerRow ? esc(workerRow.name) : 'Без исполнителя';
+    const name = avatarMeta.isWorker
+      ? esc(avatarMeta.workerName || 'Исполнитель')
+      : esc(avatarMeta.title || 'Агент кодинга');
     const role = workerRow && workerRow.role ? `<span class="detail-worker-role">${esc(workerRow.role)}</span>` : '';
     return `<div class="detail-info detail-worker-row">
-      <span class="label">Исполнитель: </span>
-      <img class="task-worker-avatar" src="${esc(av)}" alt="${name}" loading="lazy">
+      <span class="label">${avatarMeta.isWorker ? 'Исполнитель' : 'Агент'}: </span>
+      ${taskAvatarHtml(t, { workerRow })}
       <span class="detail-worker-name">${name}</span>${role}
     </div>`;
   })();
@@ -3238,12 +3282,12 @@ async function loadTasks() {
     <div class="task-row${t.status === 'running' ? ' task-running' : ''}${expanded ? ' expanded' : ''}">
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-id">#${t.id}</span>
-        <span class="task-meta worker-avatar-badge" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}"><img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy"></span>
+        <span class="task-meta worker-avatar-badge">${taskAvatarHtml(t, { workerRow })}</span>
         <span class="task-prompt">${esc(taskCardTitle(t))}</span>
         <span class="task-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
         ${taskPriorityBadgeHtml(t, { className: 'task-meta' })}
         <span class="task-meta">${time}</span>
-        <span class="status-dot task-header-status-dot ${taskStatusDotClass(t.status)}"${taskDotStyle(t)} title="${esc(statusLabel(t.status))}"></span>
+        <span class="status-dot task-header-status-dot ${taskRefStatusDotClass(t)}"${taskDotStyle(t)} title="${esc(taskRefStatusLabel(t))}"></span>
       </div>
       <div class="task-card-meta">
         ${agentIconInfo ? `<span class="task-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
@@ -3273,13 +3317,13 @@ async function loadTasks() {
     return `
     <div class="admin-mobile-card${t.status === 'running' ? ' status-3' : ''}${expanded ? ' expanded' : ''}">
       <div class="admin-mobile-head" onclick="toggleTask(${t.id})">
-        <img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}">
+        ${taskAvatarHtml(t, { workerRow })}
         <div class="admin-mobile-main">
           <div class="task-mobile-head-line1">
             <span class="task-mobile-id">#${t.id}</span>
             ${agentIconInfo ? `<span class="task-mobile-agent-icon" title="${esc(agentIconInfo.label)}"${agentIconStyleAttr(agentIconInfo)}>${agentIconInfo.icon}</span>` : ''}
             <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
-            <span class="status-dot ${taskStatusDotClass(t.status)}"${taskDotStyle(t)} title="${esc(statusLabel(t.status))}"></span>
+            <span class="status-dot ${taskRefStatusDotClass(t)}"${taskDotStyle(t)} title="${esc(taskRefStatusLabel(t))}"></span>
           </div>
           <div class="task-mobile-head-meta">
             <span class="task-mobile-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
@@ -3290,7 +3334,7 @@ async function loadTasks() {
       </div>
       <div class="admin-mobile-body">
         <div class="admin-mobile-sub">
-          <span class="admin-mobile-chip">${statusLabel(t.status)}</span>
+          <span class="admin-mobile-chip">${taskRefStatusLabel(t)}</span>
           ${taskPriorityBadgeHtml(t, { className: 'admin-mobile-chip' })}
           <span class="admin-mobile-chip">${time}</span>
           ${scheduleInfo(t)}
@@ -4603,6 +4647,11 @@ function renderCrudFields(entity, row = {}) {
       <div class="crud-field"><label>${tc('email')}</label><input id="crud_email" value="${esc(row.email || '')}"></div>
       <div class="crud-field"><label>${tc('priority')}</label><input id="crud_priority" type="number" value="${esc(String(row.priority ?? 0))}"></div>
       <div class="crud-field"><label>${tc('color')}</label><input id="crud_color" required value="${esc(agentColor)}" placeholder="#38bdf8"></div>
+      <div class="crud-field">
+        <label>Аватар (URL картинки)</label>
+        <input id="crud_avatar_url" type="url" placeholder="https://..." value="${esc(row.avatar_url || '')}">
+        ${row.avatar_url ? `<div style="margin-top:6px"><img src="${esc(row.avatar_url)}" style="width:48px;height:48px;border-radius:50%;border:1px solid var(--border);object-fit:cover" alt="avatar"></div>` : ''}
+      </div>
       <div class="crud-field"><label>${tc('status')}</label>
         <select id="crud_status">
           <option value="1" ${(row.status ?? 1) === 1 ? 'selected' : ''}>${tc('active')}</option>
@@ -4818,6 +4867,7 @@ async function submitCrudModal(e) {
         priority: parseInt(crudValue('crud_priority') || '0', 10),
         status: parseInt(crudValue('crud_status') || '1', 10),
         color,
+        avatar_url: crudValue('crud_avatar_url').trim() || null,
       };
       if (mode === 'create') {
         await fetchJSON(`${API}/admin/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -4979,6 +5029,7 @@ function renderAgentsCards(rows) {
         <div class="admin-mobile-kv"><b>Priority:</b> ${r.priority ?? 0}</div>
         <div class="admin-mobile-kv"><b>Status:</b> ${r.status ?? 1}</div>
         <div class="admin-mobile-kv"><b>Color:</b> ${normalizeHexColor(r.color || '') ? `<span style="display:inline-flex;align-items:center;gap:6px"><span class="status-dot" style="background:${esc(normalizeHexColor(r.color || ''))}"></span>${esc(r.color || '')}</span>` : '—'}</div>
+        ${r.avatar_url ? `<div class="admin-mobile-kv"><b>Avatar:</b> <a href="${esc(r.avatar_url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;word-break:break-all">${esc(r.avatar_url)}</a></div>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -5112,6 +5163,7 @@ async function loadAgentsCrud() {
       <td>${r.priority ?? 0}</td>
       <td>${r.status ?? 1}</td>
       <td>${normalizeHexColor(r.color || '') ? `<span class="status-dot" style="background:${esc(normalizeHexColor(r.color || ''))}" title="${esc(r.color)}"></span> ${esc(r.color || '')}` : '—'}</td>
+      <td>${r.avatar_url ? `<a href="${esc(r.avatar_url)}" target="_blank" rel="noopener noreferrer">link</a>` : '—'}</td>
       <td class="admin-actions">
         <button class="btn btn-sm btn-ghost" onclick="editAgentCrud(${r.id})">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteAgentCrud(${r.id})">Delete</button>
@@ -5269,9 +5321,7 @@ function renderKanbanCard(t) {
 
   return `<div class="kanban-card${expanded ? ' expanded' : ''}" id="kcard-${t.id}" data-task-id="${t.id}">
     <div class="kanban-card-head" onclick="toggleKanbanCard(${t.id})">
-      <img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}"
-           alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy"
-           title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}" style="flex:0 0 22px">
+      ${taskAvatarHtml(t, { workerRow, imgStyle: 'flex:0 0 22px' })}
       <div style="flex:1;min-width:0">
         <div class="kanban-card-title"><span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}</div>
         <div class="kanban-card-meta">
@@ -5763,11 +5813,69 @@ const WORKER_STATUS_LABELS = {
 
 const WORKER_DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%23e5e7eb'/%3E%3Ccircle cx='50' cy='38' r='17' fill='%239ca3af'/%3E%3Cellipse cx='50' cy='86' rx='28' ry='22' fill='%239ca3af'/%3E%3C/svg%3E";
 
+function agentById(agentId) {
+  if (!agentId) return null;
+  return adminAgentsRows.find(a => Number(a.id) === Number(agentId)) || null;
+}
+
+function normalizedAvatarUrl(url) {
+  const val = String(url || '').trim();
+  return val || null;
+}
+
 function workerAvatarUrl(r) {
   if (r.avatar_url) return r.avatar_url;
   const seed = encodeURIComponent(r.shortname || r.name || String(r.id));
   if (r.is_agent) return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
   return `https://api.dicebear.com/7.x/lorelei/svg?seed=${seed}&backgroundColor=b6e3f4,ffdfbf,c0aede`;
+}
+
+function taskAvatarMeta(t, workerRow = null) {
+  const worker = workerRow || (t.worker_id ? adminWorkersRows.find(w => Number(w.id) === Number(t.worker_id)) : null);
+  if (worker) {
+    const workerAgent = worker.agent_id ? agentById(worker.agent_id) : null;
+    const dotColor = normalizeHexColor(
+      (workerAgent && workerAgent.color) ||
+      worker.agent_color ||
+      t.agent_color ||
+      ''
+    );
+    return {
+      url: workerAvatarUrl(worker),
+      alt: worker.name || '',
+      title: worker.name || 'Исполнитель',
+      dotColor: dotColor || null,
+      workerName: worker.name || '',
+      workerRole: worker.role || null,
+      isWorker: true,
+    };
+  }
+
+  const taskAgent = agentById(t.agent_id);
+  const taskAgentNameVal = (taskAgent && taskAgent.name) || taskAgentName(t) || 'Агент кодинга';
+  const agentAvatar = normalizedAvatarUrl(
+    (taskAgent && taskAgent.avatar_url) || t.agent_avatar_url
+  ) || WORKER_DEFAULT_AVATAR;
+  return {
+    url: agentAvatar,
+    alt: taskAgentNameVal,
+    title: taskAgentNameVal,
+    dotColor: null,
+    workerName: null,
+    workerRole: null,
+    isWorker: false,
+  };
+}
+
+function taskAvatarHtml(t, opts = {}) {
+  const workerRow = opts.workerRow || null;
+  const imgClass = opts.imgClass || 'task-worker-avatar';
+  const imgStyle = opts.imgStyle ? ` style="${opts.imgStyle}"` : '';
+  const meta = taskAvatarMeta(t, workerRow);
+  return `<span class="task-avatar-wrap" title="${esc(meta.title)}">` +
+    `<img class="${imgClass}" src="${esc(meta.url)}" alt="${esc(meta.alt)}" loading="lazy"${imgStyle}>` +
+    (meta.dotColor ? `<span class="task-avatar-agent-dot" style="background:${esc(meta.dotColor)}"></span>` : '') +
+    `</span>`;
 }
 
 function workerAvatarImg(r, cls = 'worker-avatar') {
