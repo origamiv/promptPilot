@@ -4028,7 +4028,7 @@ function openContextHelp() {
 }
 
 function switchView(view, opts = {}) {
-  const { syncUrl = true } = opts;
+  const { syncUrl = true, kanbanProjectSlug = null } = opts;
   if (!VIEW_NAMES.has(view)) view = 'tasks';
   if (view !== 'help') lastContentView = view;
   currentView = view;
@@ -4081,7 +4081,15 @@ function switchView(view, opts = {}) {
   if (view === 'prompts') loadPromptsCrud();
   if (view === 'workers') loadWorkersCrud();
   if (view === 'task-statuses') loadTaskStatusesCrud();
-  if (view === 'kanban') loadKanbanProjects();
+  if (view === 'kanban') {
+    if (kanbanProjectSlug) {
+      document.getElementById('kanbanProjectPicker').style.display = 'none';
+      document.getElementById('kanbanBoardWrap').style.display = '';
+      openKanbanProjectBySlug(kanbanProjectSlug, { syncUrl: false });
+    } else {
+      loadKanbanProjects();
+    }
+  }
   adminCardMenuKey = null;
   closeMobileMenu();
 }
@@ -5053,15 +5061,32 @@ function renderKanbanProjectGrid() {
   }).join('');
 }
 
-async function selectKanbanProject(projectId) {
+async function selectKanbanProject(projectId, opts = {}) {
+  const { syncUrl = true } = opts;
   kanbanSelectedProject = projectsCache.find(p => p.id === projectId) || null;
   if (!kanbanSelectedProject) return;
   const slug = encodeURIComponent(kanbanSelectedProject.shortname || kanbanSelectedProject.folder || kanbanSelectedProject.path);
-  history.pushState({ view: 'kanban' }, '', `/kanban/${slug}`);
+  if (syncUrl) history.pushState({ view: 'kanban' }, '', `/kanban/${slug}`);
+  else if (window.location.pathname !== `/kanban/${slug}`) history.replaceState({ view: 'kanban' }, '', `/kanban/${slug}`);
   document.getElementById('kanbanProjectPicker').style.display = 'none';
   document.getElementById('kanbanBoardWrap').style.display = '';
   document.getElementById('kanbanBoardTitle').textContent = kanbanSelectedProject.name;
   await loadKanban();
+}
+
+async function openKanbanProjectBySlug(slug, opts = {}) {
+  const { syncUrl = true } = opts;
+  if (!slug) {
+    await loadKanbanProjects();
+    return;
+  }
+  if (!projectsCache.length) await loadProjects();
+  const proj = projectsCache.find(p => (p.shortname || p.folder || p.path) === slug);
+  if (proj) {
+    await selectKanbanProject(proj.id, { syncUrl });
+    return;
+  }
+  kanbanBackToProjects();
 }
 
 function kanbanBackToProjects() {
@@ -5602,12 +5627,7 @@ window.addEventListener('popstate', (e) => {
   const view = (e.state && VIEW_NAMES.has(e.state.view)) ? e.state.view : parseViewFromPath();
   if (view === 'kanban') {
     const folder = parseKanbanProjectFromPath();
-    if (folder) {
-      const proj = projectsCache.find(p => (p.shortname || p.folder || p.path) === folder);
-      if (proj) { selectKanbanProject(proj.id); return; }
-    }
-    kanbanBackToProjects();
-    if (currentView !== 'kanban') switchView('kanban', { syncUrl: false });
+    switchView('kanban', { syncUrl: false, kanbanProjectSlug: folder });
     return;
   }
   if (view !== currentView) switchView(view, { syncUrl: false });
@@ -5640,18 +5660,9 @@ loadWorkerStatus();
 loadVersion();
 loadCosts();
 refresh();
-switchView(parseViewFromPath(), { syncUrl: false });
-// For /kanban/folder — restore project selection after projects are loaded
 const _initKanbanFolder = parseKanbanProjectFromPath();
-if (_initKanbanFolder) {
-  const _tryRestoreKanban = async () => {
-    if (!projectsCache.length) await loadProjects();
-    const proj = projectsCache.find(p => (p.shortname || p.folder || p.path) === _initKanbanFolder);
-    if (proj) { await selectKanbanProject(proj.id); return; }
-    history.replaceState({ view: 'kanban' }, '', '/kanban');
-  };
-  _tryRestoreKanban();
-} else {
+switchView(parseViewFromPath(), { syncUrl: false, kanbanProjectSlug: _initKanbanFolder });
+if (!_initKanbanFolder) {
   history.replaceState({ view: currentView }, '', `/${currentView}`);
 }
 setTimeout(loadInteractiveState, 200);
