@@ -106,6 +106,29 @@ def _parse_dt(val) -> Optional[datetime]:
     return None
 
 
+def _find_ref_task_status_id(cur, status_to: str) -> Optional[int]:
+    """Pick reference task status ID mapped to status_to (prefer active rows)."""
+    if not status_to:
+        return None
+    cur.execute(
+        sql.SQL(
+            """
+            SELECT id
+            FROM {}.tasks_statuses
+            WHERE status_to = %s
+            ORDER BY
+                CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                nom ASC NULLS LAST,
+                id ASC
+            LIMIT 1
+            """
+        ).format(sql.Identifier(SCHEMA_NAME)),
+        (status_to,),
+    )
+    row = cur.fetchone()
+    return int(row["id"]) if row else None
+
+
 def _normalize_project_color(color: Optional[str]) -> Optional[str]:
     if color is None:
         return None
@@ -395,6 +418,30 @@ def init_db():
                 """
             ).format(sql.Identifier(SCHEMA_NAME))
         )
+        # Keep ref-link in tasks in sync for pre-existing rows where task_status_id is not set.
+        cur.execute(
+            sql.SQL(
+                """
+                WITH mapped AS (
+                    SELECT DISTINCT ON (status_to)
+                        status_to,
+                        id
+                    FROM {}.tasks_statuses
+                    WHERE status_to IS NOT NULL
+                    ORDER BY
+                        status_to,
+                        CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                        nom ASC NULLS LAST,
+                        id ASC
+                )
+                UPDATE {} t
+                SET task_status_id = m.id
+                FROM mapped m
+                WHERE t.task_status_id IS NULL
+                  AND t.status = m.status_to
+                """
+            ).format(sql.Identifier(SCHEMA_NAME), _tasks_ref())
+        )
 
         # Priorities reference table
         cur.execute(
@@ -528,6 +575,7 @@ def init_db():
 def create_task(task: TaskCreate) -> TaskInDB:
     subject = task.subject or (task.prompt.splitlines()[0][:255] if task.prompt else None)
     with _connect() as conn, conn.cursor() as cur:
+        task_status_id = task.task_status_id or _find_ref_task_status_id(cur, TaskStatus.PENDING.value)
         cur.execute(
             sql.SQL(
                 """
@@ -557,7 +605,7 @@ def create_task(task: TaskCreate) -> TaskInDB:
                 task.tg_chat_id,
                 task.recurrence,
                 task.worker_id,
-                task.task_status_id,
+                task_status_id,
             ),
         )
         task_id = cur.fetchone()["id"]
@@ -614,14 +662,27 @@ def get_next_runnable() -> Optional[TaskInDB]:
                     ORDER BY priority ASC, created_at ASC
                     FOR UPDATE SKIP LOCKED
                     LIMIT 1
+                ),
+                running_status AS (
+                    SELECT id
+                    FROM {}.tasks_statuses
+                    WHERE status_to = 'running'
+                    ORDER BY
+                        CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                        nom ASC NULLS LAST,
+                        id ASC
+                    LIMIT 1
                 )
                 UPDATE {} t
-                SET status = 'running', started_at = %s
+                SET status = 'running',
+                    started_at = %s,
+                    task_status_id = COALESCE(running_status.id, t.task_status_id)
                 FROM next_task
+                LEFT JOIN running_status ON TRUE
                 WHERE t.id = next_task.id
                 RETURNING t.*
                 """
-            ).format(_tasks_ref(), _tasks_ref()),
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME), _tasks_ref()),
             (now, now, _now()),
         )
         row = cur.fetchone()
@@ -643,6 +704,16 @@ def mark_completed(
                 """
                 UPDATE {}
                 SET status = 'completed',
+                    task_status_id = COALESCE((
+                        SELECT id
+                        FROM {}.tasks_statuses
+                        WHERE status_to = 'completed'
+                        ORDER BY
+                            CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                            nom ASC NULLS LAST,
+                            id ASC
+                        LIMIT 1
+                    ), task_status_id),
                     result = %s,
                     src = COALESCE(%s::jsonb, src),
                     exit_code = %s,
@@ -651,7 +722,7 @@ def mark_completed(
                     session_id = COALESCE(%s, session_id)
                 WHERE id = %s
                 """
-            ).format(_tasks_ref()),
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME)),
             (result, src_payload, exit_code, _now(), model_used, session_id, task_id),
         )
     touch_project_last_used_by_task(task_id)
@@ -662,10 +733,26 @@ def mark_failed(task_id: int, error: str, exit_code: int = 1, src: Optional[dict
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
-                "UPDATE {} SET status = 'failed', error = %s, src = COALESCE(%s::jsonb, src), exit_code = %s, completed_at = %s WHERE id = %s"
-            ).format(
-                _tasks_ref()
-            ),
+                """
+                UPDATE {}
+                SET status = 'failed',
+                    task_status_id = COALESCE((
+                        SELECT id
+                        FROM {}.tasks_statuses
+                        WHERE status_to = 'failed'
+                        ORDER BY
+                            CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                            nom ASC NULLS LAST,
+                            id ASC
+                        LIMIT 1
+                    ), task_status_id),
+                    error = %s,
+                    src = COALESCE(%s::jsonb, src),
+                    exit_code = %s,
+                    completed_at = %s
+                WHERE id = %s
+                """
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME)),
             (error, src_payload, exit_code, _now(), task_id),
         )
     touch_project_last_used_by_task(task_id)
@@ -678,12 +765,22 @@ def mark_rate_limited(task_id: int, next_run_at: datetime, error: str = None):
                 """
                 UPDATE {}
                 SET status = 'rate_limited',
+                    task_status_id = COALESCE((
+                        SELECT id
+                        FROM {}.tasks_statuses
+                        WHERE status_to = 'rate_limited'
+                        ORDER BY
+                            CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                            nom ASC NULLS LAST,
+                            id ASC
+                        LIMIT 1
+                    ), task_status_id),
                     next_run_at = %s,
                     retry_count = retry_count + 1,
                     error = COALESCE(%s, error)
                 WHERE id = %s
                 """
-            ).format(_tasks_ref()),
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME)),
             (next_run_at, error, task_id),
         )
 
@@ -692,8 +789,24 @@ def cancel_task(task_id: int) -> bool:
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
-                "UPDATE {} SET status = 'cancelled', completed_at = %s WHERE id = %s AND status IN ('pending', 'rate_limited')"
-            ).format(_tasks_ref()),
+                """
+                UPDATE {}
+                SET status = 'cancelled',
+                    task_status_id = COALESCE((
+                        SELECT id
+                        FROM {}.tasks_statuses
+                        WHERE status_to = 'cancelled'
+                        ORDER BY
+                            CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                            nom ASC NULLS LAST,
+                            id ASC
+                        LIMIT 1
+                    ), task_status_id),
+                    completed_at = %s
+                WHERE id = %s
+                  AND status IN ('pending', 'rate_limited')
+                """
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME)),
             (_now(), task_id),
         )
         return cur.rowcount > 0
@@ -883,9 +996,24 @@ def recover_running():
     """Reset any 'running' tasks back to 'pending' (crash recovery)."""
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
-            sql.SQL("UPDATE {} SET status = 'pending', started_at = NULL WHERE status = 'running'").format(
-                _tasks_ref()
-            )
+            sql.SQL(
+                """
+                UPDATE {}
+                SET status = 'pending',
+                    task_status_id = COALESCE((
+                        SELECT id
+                        FROM {}.tasks_statuses
+                        WHERE status_to = 'pending'
+                        ORDER BY
+                            CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                            nom ASC NULLS LAST,
+                            id ASC
+                        LIMIT 1
+                    ), task_status_id),
+                    started_at = NULL
+                WHERE status = 'running'
+                """
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME))
         )
 
 
@@ -893,9 +1021,25 @@ def reset_task(task_id: int) -> bool:
     """Reset a single stuck 'running' task back to 'pending'."""
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
-            sql.SQL("UPDATE {} SET status = 'pending', started_at = NULL WHERE id = %s AND status = 'running'").format(
-                _tasks_ref()
-            ),
+            sql.SQL(
+                """
+                UPDATE {}
+                SET status = 'pending',
+                    task_status_id = COALESCE((
+                        SELECT id
+                        FROM {}.tasks_statuses
+                        WHERE status_to = 'pending'
+                        ORDER BY
+                            CASE WHEN status = 1 THEN 0 ELSE 1 END,
+                            nom ASC NULLS LAST,
+                            id ASC
+                        LIMIT 1
+                    ), task_status_id),
+                    started_at = NULL
+                WHERE id = %s
+                  AND status = 'running'
+                """
+            ).format(_tasks_ref(), sql.Identifier(SCHEMA_NAME)),
             (task_id,),
         )
         return cur.rowcount > 0

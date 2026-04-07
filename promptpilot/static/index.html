@@ -2739,9 +2739,12 @@ function taskStatusDotClass(status) {
 }
 
 function taskRefStatusColor(t) {
-  if (!t.task_status_id) return null;
-  const rs = adminTaskStatusesRows.find(x => x.id === t.task_status_id);
-  return rs ? rs.color : null;
+  if (t.task_status_id) {
+    const direct = adminTaskStatusesRows.find(x => x.id === t.task_status_id);
+    if (direct && direct.color) return direct.color;
+  }
+  const mapped = adminTaskStatusesRows.find(x => x.status === 1 && x.status_to === t.status);
+  return mapped ? mapped.color : null;
 }
 
 function taskDotStyle(t) {
