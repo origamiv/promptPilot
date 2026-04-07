@@ -345,6 +345,7 @@ def init_db():
         cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS worker_id BIGINT").format(_tasks_ref()))
         cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS task_status_id BIGINT").format(_tasks_ref()))
         cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS prompt_list TEXT").format(_tasks_ref()))
+        cur.execute(sql.SQL("ALTER TABLE {} ADD COLUMN IF NOT EXISTS questions TEXT").format(_tasks_ref()))
 
         # Task statuses reference table
         cur.execute(
@@ -888,6 +889,16 @@ def update_task_status_id(task_id: int, task_status_id: int) -> bool:
         cur.execute(
             sql.SQL("UPDATE {} SET task_status_id = %s WHERE id = %s").format(_tasks_ref()),
             (task_status_id, task_id),
+        )
+        return cur.rowcount > 0
+
+
+def update_task_questions(task_id: int, questions: str) -> bool:
+    """Записать вопросы в поле questions задачи."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("UPDATE {} SET questions = %s WHERE id = %s").format(_tasks_ref()),
+            (questions, task_id),
         )
         return cur.rowcount > 0
 

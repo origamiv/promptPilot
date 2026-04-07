@@ -40,6 +40,7 @@ class TaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
     priority: Optional[int] = Field(default=None, ge=1)
     task_status_id: Optional[int] = None
+    questions: Optional[str] = None
 
 
 class TaskInDB(BaseModel):
@@ -79,6 +80,7 @@ class TaskInDB(BaseModel):
     worker_id: Optional[int] = None
     task_status_id: Optional[int] = None
     prompt_list: Optional[str] = None
+    questions: Optional[str] = None
 
 
 class Stats(BaseModel):

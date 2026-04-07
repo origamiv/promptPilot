@@ -427,6 +427,10 @@ def api_update_task(task_id: int, update: TaskUpdate):
         if not db.update_task_status_id(task_id, update.task_status_id):
             raise HTTPException(404, "Task not found")
 
+    if update.questions is not None:
+        if not db.update_task_questions(task_id, update.questions):
+            raise HTTPException(404, "Task not found")
+
     return {"ok": True}
 
 
