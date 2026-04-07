@@ -30,6 +30,7 @@
 
 | Файл | Описание |
 |------|----------|
+| `docs/pm/features/{task_id}/PLAN.md` | План фичи |
 | `docs/pm/features/{task_id}/api-contract.md` | API контракт |
 | `docs/pm/features/{task_id}/db-schema.md` | Схема БД |
 | `docs/pm/features/{task_id}/ux/*.png` | Макеты экранов |
