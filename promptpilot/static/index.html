@@ -100,6 +100,7 @@
   }
   .side-group:first-child .side-group-title { margin-top: 0; }
   .side-btn {
+    display: block;
     width: 100%;
     text-align: left;
     background: transparent;
@@ -110,6 +111,7 @@
     margin-bottom: 8px;
     font-size: 13px;
     cursor: pointer;
+    text-decoration: none;
   }
   .side-btn.active {
     border-color: var(--accent);
@@ -2133,18 +2135,18 @@
     <div class="side-title" id="menuTitle">Меню</div>
     <div class="side-group">
       <div class="side-group-title">Работа</div>
-      <button id="menuKanban" class="side-btn" onclick="switchView('kanban')">Канбан</button>
-      <button id="menuTasks" class="side-btn active" onclick="switchView('tasks')">Задачи</button>
-      <button id="menuProjects" class="side-btn" onclick="switchView('projects')">Проекты</button>
-      <button id="menuAccounts" class="side-btn" onclick="switchView('accounts')">Учётные записи</button>
-      <button id="menuInteractive" class="side-btn" onclick="switchView('interactive')">Интерактив</button>
+      <a id="menuKanban" class="side-btn" href="/kanban" onclick="return onMenuLinkClick(event, 'kanban')">Канбан</a>
+      <a id="menuTasks" class="side-btn active" href="/tasks" onclick="return onMenuLinkClick(event, 'tasks')">Задачи</a>
+      <a id="menuProjects" class="side-btn" href="/projects" onclick="return onMenuLinkClick(event, 'projects')">Проекты</a>
+      <a id="menuAccounts" class="side-btn" href="/accounts" onclick="return onMenuLinkClick(event, 'accounts')">Учётные записи</a>
+      <a id="menuInteractive" class="side-btn" href="/interactive" onclick="return onMenuLinkClick(event, 'interactive')">Интерактив</a>
     </div>
     <div class="side-group">
       <div class="side-group-title">Справочники</div>
-      <button id="menuAgents" class="side-btn" onclick="switchView('agents')">Агенты</button>
-      <button id="menuTaskStatuses" class="side-btn" onclick="switchView('task-statuses')">Статусы задач</button>
-      <button id="menuPrompts" class="side-btn" onclick="switchView('prompts')">Промпты</button>
-      <button id="menuWorkers" class="side-btn" onclick="switchView('workers')">Исполнители</button>
+      <a id="menuAgents" class="side-btn" href="/agents" onclick="return onMenuLinkClick(event, 'agents')">Агенты</a>
+      <a id="menuTaskStatuses" class="side-btn" href="/task-statuses" onclick="return onMenuLinkClick(event, 'task-statuses')">Статусы задач</a>
+      <a id="menuPrompts" class="side-btn" href="/prompts" onclick="return onMenuLinkClick(event, 'prompts')">Промпты</a>
+      <a id="menuWorkers" class="side-btn" href="/workers" onclick="return onMenuLinkClick(event, 'workers')">Исполнители</a>
     </div>
   </aside>
 <div class="container">
@@ -4025,6 +4027,15 @@ function openContextHelp() {
   const section = helpSectionForView(currentView === 'help' ? lastContentView : currentView);
   loadHelpSection(section);
   switchView('help');
+}
+
+function onMenuLinkClick(event, view) {
+  if (!event || event.defaultPrevented) return true;
+  if (event.button !== 0) return true;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return true;
+  switchView(view);
+  event.preventDefault();
+  return false;
 }
 
 function switchView(view, opts = {}) {
