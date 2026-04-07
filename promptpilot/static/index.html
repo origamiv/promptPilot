@@ -3363,7 +3363,7 @@ async function loadTasks() {
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-meta worker-avatar-badge">${taskAvatarHtml(t, { workerRow })}</span>
         ${taskParentTaskId(t)
-          ? `<span class="task-meta">📄 #${taskParentTaskId(t)}</span><span class="task-meta">-</span><span class="task-id">#${t.id}</span><span class="task-prompt">${esc(taskCardTitle(t))}</span>`
+          ? `📄 #${taskParentTaskId(t)} - <span class="task-id">#${t.id}</span><span class="task-prompt">${esc(taskCardTitle(t))}</span>`
           : `<span class="task-id">#${t.id}</span><span class="task-prompt">${esc(taskCardTitle(t))}</span>`}
         <span class="task-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
         ${taskPriorityBadgeHtml(t, { className: 'task-meta' })}
@@ -3401,7 +3401,7 @@ async function loadTasks() {
         <div class="admin-mobile-main">
           <div class="task-mobile-head-line1">
             ${taskParentTaskId(t)
-              ? `<span class="task-meta">📄 #${taskParentTaskId(t)}</span><span class="task-meta">-</span><span class="task-mobile-id">#${t.id}</span>`
+              ? `📄 #${taskParentTaskId(t)} - <span class="task-mobile-id">#${t.id}</span>`
               : `<span class="task-mobile-id">#${t.id}</span>`}
             <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
             <span class="status-dot ${taskRefStatusDotClass(t)}"${taskDotStyle(t)} title="${esc(taskRefStatusLabel(t))}"></span>
@@ -5634,7 +5634,7 @@ function renderKanbanCard(t) {
       ${taskAvatarHtml(t, { workerRow, imgStyle: 'flex:0 0 22px' })}
       <div style="flex:1;min-width:0">
         <div class="kanban-card-title">${taskParentTaskId(t)
-          ? `<span class="task-meta">📄 #${taskParentTaskId(t)}</span><span class="task-meta">-</span><span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`
+          ? `📄 #${taskParentTaskId(t)} - <span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`
           : `<span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`}</div>
         <div class="kanban-card-meta">
           ${taskPriorityBadgeHtml(t, { className: 'kanban-card-badge' })}
