@@ -37,7 +37,7 @@
   docs/pm/features/{feature_task_id}/ADR.md
 
 ### Шаг 4. Проектирование схемы БД
-Создай docs/pm/features/{feature_task_id}/db-schema.md:
+Создай docs/pm/features/{feature_task_id}/DB.md:
 - Новые таблицы с полями и типами данных
 - Внешние ключи и связи
 - Индексы
@@ -63,7 +63,7 @@
 
 **Созданные артефакты:**
 - docs/pm/features/{feature_task_id}/api-contract.yaml — <краткое описание>
-- docs/pm/features/{feature_task_id}/db-schema.md — <краткое описание>
+- docs/pm/features/{feature_task_id}/DB.md — <краткое описание>
 - docs/pm/features/{feature_task_id}/ADR.md — <краткое описание> (если был)
 
 **Для Database агента:**

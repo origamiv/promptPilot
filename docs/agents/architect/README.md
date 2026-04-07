@@ -18,7 +18,7 @@
 | Артефакт | Путь |
 |----------|------|
 | API-контракт (OpenAPI YAML) | `docs/pm/features/{feature_task_id}/api-contract.yaml` |
-| Схема базы данных | `docs/pm/features/{feature_task_id}/db-schema.md` |
+| Схема базы данных | `docs/pm/features/{feature_task_id}/DB.md` |
 | Architecture Decision Record | `docs/pm/features/{feature_task_id}/ADR.md` |
 | Диаграмма компонентов | `docs/pm/features/{feature_task_id}/components.md` |
 

@@ -30,7 +30,7 @@
 
 **Артефакты Фазы 1:**
 - `docs/pm/features/{task_id}/api-contract.md` — API контракт
-- `docs/pm/features/{task_id}/db-schema.md` — схема БД
+- `docs/pm/features/{task_id}/DB.md` — схема БД
 - `docs/pm/features/{task_id}/ux/` — PNG макеты экранов
 
 ### Фаза 2 — Реализация
