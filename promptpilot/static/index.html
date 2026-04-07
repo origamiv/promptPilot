@@ -703,6 +703,13 @@
   [data-theme="dark"] .task-row.task-running {
     background: color-mix(in oklab, #fff2a3 38%, var(--surface));
   }
+  .task-row.task-parent-highlight {
+    background: #fff2a3 !important;
+    border-color: #f59e0b !important;
+  }
+  [data-theme="dark"] .task-row.task-parent-highlight {
+    background: color-mix(in oklab, #fde68a 42%, var(--surface)) !important;
+  }
 
   .task-header {
     display: flex;
@@ -753,6 +760,21 @@
     color: var(--text2);
     font-family: var(--mono);
     white-space: nowrap;
+  }
+  .task-parent-link {
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .task-parent-link:hover {
+    color: var(--yellow);
+    text-decoration: underline;
   }
   .task-header-status-dot {
     flex: 0 0 auto;
@@ -1209,6 +1231,13 @@
   .kanban-card:not(.expanded) { height: 88px; }
   .kanban-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
   .kanban-card.expanded { border-color: var(--accent); }
+  .kanban-card.task-parent-highlight {
+    background: #fff2a3 !important;
+    border-color: #f59e0b !important;
+  }
+  [data-theme="dark"] .kanban-card.task-parent-highlight {
+    background: color-mix(in oklab, #fde68a 42%, var(--bg)) !important;
+  }
   .kanban-card-head {
     padding: 8px 10px 7px;
     display: flex;
@@ -1350,6 +1379,13 @@
   }
   [data-theme="dark"] .admin-mobile-card.status-3 {
     background: color-mix(in oklab, #fff2a3 34%, var(--bg));
+  }
+  .admin-mobile-card.task-parent-highlight {
+    background: #fff2a3 !important;
+    border-color: #f59e0b !important;
+  }
+  [data-theme="dark"] .admin-mobile-card.task-parent-highlight {
+    background: color-mix(in oklab, #fde68a 42%, var(--bg)) !important;
   }
   .admin-mobile-head {
     display: flex;
@@ -2647,6 +2683,9 @@ let interactiveOutboundBuffer = '';
 let interactiveFlushTimer = null;
 let interactiveSendChain = Promise.resolve();
 let interactiveLastInputErrorAt = 0;
+const TASK_PARENT_HIGHLIGHT_MS = 15000;
+let parentHighlightCleanupTimer = null;
+const parentHighlightUntilByTaskId = new Map();
 
 const I18N = {
   ru: {
@@ -3151,6 +3190,70 @@ function taskParentTaskId(t) {
   return parentTaskId > 0 ? parentTaskId : null;
 }
 
+function taskParentLinkHtml(parentTaskId) {
+  const parentId = Number(parentTaskId || 0);
+  if (parentId <= 0) return '';
+  return `<button type="button" class="task-parent-link" onclick="highlightParentTask(event, ${parentId})" title="Подсветить задачу #${parentId}">📄 #${parentId}</button>`;
+}
+
+function cleanupExpiredParentHighlights() {
+  const now = Date.now();
+  [...parentHighlightUntilByTaskId.entries()].forEach(([taskId, until]) => {
+    if (until <= now) parentHighlightUntilByTaskId.delete(taskId);
+  });
+}
+
+function applyParentHighlightToDom(parentTaskId, opts = {}) {
+  const parentId = Number(parentTaskId || 0);
+  if (parentId <= 0) return false;
+  const selector = `[data-task-id="${parentId}"]`;
+  const cards = [...document.querySelectorAll(selector)];
+  if (!cards.length) return false;
+  cards.forEach(el => el.classList.add('task-parent-highlight'));
+  if (opts.scroll !== false) {
+    cards[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }
+  return true;
+}
+
+function scheduleParentHighlightCleanup() {
+  if (parentHighlightCleanupTimer) {
+    clearTimeout(parentHighlightCleanupTimer);
+    parentHighlightCleanupTimer = null;
+  }
+  if (!parentHighlightUntilByTaskId.size) return;
+  const now = Date.now();
+  const nearestExpiry = Math.min(...[...parentHighlightUntilByTaskId.values()]);
+  const delayMs = Math.max(0, nearestExpiry - now);
+  parentHighlightCleanupTimer = setTimeout(() => {
+    cleanupExpiredParentHighlights();
+    reapplyParentHighlights();
+    scheduleParentHighlightCleanup();
+  }, delayMs);
+}
+
+function reapplyParentHighlights() {
+  document.querySelectorAll('.task-parent-highlight').forEach(el => {
+    el.classList.remove('task-parent-highlight');
+  });
+  cleanupExpiredParentHighlights();
+  [...parentHighlightUntilByTaskId.keys()].forEach(taskId => {
+    applyParentHighlightToDom(taskId, { scroll: false });
+  });
+}
+
+function highlightParentTask(event, parentTaskId) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const parentId = Number(parentTaskId || 0);
+  if (parentId <= 0) return;
+  parentHighlightUntilByTaskId.set(parentId, Date.now() + TASK_PARENT_HIGHLIGHT_MS);
+  applyParentHighlightToDom(parentId, { scroll: true });
+  scheduleParentHighlightCleanup();
+}
+
 function taskAgentName(t) {
   return String(t.agent_name || t.agent_account_name || t.agent_account_shortname || '').trim();
 }
@@ -3362,11 +3465,11 @@ async function loadTasks() {
     const resultHTML = buildTaskResultHTML(t, parsed);
 
     return `
-    <div class="task-row${t.status === 'running' ? ' task-running' : ''}${expanded ? ' expanded' : ''}">
+    <div class="task-row${t.status === 'running' ? ' task-running' : ''}${expanded ? ' expanded' : ''}" data-task-id="${t.id}">
       <div class="task-header" onclick="toggleTask(${t.id})">
         <span class="task-meta worker-avatar-badge">${taskAvatarHtml(t, { workerRow })}</span>
         ${taskParentTaskId(t)
-          ? `📄 #${taskParentTaskId(t)} - <span class="task-id">#${t.id}</span><span class="task-prompt">${esc(taskCardTitle(t))}</span>`
+          ? `${taskParentLinkHtml(taskParentTaskId(t))} - <span class="task-id">#${t.id}</span><span class="task-prompt">${esc(taskCardTitle(t))}</span>`
           : `<span class="task-id">#${t.id}</span><span class="task-prompt">${esc(taskCardTitle(t))}</span>`}
         <span class="task-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
         ${taskPriorityBadgeHtml(t, { className: 'task-meta' })}
@@ -3398,13 +3501,13 @@ async function loadTasks() {
     const workerRow = t.worker_id ? adminWorkersRows.find(w => w.id === t.worker_id) : null;
 
     return `
-    <div class="admin-mobile-card${t.status === 'running' ? ' status-3' : ''}${expanded ? ' expanded' : ''}">
+    <div class="admin-mobile-card${t.status === 'running' ? ' status-3' : ''}${expanded ? ' expanded' : ''}" data-task-id="${t.id}">
       <div class="admin-mobile-head" onclick="toggleTask(${t.id})">
         ${taskAvatarHtml(t, { workerRow })}
         <div class="admin-mobile-main">
           <div class="task-mobile-head-line1">
             ${taskParentTaskId(t)
-              ? `📄 #${taskParentTaskId(t)} - <span class="task-mobile-id">#${t.id}</span>`
+              ? `${taskParentLinkHtml(taskParentTaskId(t))} - <span class="task-mobile-id">#${t.id}</span>`
               : `<span class="task-mobile-id">#${t.id}</span>`}
             <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
             <span class="status-dot ${taskRefStatusDotClass(t)}"${taskDotStyle(t)} title="${esc(taskRefStatusLabel(t))}"></span>
@@ -3429,6 +3532,7 @@ async function loadTasks() {
       </div>
     </div>`;
   }).join('');
+  reapplyParentHighlights();
 }
 
 async function addTask() {
@@ -5637,7 +5741,7 @@ function renderKanbanCard(t) {
       ${taskAvatarHtml(t, { workerRow, imgStyle: 'flex:0 0 22px' })}
       <div style="flex:1;min-width:0">
         <div class="kanban-card-title">${taskParentTaskId(t)
-          ? `📄 #${taskParentTaskId(t)} - <span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`
+          ? `${taskParentLinkHtml(taskParentTaskId(t))} - <span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`
           : `<span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`}</div>
         <div class="kanban-card-meta">
           ${taskPriorityBadgeHtml(t, { className: 'kanban-card-badge' })}
@@ -5759,10 +5863,12 @@ function renderKanbanColById(colIdStr) {
   const existing = [...board.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === String(colIdStr));
   if (existing) {
     existing.outerHTML = newColHTML;
+    reapplyParentHighlights();
     return;
   }
   if (colIdStr === '__none__') {
     board.insertAdjacentHTML('beforeend', newColHTML);
+    reapplyParentHighlights();
     return;
   }
 
@@ -5770,6 +5876,7 @@ function renderKanbanColById(colIdStr) {
   const index = activeOrder.indexOf(String(colIdStr));
   if (index < 0) {
     board.insertAdjacentHTML('beforeend', newColHTML);
+    reapplyParentHighlights();
     return;
   }
   const beforeCol = activeOrder.slice(index + 1)
@@ -5781,6 +5888,7 @@ function renderKanbanColById(colIdStr) {
     if (noneEl) noneEl.insertAdjacentHTML('beforebegin', newColHTML);
     else board.insertAdjacentHTML('beforeend', newColHTML);
   }
+  reapplyParentHighlights();
 }
 
 function syncKanbanStateFromItems() {
@@ -5850,7 +5958,10 @@ function kanbanShowMore(colIdStr) {
   const name = col ? col.name : 'Без статуса';
   const newColHTML = renderKanbanCol(colIdStr, items, color, name);
   const el = [...document.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === colIdStr);
-  if (el) el.outerHTML = newColHTML;
+  if (el) {
+    el.outerHTML = newColHTML;
+    reapplyParentHighlights();
+  }
 }
 
 async function loadKanban() {
@@ -5889,6 +6000,7 @@ async function loadKanban() {
 
   board.innerHTML = colsHTML + noneHTML;
   syncKanbanStateFromItems();
+  reapplyParentHighlights();
 }
 
 async function syncKanban() {
