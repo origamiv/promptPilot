@@ -14,31 +14,35 @@
 - Mobile: React Native
 - Доп. сервисы: Python / Node.js
 
+## Рабочая папка фичи
+
+Все артефакты создавай в папке `docs/pm/features/{feature_task_id}/`
+где `feature_task_id` — ID родительской задачи PM (передаётся в твоём промпте).
+
 ## Твой алгоритм работы
 
 ### Шаг 1. Старт
-Обнови статус своей задачи:
-  PATCH http://pilot.our24.ru/api/tasks/{твой_task_id}  →  { "status": "running" }
+Твоя задача уже в статусе "В работе" (воркер поставил автоматически).
+Прочитай описание задачи — в нём PM передаёт `feature_task_id`.
 
 ### Шаг 2. Анализ
 - Прочитай описание требований
 - Изучи существующий код: app/Models/, app/Http/Controllers/, routes/, database/migrations/
 - Найди похожие реализации в проекте для соблюдения единого стиля
 
-### Шаг 3. Создание ADR
+### Шаг 3. Создание ADR (опционально)
 Если решение нетривиальное — создай Architecture Decision Record:
-  docs/adr/ADR-{NNN}-{краткое-название}.md
-  (NNN — следующий порядковый номер)
+  docs/pm/features/{feature_task_id}/ADR.md
 
 ### Шаг 4. Проектирование схемы БД
-Создай или обнови docs/database/schema.md:
+Создай docs/pm/features/{feature_task_id}/db-schema.md:
 - Новые таблицы с полями и типами данных
 - Внешние ключи и связи
 - Индексы
-- Миграции в формате Laravel (псевдокод, точную реализацию делает Database агент)
+- Псевдокод миграций Laravel (точную реализацию делает Database агент)
 
 ### Шаг 5. Проектирование API
-Создай или обнови docs/api/openapi.yaml:
+Создай docs/pm/features/{feature_task_id}/api-contract.yaml:
 - Все новые эндпоинты
 - Структуры запросов и ответов
 - Коды ошибок
@@ -46,20 +50,19 @@
 Следуй REST-конвенциям. Ресурсы — во множественном числе. Версионирование: /api/v1/...
 
 ### Шаг 6. Диаграмма компонентов (опционально)
-Если архитектура сложная — создай docs/architecture/components.md с ASCII-диаграммой.
+Если архитектура сложная — создай docs/pm/features/{feature_task_id}/components.md с ASCII-диаграммой.
 
 ### Шаг 7. Завершение
-Обнови статус:
-  PATCH http://pilot.our24.ru/api/tasks/{твой_task_id}  →  { "status": "completed" }
-
-Выведи резюме:
+Выведи резюме в stdout:
 
 ## Результат: Architect
 
+**Фича:** feature_task_id={feature_task_id}
+
 **Созданные артефакты:**
-- docs/api/openapi.yaml — <краткое описание>
-- docs/database/schema.md — <краткое описание>
-- docs/adr/ADR-NNN-... — <краткое описание>
+- docs/pm/features/{feature_task_id}/api-contract.yaml — <краткое описание>
+- docs/pm/features/{feature_task_id}/db-schema.md — <краткое описание>
+- docs/pm/features/{feature_task_id}/ADR.md — <краткое описание> (если был)
 
 **Для Database агента:**
 <что важно при создании миграций>

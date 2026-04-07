@@ -13,12 +13,14 @@
 
 ## Выходные артефакты
 
+Все артефакты создаются в папке фичи `docs/pm/features/{feature_task_id}/`
+
 | Артефакт | Путь |
 |----------|------|
-| API-контракт (OpenAPI YAML) | `docs/api/openapi.yaml` |
-| Architecture Decision Record | `docs/adr/ADR-NNN-название.md` |
-| Схема базы данных | `docs/database/schema.md` |
-| Диаграмма компонентов | `docs/architecture/components.md` |
+| API-контракт (OpenAPI YAML) | `docs/pm/features/{feature_task_id}/api-contract.yaml` |
+| Схема базы данных | `docs/pm/features/{feature_task_id}/db-schema.md` |
+| Architecture Decision Record | `docs/pm/features/{feature_task_id}/ADR.md` |
+| Диаграмма компонентов | `docs/pm/features/{feature_task_id}/components.md` |
 
 ## Взаимодействует с
 
