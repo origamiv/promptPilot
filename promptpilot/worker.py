@@ -467,6 +467,24 @@ def execute_task(task):
         return
 
     base_prompt = task.agent_prompt or task.prompt
+    # If task is assigned to a worker with a system prompt, use it as the base.
+    if task.worker_id:
+        worker = db.get_worker(task.worker_id)
+        if worker and worker.get("prompt"):
+            worker_prompt_field = worker["prompt"].strip()
+            worker_system_prompt = None
+            # Detect file path: absolute path or starts with ./
+            if worker_prompt_field.startswith("/") or worker_prompt_field.startswith("./"):
+                try:
+                    with open(worker_prompt_field, "r", encoding="utf-8") as fh:
+                        worker_system_prompt = fh.read().strip()
+                    print(f"  -> Worker system prompt loaded from: {worker_prompt_field}")
+                except Exception as e:
+                    print(f"  -> Warning: could not read worker prompt file '{worker_prompt_field}': {e}")
+            else:
+                worker_system_prompt = worker_prompt_field
+            if worker_system_prompt:
+                base_prompt = f"{worker_system_prompt}\n\n{task.prompt}"
     # Guardrail: allow restarting only the web server, never the worker process.
     runtime_guard = (
         "\n\nОбязательное ограничение выполнения:\n"

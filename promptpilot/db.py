@@ -1694,6 +1694,25 @@ def delete_priority(priority_id: int) -> bool:
 
 # --- Workers ---
 
+def get_worker(worker_id: int) -> Optional[dict]:
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT w.id, w.name, w.shortname, w.role, w.is_agent, w.agent_id,
+                       a.name AS agent_name, a.color AS agent_color,
+                       w.status, w.avatar_url, w.prompt, w.created_at, w.updated_at
+                FROM {}.workers w
+                LEFT JOIN {}.agents a ON a.id = w.agent_id
+                WHERE w.id = %s
+                """
+            ).format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME)),
+            (worker_id,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
 def list_workers(search: Optional[str] = None, limit: int = 200) -> list[dict]:
     with _connect() as conn, conn.cursor() as cur:
         if search:
