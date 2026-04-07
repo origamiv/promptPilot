@@ -30,7 +30,7 @@ def cli(ctx):
 @cli.command()
 @click.argument("prompt", required=False)
 @click.option("-f", "--file", "file_path", type=click.Path(exists=True), help="File with prompts (one per line)")
-@click.option("-p", "--priority", default=5, type=click.IntRange(1, 10), help="Priority 1-10 (1=highest)")
+@click.option("-p", "--priority", default=5, type=click.IntRange(1), help="Priority ID from priorities table")
 @click.option("-a", "--at", "scheduled_at", help="Schedule time (ISO format, e.g. 2026-03-25T03:00)")
 @click.option("-d", "--dir", "working_dir", help="Working directory for claude execution")
 @click.option("-c", "--cli", "provider", default=None, help="CLI provider: claude, claude-z, or custom command")

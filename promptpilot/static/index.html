@@ -707,6 +707,17 @@
     font-family: var(--mono);
     white-space: nowrap;
   }
+  .priority-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .priority-badge-icon {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+    flex: 0 0 14px;
+  }
   .task-schedule {
     font-size: 11px;
     color: var(--yellow);
@@ -2065,6 +2076,7 @@
 
   /* Select2 project select */
   #workdirSelect + .select2-container { min-width: 260px; }
+  #priorityInput + .select2-container { min-width: 180px; }
   .select2-container--default .select2-selection--single {
     background: var(--bg);
     border: 1px solid var(--border);
@@ -2413,18 +2425,7 @@
             <select id="modelInput"></select>
           </label>
           <label><span id="priorityLabelText">Приоритет</span>
-            <select id="priorityInput">
-              <option value="1">1 (highest)</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5" selected>5</option>
-              <option value="6">6</option>
-              <option value="7">7</option>
-              <option value="8">8</option>
-              <option value="9">9</option>
-              <option value="10">10 (lowest)</option>
-            </select>
+            <select id="priorityInput"></select>
           </label>
           <label><span id="scheduleLabelText">Расписание</span>
             <input type="datetime-local" id="scheduleInput">
@@ -2776,10 +2777,7 @@ function applyLanguage(lang) {
   document.getElementById('filterCompletedBtn').textContent = tr('completed');
   document.getElementById('filterFailedBtn').textContent = tr('failed');
   document.getElementById('filterRateBtn').textContent = tr('rate_limited');
-  const p1 = document.querySelector('#priorityInput option[value=\"1\"]');
-  const p10 = document.querySelector('#priorityInput option[value=\"10\"]');
-  if (p1) p1.textContent = `1 (${tr('highest')})`;
-  if (p10) p10.textContent = `10 (${tr('lowest')})`;
+  renderTaskPriorityOptions();
   if (projectsCache.length) renderProjectOptions();
   setCrudActionLabels();
 
@@ -3032,6 +3030,34 @@ function agentDotStyleAttr(info) {
   return ` style="background:${info.color};"`;
 }
 
+function priorityRowById(priorityId) {
+  const id = Number(priorityId);
+  if (!Number.isFinite(id)) return null;
+  return adminPrioritiesRows.find(r => Number(r.id) === id) || null;
+}
+
+function taskPriorityInfo(t) {
+  const id = Number(t && t.priority);
+  if (!Number.isFinite(id)) return null;
+  const row = priorityRowById(id);
+  if (!row) return { id, name: `P${id}`, icon: null };
+  const name = String(row.name || row.shortname || `P${id}`).trim() || `P${id}`;
+  const icon = row.icon ? String(row.icon).trim() : null;
+  return { id, name, icon };
+}
+
+function taskPriorityBadgeHtml(t, opts = {}) {
+  const info = taskPriorityInfo(t);
+  if (!info) return '';
+  const cls = opts.className ? ` ${opts.className}` : '';
+  const icon = info.icon
+    ? `<img class="priority-badge-icon" src="${esc(info.icon)}" alt="${esc(info.name)}" loading="lazy">`
+    : '';
+  const text = esc(info.name || `P${info.id}`);
+  const title = esc(`Приоритет #${info.id}${info.name ? `: ${info.name}` : ''}`);
+  return `<span class="priority-badge${cls}" title="${title}">${icon}<span>${text}</span></span>`;
+}
+
 function taskWorkedMinutes(t) {
   if (!t.started_at) return null;
   const started = new Date(t.started_at);
@@ -3126,6 +3152,7 @@ async function loadTasks() {
     fetchJSON(`${API}/tasks${params}`),
     ensureWorkersRows(),
     ensureTaskStatusesRows(),
+    ensurePrioritiesRows(),
   ]);
   const list = document.getElementById('taskList');
   const mobileList = document.getElementById('taskMobileList');
@@ -3163,7 +3190,7 @@ async function loadTasks() {
         <span class="task-meta">${tr('task_account')}: ${esc(agentAccountName || '—')}</span>
         ${t.provider ? `<span class="task-meta">${esc(t.provider)}</span>` : ''}
         ${scheduleInfo(t)}
-        <span class="task-meta">P${t.priority}</span>
+        ${taskPriorityBadgeHtml(t, { className: 'task-meta' })}
         <span class="task-meta">${time}</span>
         <span class="task-meta worker-avatar-badge" title="${workerRow ? esc(workerRow.name) : 'Без исполнителя'}"><img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}" alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy">${workerRow ? ` ${esc(workerRow.shortname || workerRow.name)}` : ''}</span>
       </div>
@@ -3206,7 +3233,7 @@ async function loadTasks() {
       <div class="admin-mobile-body">
         <div class="admin-mobile-sub">
           <span class="admin-mobile-chip">${statusLabel(t.status)}</span>
-          <span class="admin-mobile-chip">P${t.priority}</span>
+          ${taskPriorityBadgeHtml(t, { className: 'admin-mobile-chip' })}
           <span class="admin-mobile-chip">${time}</span>
           ${scheduleInfo(t)}
         </div>
@@ -3226,7 +3253,11 @@ async function addTask() {
   }
   const subject = document.getElementById('subjectInput').value.trim() || null;
   const promptListRaw = document.getElementById('promptListInput').value.trim();
-  const priority = parseInt(document.getElementById('priorityInput').value);
+  const priority = parseInt(document.getElementById('priorityInput').value, 10);
+  if (Number.isNaN(priority)) {
+    alert('Выберите приоритет');
+    return;
+  }
   const schedule = document.getElementById('scheduleInput').value || null;
   const provider = document.getElementById('providerInput').value || null;
   const model = document.getElementById('modelInput').value || null;
@@ -3569,6 +3600,87 @@ function selectSkill(name) {
   prompt.focus();
   prompt.setSelectionRange(prompt.value.length, prompt.value.length);
   closeSkillsPanel();
+}
+
+function taskPriorityRowsForForm() {
+  const enabled = adminPrioritiesRows.filter(r => Number(r.status) === 1);
+  return enabled.length ? enabled : adminPrioritiesRows.slice();
+}
+
+function taskPriorityDefaultValue(rows) {
+  if (!rows.length) return '5';
+  if (rows.some(r => Number(r.id) === 5)) return '5';
+  return String(rows[0].id);
+}
+
+function renderTaskPriorityOptions(preferredValue = null) {
+  const sel = document.getElementById('priorityInput');
+  if (!sel) return;
+  const previous = preferredValue ?? sel.value;
+  const rows = taskPriorityRowsForForm();
+
+  if (!rows.length) {
+    sel.innerHTML = `
+      <option value="1">1 (${tr('highest')})</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5" selected>5</option>
+      <option value="6">6</option>
+      <option value="7">7</option>
+      <option value="8">8</option>
+      <option value="9">9</option>
+      <option value="10">10 (${tr('lowest')})</option>
+    `;
+    initPrioritySelect2();
+    return;
+  }
+
+  sel.innerHTML = rows.map(r => {
+    const id = Number(r.id);
+    const name = String(r.name || r.shortname || `P${id}`).trim() || `P${id}`;
+    const text = `${id} — ${name}`;
+    const icon = r.icon ? String(r.icon).trim() : '';
+    return `<option value="${id}" data-icon="${esc(icon)}" data-label="${esc(text)}">${esc(text)}</option>`;
+  }).join('');
+
+  const target = previous && Array.from(sel.options).some(o => o.value === String(previous))
+    ? String(previous)
+    : taskPriorityDefaultValue(rows);
+  sel.value = target;
+  initPrioritySelect2();
+}
+
+function prioritySelect2Node(data) {
+  if (!window.jQuery) return data.text || '';
+  if (!data || !data.id) return data && data.text ? data.text : '';
+  const icon = data.element ? data.element.getAttribute('data-icon') || '' : '';
+  const label = data.element ? data.element.getAttribute('data-label') || data.text : data.text;
+  const $wrap = window.jQuery('<span style="display:flex;align-items:center;gap:6px"></span>');
+  if (icon) {
+    window.jQuery('<img alt="" style="width:14px;height:14px;object-fit:contain;flex:0 0 14px">')
+      .attr('src', icon)
+      .appendTo($wrap);
+  }
+  window.jQuery('<span></span>').text(label || '').appendTo($wrap);
+  return $wrap;
+}
+
+function initPrioritySelect2() {
+  if (!window.jQuery || !window.jQuery.fn || !window.jQuery.fn.select2) return;
+  const $sel = window.jQuery('#priorityInput');
+  const $dropdownParent = window.jQuery('#taskFormScreen .task-form-dialog');
+  if ($sel.hasClass('select2-hidden-accessible')) {
+    $sel.off('change.select2priority');
+    $sel.select2('destroy');
+  }
+  $sel.select2({
+    width: '180px',
+    minimumResultsForSearch: Infinity,
+    dropdownParent: $dropdownParent.length ? $dropdownParent : undefined,
+    templateResult: prioritySelect2Node,
+    templateSelection: prioritySelect2Node,
+  });
 }
 
 // --- Load projects into dir select ---
@@ -4138,11 +4250,11 @@ function switchView(view, opts = {}) {
   closeMobileMenu();
 }
 
-function openTaskFormFromKanban() {
+async function openTaskFormFromKanban() {
   _afterAddTaskCallback = () => {
     ensureTaskStatusesRows(true).then(() => loadKanban());
   };
-  openTaskFormScreen();
+  await openTaskFormScreen();
   // Pre-select current kanban project
   if (kanbanSelectedProject) {
     const sel = document.getElementById('workdirSelect');
@@ -4153,11 +4265,13 @@ function openTaskFormFromKanban() {
   }
 }
 
-function openTaskFormScreen() {
+async function openTaskFormScreen() {
   const screen = document.getElementById('taskFormScreen');
   if (!screen) return;
   screen.classList.add('open');
   setDefaultSchedule();
+  await ensurePrioritiesRows();
+  renderTaskPriorityOptions();
   initProjectSelect2();
   setTimeout(() => {
     const first = screen.querySelector('textarea,input,select,button');
@@ -5104,7 +5218,7 @@ function renderKanbanCard(t) {
         <div class="kanban-card-title"><span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}</div>
         <div class="kanban-card-meta">
           ${agentIconInfo ? `<span class="kanban-card-badge" title="${esc(agentIconInfo.label)}"><span class="status-dot"${agentDotStyleAttr(agentIconInfo)}></span></span>` : ''}
-          <span class="kanban-card-badge">P${t.priority}</span>
+          ${taskPriorityBadgeHtml(t, { className: 'kanban-card-badge' })}
           <span class="kanban-card-badge">${timeAgo(t.created_at)}</span>
         </div>
       </div>
@@ -5322,7 +5436,7 @@ async function loadKanban() {
   if (!board) return;
   board.innerHTML = '<div style="padding:24px;color:var(--text2)">Загрузка…</div>';
 
-  await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows()]);
+  await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows(), ensurePrioritiesRows()]);
   const tasks = await fetchKanbanTasksForSelectedProject();
 
   const activeCols = adminTaskStatusesRows.filter(s => s.status === 1);
@@ -5357,7 +5471,7 @@ async function loadKanban() {
 
 async function syncKanban() {
   if (!kanbanSelectedProject) return;
-  await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows()]);
+  await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows(), ensurePrioritiesRows()]);
   if (!Object.keys(_kanbanColItems).length) {
     await loadKanban();
     return;
@@ -5528,6 +5642,9 @@ async function loadPrioritiesCrud() {
     </tr>
   `).join('');
   renderPrioritiesCards(rows);
+  if (document.getElementById('taskFormScreen')?.classList.contains('open')) {
+    renderTaskPriorityOptions();
+  }
 }
 
 async function createPriorityCrud() { await openCrudModal('priority', 'create'); }

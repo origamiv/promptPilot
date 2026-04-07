@@ -22,7 +22,7 @@ class TaskCreate(BaseModel):
     agent_prompt: Optional[str] = None  # Combined prompt passed to the agent CLI (if differs from prompt)
     working_dir: Optional[str] = None
     provider: Optional[str] = None  # e.g. "claude", "claude-z", or raw command
-    priority: int = Field(default=5, ge=1, le=10)
+    priority: int = Field(default=5, ge=1)
     scheduled_at: Optional[datetime] = None
     max_retries: int = Field(default=5, ge=0, le=50)
     skip_permissions: bool = False
@@ -37,7 +37,7 @@ class TaskCreate(BaseModel):
 
 class TaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
-    priority: Optional[int] = Field(default=None, ge=1, le=10)
+    priority: Optional[int] = Field(default=None, ge=1)
 
 
 class TaskInDB(BaseModel):
