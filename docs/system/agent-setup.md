@@ -10,11 +10,11 @@
 ├── agents/
 │   ├── pm/
 │   │   ├── README.md
-│   │   ├── system-prompt.md
+│   │   ├── system.md
 │   │   └── responsibilities.md
 │   ├── architect/
 │   │   ├── README.md
-│   │   └── system-prompt.md
+│   │   └── system.md
 │   └── [другие агенты аналогично]
 ```
 

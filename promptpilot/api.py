@@ -423,6 +423,10 @@ def api_update_task(task_id: int, update: TaskUpdate):
         if not db.update_priority(task_id, update.priority):
             raise HTTPException(400, "Can only reprioritize pending or rate_limited tasks")
 
+    if update.task_status_id is not None:
+        if not db.update_task_status_id(task_id, update.task_status_id):
+            raise HTTPException(404, "Task not found")
+
     return {"ok": True}
 
 

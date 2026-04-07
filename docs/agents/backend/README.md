@@ -37,6 +37,6 @@ Laravel/PHP разработчик. Реализует серверную час
 
 ## Связанные файлы
 
-- [Системный промпт](system-prompt.md)
+- [Системный промпт](system.md)
 - [Детальные обязанности](responsibilities.md)
 - [Конвенции кода](standards/conventions.md)

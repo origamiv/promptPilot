@@ -33,6 +33,6 @@ Unit тесты, Feature тесты (Laravel), компонентные тест
 
 ## Связанные файлы
 
-- [Системный промпт](system-prompt.md)
+- [Системный промпт](system.md)
 - [Детальные обязанности](responsibilities.md)
 - [Шаблон тест-плана](templates/test-plan.md)

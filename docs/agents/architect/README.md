@@ -33,7 +33,7 @@
 
 ## Связанные файлы
 
-- [Системный промпт](system-prompt.md)
+- [Системный промпт](system.md)
 - [Детальные обязанности](responsibilities.md)
 - [Шаблон ADR](templates/adr.md)
 - [Шаблон API-контракта](templates/api-contract.md)

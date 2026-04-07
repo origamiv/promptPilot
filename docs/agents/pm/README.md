@@ -38,7 +38,7 @@
 
 ## Связанные файлы
 
-- [Системный промпт](system-prompt.md)
+- [Системный промпт](system.md)
 - [Детальные обязанности](responsibilities.md)
 - [Протокол коммуникации](../../system/communication-protocol.md)
 - [Жизненный цикл задачи](../../system/task-lifecycle.md)

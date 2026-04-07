@@ -38,6 +38,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
     priority: Optional[int] = Field(default=None, ge=1)
+    task_status_id: Optional[int] = None
 
 
 class TaskInDB(BaseModel):

@@ -36,6 +36,6 @@ React Native разработчик. Реализует мобильное пр�
 
 ## Связанные файлы
 
-- [Системный промпт](system-prompt.md)
+- [Системный промпт](system.md)
 - [Детальные обязанности](responsibilities.md)
 - [Конвенции кода](standards/conventions.md)

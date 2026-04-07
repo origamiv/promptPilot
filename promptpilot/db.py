@@ -873,6 +873,16 @@ def update_priority(task_id: int, priority: int) -> bool:
         return cur.rowcount > 0
 
 
+def update_task_status_id(task_id: int, task_status_id: int) -> bool:
+    """Обновить task_status_id задачи (для промежуточных статусов без status_to)."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("UPDATE {} SET task_status_id = %s WHERE id = %s").format(_tasks_ref()),
+            (task_status_id, task_id),
+        )
+        return cur.rowcount > 0
+
+
 def delete_task(task_id: int) -> bool:
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(sql.SQL("DELETE FROM {} WHERE id = %s").format(_tasks_ref()), (task_id,))
