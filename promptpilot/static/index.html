@@ -2438,6 +2438,8 @@ let currentFilter = '';
 let expandedId = null;
 let kanbanExpandedId = null;
 let kanbanSelectedProject = null; // { id, name, path, color, folder }
+let kanbanTaskColById = {};
+let kanbanTaskById = {};
 let _afterAddTaskCallback = null;
 let providersData = {};
 let skillsCache = {};
@@ -4992,7 +4994,7 @@ function renderKanbanCard(t) {
   const parsed = parseResult(t.result);
   const resultHTML = buildTaskResultHTML(t, parsed);
 
-  return `<div class="kanban-card${expanded ? ' expanded' : ''}" id="kcard-${t.id}">
+  return `<div class="kanban-card${expanded ? ' expanded' : ''}" id="kcard-${t.id}" data-task-id="${t.id}">
     <div class="kanban-card-head" onclick="toggleKanbanCard(${t.id})">
       <img class="task-worker-avatar" src="${workerRow ? esc(workerAvatarUrl(workerRow)) : WORKER_DEFAULT_AVATAR}"
            alt="${workerRow ? esc(workerRow.name) : ''}" loading="lazy"
@@ -5074,6 +5076,97 @@ const KANBAN_PAGE_SIZE = 10;
 const kanbanColVisible = {};
 let _kanbanColItems = {};
 
+function kanbanTaskSort(a, b) {
+  const ta = a.updated_at || a.created_at || '';
+  const tb = b.updated_at || b.created_at || '';
+  return tb < ta ? -1 : tb > ta ? 1 : 0;
+}
+
+function kanbanColMeta(colIdStr) {
+  if (colIdStr === '__none__') return { color: '#9ca3af', name: 'Без статуса' };
+  const col = adminTaskStatusesRows.find(s => String(s.id) === String(colIdStr));
+  return { color: (col && col.color) || '#9ca3af', name: (col && col.name) || 'Без статуса' };
+}
+
+function renderKanbanColById(colIdStr) {
+  const board = document.getElementById('kanbanBoard');
+  if (!board) return;
+  const items = _kanbanColItems[colIdStr] || [];
+
+  // Временная колонка "Без статуса" скрывается, когда там нет задач
+  if (colIdStr === '__none__' && !items.length) {
+    const noneEl = [...board.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === '__none__');
+    if (noneEl) noneEl.remove();
+    return;
+  }
+
+  const meta = kanbanColMeta(colIdStr);
+  const newColHTML = renderKanbanCol(String(colIdStr), items, meta.color, meta.name);
+  const existing = [...board.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === String(colIdStr));
+  if (existing) {
+    existing.outerHTML = newColHTML;
+    return;
+  }
+  if (colIdStr === '__none__') {
+    board.insertAdjacentHTML('beforeend', newColHTML);
+    return;
+  }
+
+  const activeOrder = adminTaskStatusesRows.filter(s => s.status === 1).map(s => String(s.id));
+  const index = activeOrder.indexOf(String(colIdStr));
+  if (index < 0) {
+    board.insertAdjacentHTML('beforeend', newColHTML);
+    return;
+  }
+  const beforeCol = activeOrder.slice(index + 1)
+    .map(id => [...board.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === id))
+    .find(Boolean);
+  if (beforeCol) beforeCol.insertAdjacentHTML('beforebegin', newColHTML);
+  else {
+    const noneEl = [...board.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === '__none__');
+    if (noneEl) noneEl.insertAdjacentHTML('beforebegin', newColHTML);
+    else board.insertAdjacentHTML('beforeend', newColHTML);
+  }
+}
+
+function syncKanbanStateFromItems() {
+  kanbanTaskColById = {};
+  kanbanTaskById = {};
+  Object.entries(_kanbanColItems).forEach(([colIdStr, items]) => {
+    (items || []).forEach(t => {
+      kanbanTaskColById[t.id] = String(colIdStr);
+      kanbanTaskById[t.id] = t;
+    });
+  });
+}
+
+async function fetchKanbanTasksForSelectedProject() {
+  let tasks = await fetchJSON(`${API}/tasks?limit=1000`);
+  if (kanbanSelectedProject) {
+    const projPath = (kanbanSelectedProject.path || '').replace(/\/+$/, '').toLowerCase();
+    tasks = tasks.filter(t => t.working_dir && t.working_dir.replace(/\/+$/, '').toLowerCase() === projPath);
+  }
+  tasks.sort(kanbanTaskSort);
+  return tasks;
+}
+
+function upsertTaskInColItems(task, colIdStr) {
+  const key = String(colIdStr);
+  if (!_kanbanColItems[key]) _kanbanColItems[key] = [];
+  const idx = _kanbanColItems[key].findIndex(x => x.id === task.id);
+  if (idx >= 0) _kanbanColItems[key][idx] = task;
+  else _kanbanColItems[key].push(task);
+  _kanbanColItems[key].sort(kanbanTaskSort);
+}
+
+function removeTaskFromColItems(taskId, colIdStr) {
+  const key = String(colIdStr);
+  const items = _kanbanColItems[key];
+  if (!items) return;
+  const idx = items.findIndex(x => x.id === taskId);
+  if (idx >= 0) items.splice(idx, 1);
+}
+
 function renderKanbanCol(colIdStr, items, color, name) {
   const visible = kanbanColVisible[colIdStr] ?? KANBAN_PAGE_SIZE;
   const shown = items.slice(0, visible);
@@ -5112,20 +5205,7 @@ async function loadKanban() {
   board.innerHTML = '<div style="padding:24px;color:var(--text2)">Загрузка…</div>';
 
   await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows()]);
-  let tasks = await fetchJSON(`${API}/tasks?limit=1000`);
-
-  // Filter by selected project
-  if (kanbanSelectedProject) {
-    const projPath = (kanbanSelectedProject.path || '').replace(/\/+$/, '').toLowerCase();
-    tasks = tasks.filter(t => t.working_dir && t.working_dir.replace(/\/+$/, '').toLowerCase() === projPath);
-  }
-
-  // Sort newest first (updated_at → created_at fallback)
-  tasks.sort((a, b) => {
-    const ta = a.updated_at || a.created_at || '';
-    const tb = b.updated_at || b.created_at || '';
-    return tb < ta ? -1 : tb > ta ? 1 : 0;
-  });
+  const tasks = await fetchKanbanTasksForSelectedProject();
 
   const activeCols = adminTaskStatusesRows.filter(s => s.status === 1);
 
@@ -5153,6 +5233,60 @@ async function loadKanban() {
     : '';
 
   board.innerHTML = colsHTML + noneHTML;
+  syncKanbanStateFromItems();
+}
+
+async function syncKanban() {
+  if (!kanbanSelectedProject) return;
+  await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows()]);
+  if (!Object.keys(_kanbanColItems).length) {
+    await loadKanban();
+    return;
+  }
+
+  const tasks = await fetchKanbanTasksForSelectedProject();
+  const nextById = {};
+  const changedCols = new Set();
+
+  tasks.forEach(t => {
+    nextById[t.id] = t;
+    const nextCol = String(taskKanbanColId(t));
+    const prevCol = kanbanTaskColById[t.id];
+
+    if (!prevCol) {
+      upsertTaskInColItems(t, nextCol);
+      kanbanTaskColById[t.id] = nextCol;
+      kanbanTaskById[t.id] = t;
+      changedCols.add(nextCol);
+      return;
+    }
+
+    if (prevCol !== nextCol) {
+      removeTaskFromColItems(t.id, prevCol);
+      upsertTaskInColItems(t, nextCol);
+      kanbanTaskColById[t.id] = nextCol;
+      kanbanTaskById[t.id] = t;
+      changedCols.add(prevCol);
+      changedCols.add(nextCol);
+      return;
+    }
+
+    // Сохраняем свежие данные задачи, даже если колонка не изменилась
+    upsertTaskInColItems(t, nextCol);
+    kanbanTaskById[t.id] = t;
+  });
+
+  Object.keys(kanbanTaskColById).forEach(taskIdStr => {
+    const taskId = Number(taskIdStr);
+    if (nextById[taskId]) return;
+    const prevCol = kanbanTaskColById[taskId];
+    removeTaskFromColItems(taskId, prevCol);
+    delete kanbanTaskColById[taskId];
+    delete kanbanTaskById[taskId];
+    changedCols.add(prevCol);
+  });
+
+  changedCols.forEach(colIdStr => renderKanbanColById(colIdStr));
 }
 
 // --- CRUD: Task Statuses ---
@@ -5458,7 +5592,7 @@ async function loadCosts() {
 async function refreshKanbanAuto() {
   if (currentView !== 'kanban') return;
   if (kanbanSelectedProject) {
-    await loadKanban();
+    await syncKanban();
     return;
   }
   await loadKanbanProjects();
