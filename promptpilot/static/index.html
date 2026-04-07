@@ -3159,12 +3159,14 @@ function projectBadgeStyleAttr(project) {
 
 function taskCardTitle(t) {
   const subject = String(t.subject || '').trim();
-  if (subject) return truncateTaskTitle(subject);
+  const parentTaskId = Number(t.parent_task_id || 0);
+  const parentPrefix = parentTaskId > 0 ? `📄 #${parentTaskId} - ` : '';
+  if (subject) return `${parentPrefix}${truncateTaskTitle(subject)}`;
   const firstPromptLine = String(t.prompt || '')
     .split(/\r?\n/)
     .map(x => x.trim())
     .find(Boolean);
-  return truncateTaskTitle(firstPromptLine || `#${t.id}`);
+  return `${parentPrefix}${truncateTaskTitle(firstPromptLine || `#${t.id}`)}`;
 }
 
 function taskAgentName(t) {
