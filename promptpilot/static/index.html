@@ -1302,22 +1302,6 @@
     border-collapse: collapse;
     font-size: 12px;
   }
-  .skills-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-  .skills-upload-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 12px;
-  }
-  .skills-upload-row input[type="text"] {
-    min-width: 220px;
-    flex: 1 1 260px;
-  }
   .admin-table th, .admin-table td {
     border-bottom: 1px solid var(--border);
     padding: 8px 6px;
@@ -2433,20 +2417,12 @@
   <div class="admin-view" id="skillsView">
     <div class="admin-header">
       <div class="admin-title" id="skillsTitle">Скиллы AI-агентов</div>
-      <input id="skillsSearch" placeholder="Поиск..." oninput="renderSkillsRows()">
-      <button class="btn btn-ghost" type="button" onclick="loadSkillsCrud(true)">Обновить</button>
+      <input id="skillsSearch" placeholder="Поиск..." oninput="loadSkillsCrud()">
+      <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createSkillCrud()">+</button>
     </div>
-    <div class="skills-meta" id="skillsAgentsMeta"></div>
-    <div class="skills-upload-row">
-      <input id="skillsArchiveInput" type="file" accept=".zip,.tar,.gz,.tgz,.bz2,.xz,.md">
-      <button class="btn btn-primary" type="button" onclick="uploadSkillsArchive()">Загрузить архив</button>
-    </div>
-    <div class="skills-upload-row">
-      <input id="skillsUrlInput" type="text" placeholder="https://example.com/skills.zip">
-      <button class="btn btn-primary" type="button" onclick="uploadSkillsUrl()">Загрузить по URL</button>
-    </div>
+    <div class="admin-mobile-list" id="skillsCards"></div>
     <table class="admin-table">
-      <thead><tr><th>Name</th><th>Location</th><th>Layout</th><th>Enabled</th><th>Description</th><th>Path</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Имя</th><th>Slug</th><th>Агенты</th><th>Активен</th><th>Описание</th><th></th></tr></thead>
       <tbody id="skillsTbody"></tbody>
     </table>
   </div>
@@ -2726,7 +2702,7 @@ const I18N = {
     copy: 'Копировать',
     copied: 'Скопировано',
     loading: 'Загрузка...',
-    no_skills: 'Скилы не найдены в ~/.claude/commands/ или плагинах.',
+    no_skills: 'Скиллы не найдены.',
     skills_hint: 'Только Claude Code · /skill-name [args]',
     select_project: '— Выберите проект —',
     custom_path: '✏️ Свой путь...',
@@ -2820,7 +2796,7 @@ const I18N = {
     copy: 'Copy',
     copied: 'Copied!',
     loading: 'Loading...',
-    no_skills: 'No skills found in ~/.claude/commands/ or plugins.',
+    no_skills: 'No skills found.',
     skills_hint: 'Claude Code only · /skill-name [args]',
     select_project: '— Select project —',
     custom_path: '✏️ Custom path...',
@@ -3159,14 +3135,17 @@ function projectBadgeStyleAttr(project) {
 
 function taskCardTitle(t) {
   const subject = String(t.subject || '').trim();
-  const parentTaskId = Number(t.parent_task_id || 0);
-  const parentPrefix = parentTaskId > 0 ? `📄 #${parentTaskId} - ` : '';
-  if (subject) return `${parentPrefix}${truncateTaskTitle(subject)}`;
+  if (subject) return truncateTaskTitle(subject);
   const firstPromptLine = String(t.prompt || '')
     .split(/\r?\n/)
     .map(x => x.trim())
     .find(Boolean);
-  return `${parentPrefix}${truncateTaskTitle(firstPromptLine || `#${t.id}`)}`;
+  return truncateTaskTitle(firstPromptLine || `#${t.id}`);
+}
+
+function taskParentTaskId(t) {
+  const parentTaskId = Number(t.parent_task_id || 0);
+  return parentTaskId > 0 ? parentTaskId : null;
 }
 
 function taskAgentName(t) {
@@ -3382,9 +3361,10 @@ async function loadTasks() {
     return `
     <div class="task-row${t.status === 'running' ? ' task-running' : ''}${expanded ? ' expanded' : ''}">
       <div class="task-header" onclick="toggleTask(${t.id})">
-        <span class="task-id">#${t.id}</span>
         <span class="task-meta worker-avatar-badge">${taskAvatarHtml(t, { workerRow })}</span>
-        <span class="task-prompt">${esc(taskCardTitle(t))}</span>
+        ${taskParentTaskId(t)
+          ? `<span class="task-meta">📄 #${taskParentTaskId(t)}</span><span class="task-meta">-</span><span class="task-id">#${t.id}</span><span class="task-prompt">${esc(taskCardTitle(t))}</span>`
+          : `<span class="task-id">#${t.id}</span><span class="task-prompt">${esc(taskCardTitle(t))}</span>`}
         <span class="task-project-badge"${projectBadgeStyleAttr(project)}>${esc(projectName || '—')}</span>
         ${taskPriorityBadgeHtml(t, { className: 'task-meta' })}
         <span class="task-meta">${time}</span>
@@ -3420,7 +3400,9 @@ async function loadTasks() {
         ${taskAvatarHtml(t, { workerRow })}
         <div class="admin-mobile-main">
           <div class="task-mobile-head-line1">
-            <span class="task-mobile-id">#${t.id}</span>
+            ${taskParentTaskId(t)
+              ? `<span class="task-meta">📄 #${taskParentTaskId(t)}</span><span class="task-meta">-</span><span class="task-mobile-id">#${t.id}</span>`
+              : `<span class="task-mobile-id">#${t.id}</span>`}
             <div class="admin-mobile-title">${esc(taskCardTitle(t))}</div>
             <span class="status-dot ${taskRefStatusDotClass(t)}"${taskDotStyle(t)} title="${esc(taskRefStatusLabel(t))}"></span>
           </div>
@@ -4597,6 +4579,7 @@ const CRUD_TX = {
     yes: 'Да',
     no: 'Нет',
     skills_agents: 'Доступные агенты для скиллов',
+    no_results: 'Нет результатов',
     relogin_code: 'Код авторизации',
     relogin_enter_code: 'Вставьте код из страницы авторизации',
   },
@@ -4652,6 +4635,7 @@ const CRUD_TX = {
     yes: 'Yes',
     no: 'No',
     skills_agents: 'Available skill-capable agents',
+    no_results: 'No results',
     relogin_code: 'Authorization code',
     relogin_enter_code: 'Paste code from authorization page',
   },
@@ -5071,6 +5055,30 @@ async function submitCrudModal(e) {
       await loadPrioritiesCrud();
       return;
     }
+    if (crudState.entity === 'skill') {
+      const sel = document.getElementById('crud_agents');
+      const agents = sel ? Array.from(sel.selectedOptions).map(o => o.value) : [];
+      const slugRaw = crudValue('crud_slug').trim();
+      const body = {
+        name: crudValue('crud_name').trim(),
+        slug: slugRaw || undefined,
+        description: crudValue('crud_description').trim() || null,
+        content: document.getElementById('crud_content')?.value || '',
+        argument_hint: crudValue('crud_argument_hint').trim() || null,
+        agents,
+        is_active: (crudValue('crud_is_active') || '1') === '1',
+      };
+      if (!body.slug) delete body.slug;
+      if (mode === 'create') {
+        await fetchJSON(`${API}/admin/skills`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await fetchJSON(`${API}/admin/skills/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      if (isMobileLayout()) closeCrudScreen();
+      else closeCrudModal();
+      await loadSkillsCrud();
+      return;
+    }
     if (isMobileLayout()) closeCrudScreen();
     else closeCrudModal();
     await loadAccountsCrud();
@@ -5345,138 +5353,146 @@ async function deleteAgentCrud(id) {
 }
 
 // --- CRUD: Skills ---
-function renderSkillsAgentsMeta(rows) {
-  const box = document.getElementById('skillsAgentsMeta');
-  if (!box) return;
-  if (!rows.length) {
-    box.innerHTML = `<span class="admin-mobile-chip">${esc(tc('skills_agents'))}: —</span>`;
-    return;
-  }
-  box.innerHTML = [
-    `<span class="admin-mobile-chip">${esc(tc('skills_agents'))}:</span>`,
-    ...rows.map(r => `<span class="admin-mobile-chip">${esc(r.name || r.shortname || '')}</span>`),
-  ].join('');
-}
-
 function renderSkillsRows() {
   const tbody = document.getElementById('skillsTbody');
   if (!tbody) return;
-  const q = (document.getElementById('skillsSearch')?.value || '').trim().toLowerCase();
-  const rows = q
-    ? adminSkillsRows.filter(r =>
-      String(r.name || '').toLowerCase().includes(q) ||
-      String(r.description || '').toLowerCase().includes(q) ||
-      String(r.path || '').toLowerCase().includes(q) ||
-      String(r.location || '').toLowerCase().includes(q),
-    )
-    : adminSkillsRows;
-
-  tbody.innerHTML = rows.map(r => {
-    const enabled = !!r.enabled;
-    const toggleLabel = enabled ? tc('disable') : tc('enable');
+  tbody.innerHTML = adminSkillsRows.map(r => {
+    const agents = Array.isArray(r.agents) ? r.agents.join(', ') : (r.agents || '');
     return `
     <tr>
+      <td>${r.id}</td>
       <td>${esc(r.name || '')}</td>
-      <td>${esc(r.location || '')}</td>
-      <td>${esc(r.layout || '')}</td>
-      <td>${enabled ? tc('yes') : tc('no')}</td>
-      <td>${esc(r.description || '')}</td>
-      <td style="font-size:11px;word-break:break-all">${esc(r.path || '')}</td>
+      <td style="font-family:var(--mono);font-size:11px">${esc(r.slug || '')}</td>
+      <td style="font-size:11px">${esc(agents)}</td>
+      <td>${r.is_active ? tc('yes') : tc('no')}</td>
+      <td style="font-size:11px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.description || '')}</td>
       <td class="admin-actions">
-        <button class="btn btn-sm btn-ghost" data-path="${esc(String(r.path || ''))}" data-enabled="${enabled ? '0' : '1'}" onclick="toggleSkillCrud(this)">${toggleLabel}</button>
-        <button class="btn btn-sm btn-danger" data-path="${esc(String(r.path || ''))}" data-name="${esc(String(r.name || ''))}" onclick="deleteSkillCrud(this)">${tc('delete')}</button>
+        <button class="btn btn-sm btn-ghost" onclick="editSkillCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-ghost" data-id="${r.id}" data-active="${r.is_active ? '1' : '0'}" onclick="toggleSkillCrud(this)">${r.is_active ? tc('disable') : tc('enable')}</button>
+        <button class="btn btn-sm btn-danger" data-id="${r.id}" data-name="${esc(String(r.name || ''))}" onclick="deleteSkillCrud(this)">${tc('delete')}</button>
       </td>
     </tr>`;
   }).join('');
 }
 
-async function loadSkillsCrud(force = false) {
-  if (!force && adminSkillsRows.length) {
-    renderSkillsRows();
+function renderSkillsCards() {
+  const cards = document.getElementById('skillsCards');
+  if (!cards) return;
+  if (!adminSkillsRows.length) {
+    cards.innerHTML = `<div class="admin-empty">${tc('no_results')}</div>`;
     return;
   }
-  const [skills, agents] = await Promise.all([
-    fetchJSON(`${API}/admin/skills`),
-    fetchJSON(`${API}/admin/skills/agents`),
-  ]);
-  adminSkillsRows = Array.isArray(skills) ? skills : [];
-  renderSkillsAgentsMeta(Array.isArray(agents) ? agents : []);
-  renderSkillsRows();
+  cards.innerHTML = adminSkillsRows.map(r => {
+    const agents = Array.isArray(r.agents) ? r.agents.join(', ') : (r.agents || '');
+    return `<div class="admin-mobile-card" onclick="editSkillCrud(${r.id})">
+      <div class="worker-card-head">
+        <span style="font-weight:600">${esc(r.name || '')}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text2)">${esc(r.slug || '')}</span>
+      </div>
+      ${r.description ? `<div style="font-size:12px;color:var(--text2);margin:2px 0">${esc(r.description)}</div>` : ''}
+      ${agents ? `<div style="font-size:11px;color:var(--text2)">${esc(agents)}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end">
+        <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit" onclick="event.stopPropagation();editSkillCrud(${r.id})">✎</button>
+        <button class="prompt-mobile-icon-btn" type="button" aria-label="Toggle" data-id="${r.id}" data-active="${r.is_active ? '1' : '0'}" onclick="event.stopPropagation();toggleSkillCrud(this)">${r.is_active ? '⏸' : '▶'}</button>
+        <button class="prompt-mobile-icon-btn btn-danger" type="button" aria-label="Delete" data-id="${r.id}" data-name="${esc(String(r.name || ''))}" onclick="event.stopPropagation();deleteSkillCrud(this)">✕</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.readAsDataURL(file);
+async function loadSkillsCrud() {
+  const q = (document.getElementById('skillsSearch')?.value || '').trim();
+  const url = `${API}/admin/skills${q ? `?q=${encodeURIComponent(q)}` : ''}`;
+  const result = await fetchJSON(url);
+  adminSkillsRows = Array.isArray(result?.items) ? result.items : (Array.isArray(result) ? result : []);
+  renderSkillsRows();
+  renderSkillsCards();
+}
+
+async function createSkillCrud() {
+  const agents = await fetchJSON(`${API}/admin/skills/agents`);
+  const agentOpts = Array.isArray(agents)
+    ? agents.map(a => `<option value="${esc(a.shortname)}">${esc(a.name || a.shortname)}</option>`).join('')
+    : '';
+  openCrudModal({
+    entity: 'skill',
+    mode: 'create',
+    title: tc('add'),
+    fields: _skillFields(null, agentOpts),
   });
 }
 
-async function uploadSkillsArchive() {
-  const input = document.getElementById('skillsArchiveInput');
-  const file = input && input.files && input.files[0];
-  if (!file) {
-    alert('Выберите архив или .md файл');
-    return;
-  }
-  try {
-    const contentBase64 = await fileToBase64(file);
-    await fetchJSON(`${API}/admin/skills/archive`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: file.name, content_base64: contentBase64 }),
-    });
-    if (input) input.value = '';
-    await loadSkillsCrud(true);
-  } catch (e) {
-    alert(`${tc('save_failed')}: ${e.message}`);
-  }
+async function editSkillCrud(id) {
+  const [row, agents] = await Promise.all([
+    fetchJSON(`${API}/admin/skills/${id}`),
+    fetchJSON(`${API}/admin/skills/agents`),
+  ]);
+  const agentOpts = Array.isArray(agents)
+    ? agents.map(a => `<option value="${esc(a.shortname)}">${esc(a.name || a.shortname)}</option>`).join('')
+    : '';
+  openCrudModal({
+    entity: 'skill',
+    mode: 'edit',
+    id,
+    title: `Edit: ${row.name}`,
+    fields: _skillFields(row, agentOpts),
+  });
 }
 
-async function uploadSkillsUrl() {
-  const input = document.getElementById('skillsUrlInput');
-  const url = String(input?.value || '').trim();
-  if (!url) {
-    alert('Укажите URL');
-    return;
-  }
-  try {
-    await fetchJSON(`${API}/admin/skills/url`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    input.value = '';
-    await loadSkillsCrud(true);
-  } catch (e) {
-    alert(`${tc('save_failed')}: ${e.message}`);
-  }
+function _skillFields(row, agentOpts) {
+  const agents = Array.isArray(row?.agents) ? row.agents : [];
+  const content = row?.content || '';
+  return `
+    <label>Имя (name)</label>
+    <input id="crud_name" class="crud-input" value="${esc(row?.name || '')}" required placeholder="commit">
+    <label>Slug</label>
+    <input id="crud_slug" class="crud-input" value="${esc(row?.slug || '')}" placeholder="auto из name">
+    <label>Описание</label>
+    <input id="crud_description" class="crud-input" value="${esc(row?.description || '')}" placeholder="Краткое описание">
+    <label>Argument hint</label>
+    <input id="crud_argument_hint" class="crud-input" value="${esc(row?.argument_hint || '')}" placeholder="[optional hint]">
+    <label>Агенты (agents)</label>
+    <select id="crud_agents" class="crud-input" multiple size="4" style="height:auto">${agentOpts}</select>
+    <script>
+    (function(){
+      const sel = document.getElementById('crud_agents');
+      if (!sel) return;
+      const active = ${JSON.stringify(agents)};
+      for (const opt of sel.options) { opt.selected = active.includes(opt.value); }
+    })();
+    <\/script>
+    <label>Активен</label>
+    <select id="crud_is_active" class="crud-input">
+      <option value="1" ${row?.is_active !== false ? 'selected' : ''}>Да</option>
+      <option value="0" ${row?.is_active === false ? 'selected' : ''}>Нет</option>
+    </select>
+    <label>Содержимое (.md)</label>
+    <textarea id="crud_content" class="crud-input" rows="10" style="font-family:var(--mono);font-size:12px;resize:vertical">${esc(content)}</textarea>
+  `;
 }
 
 async function toggleSkillCrud(btn) {
-  const path = String(btn?.dataset?.path || '').trim();
-  const enabled = String(btn?.dataset?.enabled || '0') === '1';
+  const id = parseInt(btn?.dataset?.id || '0', 10);
+  const isActive = String(btn?.dataset?.active || '0') === '1';
   try {
-    await fetchJSON(`${API}/admin/skills/toggle`, {
+    await fetchJSON(`${API}/admin/skills/${id}/toggle`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, enabled }),
+      body: JSON.stringify({ is_active: !isActive }),
     });
-    await loadSkillsCrud(true);
+    await loadSkillsCrud();
   } catch (e) {
     alert(`${tc('save_failed')}: ${e.message}`);
   }
 }
 
 async function deleteSkillCrud(btn) {
-  const path = String(btn?.dataset?.path || '').trim();
+  const id = parseInt(btn?.dataset?.id || '0', 10);
   const name = String(btn?.dataset?.name || '').trim();
-  const label = name ? `${name}` : path;
-  if (!confirm(`${tc('delete_skill_confirm')}: ${label}?`)) return;
+  if (!confirm(`${tc('delete_skill_confirm')}: ${name}?`)) return;
   try {
-    await fetchJSON(`${API}/admin/skills?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
-    await loadSkillsCrud(true);
+    await fetchJSON(`${API}/admin/skills/${id}`, { method: 'DELETE' });
+    await loadSkillsCrud();
   } catch (e) {
     alert(`${tc('delete_failed')}: ${e.message}`);
   }
@@ -5617,7 +5633,9 @@ function renderKanbanCard(t) {
     <div class="kanban-card-head" onclick="toggleKanbanCard(${t.id})">
       ${taskAvatarHtml(t, { workerRow, imgStyle: 'flex:0 0 22px' })}
       <div style="flex:1;min-width:0">
-        <div class="kanban-card-title"><span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}</div>
+        <div class="kanban-card-title">${taskParentTaskId(t)
+          ? `<span class="task-meta">📄 #${taskParentTaskId(t)}</span><span class="task-meta">-</span><span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`
+          : `<span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`}</div>
         <div class="kanban-card-meta">
           ${taskPriorityBadgeHtml(t, { className: 'kanban-card-badge' })}
           <span class="kanban-card-badge">${timeAgo(t.created_at)}</span>
