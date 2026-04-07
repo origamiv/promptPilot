@@ -2637,6 +2637,10 @@
             </div>
           </label>
           <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="taskBacklog" style="width:auto;margin:0">
+            <span id="backlogToggleText" style="font-size:13px;color:var(--text)">В бэклог</span>
+          </label>
+          <label class="compact-check" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="skipPermissions" style="width:auto;margin:0">
             <span style="font-size:13px;color:var(--yellow)">--dangerously-skip-permissions</span>
           </label>
@@ -2712,6 +2716,7 @@ const I18N = {
     project: 'Проект',
     recur: 'Повтор',
     prompt_list: 'Список промптов',
+    backlog_toggle: 'В бэклог',
     prompt_list_placeholder: 'base, current, project, end',
     add_task: 'Добавить задачу',
     all: 'Все',
@@ -2806,6 +2811,7 @@ const I18N = {
     project: 'Project',
     recur: 'Recur',
     prompt_list: 'Prompt List',
+    backlog_toggle: 'To backlog',
     prompt_list_placeholder: 'base, current, project, end',
     add_task: 'Add Task',
     all: 'All',
@@ -2924,6 +2930,16 @@ function taskRefStatusDotClass(t) {
   return taskStatusDotClass(t.status);
 }
 
+function taskStatusByShortname(shortname, { activeOnly = true } = {}) {
+  const key = String(shortname || '').trim().toLowerCase();
+  if (!key) return null;
+  return adminTaskStatusesRows.find(s => {
+    const sn = String(s.shortname || '').trim().toLowerCase();
+    if (sn !== key) return false;
+    return activeOnly ? Number(s.status || 0) === 1 : true;
+  }) || null;
+}
+
 function taskDotStyle(t) {
   const c = taskRefStatusColor(t);
   return c ? ` style="background:${esc(c)};border-color:${esc(c)}"` : '';
@@ -2974,6 +2990,7 @@ function applyLanguage(lang) {
   document.getElementById('dirLabelText').textContent = tr('dir');
   document.getElementById('recurLabelText').textContent = tr('recur');
   document.getElementById('promptListLabelText').textContent = tr('prompt_list');
+  document.getElementById('backlogToggleText').textContent = tr('backlog_toggle');
   document.getElementById('promptListInput').placeholder = tr('prompt_list_placeholder');
   document.getElementById('addTaskBtn').textContent = tr('add_task');
   document.getElementById('taskFormTitle').textContent = tr('add_task');
@@ -3558,8 +3575,14 @@ async function addTask() {
   const recurrence = document.getElementById('recurrenceInput').value.trim() || null;
   const workerIdRaw = document.getElementById('workerInput').value;
   const workerId = workerIdRaw ? parseInt(workerIdRaw, 10) : null;
+  const toBacklog = !!document.getElementById('taskBacklog').checked;
 
   try {
+    await ensureTaskStatusesRows();
+    const targetStatus = taskStatusByShortname(toBacklog ? 'backlog' : 'new');
+    if (toBacklog && !targetStatus) {
+      throw new Error('Не найден активный статус "Бэклог" (shortname=backlog)');
+    }
     const agentPrompt = await buildPromptFromList(currentPrompt, promptListRaw, workdir);
     const body = {
       prompt: currentPrompt,
@@ -3574,6 +3597,9 @@ async function addTask() {
       worker_id: workerId,
       prompt_list: promptListRaw || null,
     };
+    if (targetStatus && Number.isFinite(Number(targetStatus.id))) {
+      body.task_status_id = Number(targetStatus.id);
+    }
     if (agentPrompt !== currentPrompt) {
       body.agent_prompt = agentPrompt;
     }
@@ -3586,6 +3612,7 @@ async function addTask() {
     document.getElementById('promptInput').value = '';
     document.getElementById('subjectInput').value = '';
     document.getElementById('recurrenceInput').value = '';
+    document.getElementById('taskBacklog').checked = false;
     setDefaultSchedule();
     const cb = _afterAddTaskCallback;
     closeTaskFormScreen();
@@ -4564,7 +4591,8 @@ async function openTaskFormScreen() {
   if (!screen) return;
   screen.classList.add('open');
   setDefaultSchedule();
-  await ensurePrioritiesRows();
+  document.getElementById('taskBacklog').checked = false;
+  await Promise.all([ensurePrioritiesRows(), ensureTaskStatusesRows()]);
   renderTaskPriorityOptions();
   initProjectSelect2();
   setTimeout(() => {
