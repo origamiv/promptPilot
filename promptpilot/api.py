@@ -1339,6 +1339,100 @@ def api_admin_delete_worker(worker_id: int):
         raise HTTPException(400, f"Delete worker failed: {e}")
 
 
+# --- MCP Servers ---
+
+@app.get("/api/admin/mcps")
+def api_admin_mcps(q: Optional[str] = None):
+    return db.list_mcps(search=q, limit=500)
+
+
+@app.post("/api/admin/mcps")
+def api_admin_create_mcp(payload: dict):
+    required = ("name", "shortname")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name and shortname are required")
+    status = payload.get("status", 1)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be integer")
+    args = payload.get("args")
+    env = payload.get("env")
+    options = payload.get("options")
+    if args is not None and not isinstance(args, list):
+        raise HTTPException(400, "args must be a list")
+    if env is not None and not isinstance(env, dict):
+        raise HTTPException(400, "env must be a dict")
+    if options is not None and not isinstance(options, dict):
+        raise HTTPException(400, "options must be a dict")
+    try:
+        return db.create_mcp(
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            description=(str(payload.get("description")).strip() if payload.get("description") is not None else None),
+            command=(str(payload.get("command")).strip() if payload.get("command") is not None else None),
+            args=args,
+            env=env,
+            options=options,
+            status=status,
+        )
+    except Exception as e:
+        raise HTTPException(400, f"Create MCP failed: {e}")
+
+
+@app.patch("/api/admin/mcps/{mcp_id}")
+def api_admin_update_mcp(mcp_id: int, payload: dict):
+    required = ("name", "shortname")
+    if any(not str(payload.get(k, "")).strip() for k in required):
+        raise HTTPException(400, "name and shortname are required")
+    status = payload.get("status", 1)
+    try:
+        status = int(status)
+    except Exception:
+        raise HTTPException(400, "status must be integer")
+    args = payload.get("args")
+    env = payload.get("env")
+    options = payload.get("options")
+    if args is not None and not isinstance(args, list):
+        raise HTTPException(400, "args must be a list")
+    if env is not None and not isinstance(env, dict):
+        raise HTTPException(400, "env must be a dict")
+    if options is not None and not isinstance(options, dict):
+        raise HTTPException(400, "options must be a dict")
+    try:
+        ok = db.update_mcp(
+            mcp_id,
+            name=str(payload["name"]).strip(),
+            shortname=str(payload["shortname"]).strip(),
+            description=(str(payload.get("description")).strip() if payload.get("description") is not None else None),
+            command=(str(payload.get("command")).strip() if payload.get("command") is not None else None),
+            args=args,
+            env=env,
+            options=options,
+            status=status,
+        )
+        if not ok:
+            raise HTTPException(404, "MCP not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Update MCP failed: {e}")
+
+
+@app.delete("/api/admin/mcps/{mcp_id}")
+def api_admin_delete_mcp(mcp_id: int):
+    try:
+        ok = db.delete_mcp(mcp_id)
+        if not ok:
+            raise HTTPException(404, "MCP not found")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"Delete MCP failed: {e}")
+
+
 # --- Task Statuses ---
 
 @app.get("/api/admin/task-statuses")

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Справка: MCP серверы</title><style>body{font-family:Arial,sans-serif;max-width:920px;margin:24px auto;padding:0 16px;line-height:1.55}h1{margin:0 0 12px}h2{margin:18px 0 8px}code{background:#f2f4f8;padding:2px 6px;border-radius:4px}</style></head>
+<body>
+<h1>Справка: MCP серверы</h1>
+<p>Раздел <b>MCP серверы</b> — справочник расширений для Claude. MCP (Model Context Protocol) серверы добавляют новые инструменты и возможности: интеграции с мессенджерами, таск-трекерами, документацией и другими сервисами.</p>
+<h2>Поля MCP сервера</h2>
+<ul>
+<li><b>Имя</b> — полное название MCP сервера (например, <code>YouGile</code>, <code>Telegram</code>).</li>
+<li><b>Shortname</b> — краткий уникальный идентификатор латиницей (например, <code>yougile</code>, <code>telegram</code>). Используется для ссылок и конфигурации.</li>
+<li><b>Описание</b> — краткое описание назначения сервера.</li>
+<li><b>Команда</b> — исполняемый файл для запуска сервера (например, <code>npx</code>, <code>bun</code>).</li>
+<li><b>Args</b> — JSON массив аргументов командной строки. Пример: <code>["-y", "@yougile/mcp"]</code></li>
+<li><b>Env</b> — JSON объект переменных окружения, передаваемых серверу. Пример: <code>{"TOKEN": "abc123"}</code></li>
+<li><b>Options</b> — JSON объект дополнительных настроек MCP сервера.</li>
+<li><b>Статус</b> — 0 = выключен, 1 = активен.</li>
+</ul>
+<h2>Формат команды запуска</h2>
+<ul>
+<li>Поле <b>Команда</b> содержит только имя исполняемого файла: <code>npx</code>, <code>bun</code>, <code>node</code> и т.д.</li>
+<li>Аргументы передаются отдельно в поле <b>Args</b> в виде JSON массива строк.</li>
+<li>Пример для Context7: команда <code>npx</code>, args <code>["-y", "@upstash/context7-mcp"]</code></li>
+<li>Пример для Bun-плагина: команда <code>bun</code>, args <code>["run", "--cwd", "/path/to/plugin", "--shell=bun", "--silent", "start"]</code></li>
+</ul>
+<h2>Как добавить новый MCP сервер</h2>
+<ul>
+<li>Нажмите кнопку <b>Добавить MCP</b> в верхней части раздела.</li>
+<li>Заполните обязательные поля: <b>Имя</b> и <b>Shortname</b>.</li>
+<li>Укажите команду запуска и аргументы в формате JSON массива.</li>
+<li>При необходимости добавьте переменные окружения в поле <b>Env</b>.</li>
+<li>Сохраните запись — сервер появится в списке доступных MCP.</li>
+</ul>
+<h2>Предустановленные MCP серверы</h2>
+<ul>
+<li><b>Context7</b> — документация библиотек через Context7 (<code>npx -y @upstash/context7-mcp</code>).</li>
+<li><b>iMessage</b> — интеграция с iMessage для отправки и получения сообщений.</li>
+<li><b>Discord</b> — интеграция с Discord.</li>
+<li><b>Telegram</b> — интеграция с Telegram.</li>
+<li><b>Fake Chat</b> — фейковые чаты для тестирования без реальных мессенджеров.</li>
+<li><b>Linear</b> — интеграция с Linear (таск-трекер).</li>
+<li><b>YouGile</b> — интеграция с YouGile (таск-трекер).</li>
+</ul>
+</body></html>
