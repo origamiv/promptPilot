@@ -4617,7 +4617,7 @@ async function openTaskFormScreen() {
   screen.classList.add('open');
   setDefaultSchedule();
   document.getElementById('taskBacklog').checked = false;
-  await Promise.all([ensureWorkersRows(), ensurePrioritiesRows(), ensureTaskStatusesRows()]);
+  await Promise.all([ensureWorkersRows(), ensurePrioritiesRows(), ensureTaskStatusesRows(), ensureAgentsRows()]);
   const pmWorker = adminWorkersRows.find(
     w => String((w && w.shortname) || "").trim().toLowerCase() === "pm"
   );
