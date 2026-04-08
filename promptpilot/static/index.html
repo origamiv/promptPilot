@@ -132,6 +132,7 @@
   .side-btn#menuPriorities::before { content: "▲"; }
   .side-btn#menuPrompts::before { content: "✎"; }
   .side-btn#menuWorkers::before { content: "⚒"; }
+  .side-btn#menuMcps::before { content: "⬡"; }
   .side-btn.active {
     background: color-mix(in oklab, var(--accent) 14%, transparent);
     color: var(--text);
@@ -2370,6 +2371,7 @@
       <a id="menuPriorities" class="side-btn" href="/priorities" onclick="return onMenuLinkClick(event, 'priorities')">Приоритеты</a>
       <a id="menuPrompts" class="side-btn" href="/prompts" onclick="return onMenuLinkClick(event, 'prompts')">Промпты</a>
       <a id="menuWorkers" class="side-btn" href="/workers" onclick="return onMenuLinkClick(event, 'workers')">Исполнители</a>
+      <a id="menuMcps" class="side-btn" href="/mcps" onclick="return onMenuLinkClick(event, 'mcps')">MCP серверы</a>
     </div>
   </aside>
 <div class="container">
@@ -2576,6 +2578,19 @@
       <tbody id="workersTbody"></tbody>
     </table>
   </div>
+
+  <div class="admin-view" id="mcpsView">
+    <div class="admin-header">
+      <div class="admin-title" id="mcpsTitle">MCP серверы</div>
+      <input id="mcpsSearch" placeholder="Поиск..." oninput="loadMcpsCrud()">
+      <button class="btn admin-add-btn" type="button" title="Добавить" aria-label="Добавить" onclick="createMcpCrud()">+</button>
+    </div>
+    <div class="admin-mobile-list" id="mcpsCards"></div>
+    <table class="admin-table">
+      <thead><tr><th>ID</th><th>Название</th><th>Short</th><th>Команда</th><th>Описание</th><th>Статус</th><th></th></tr></thead>
+      <tbody id="mcpsTbody"></tbody>
+    </table>
+  </div>
 </div>
 </div>
 
@@ -2698,6 +2713,7 @@ let adminSkillsRows = [];
 let adminAccountsRows = [];
 let adminPromptsRows = [];
 let adminWorkersRows = [];
+let adminMcpsRows = [];
 let adminTaskStatusesRows = [];
 let adminPrioritiesRows = [];
 let adminCardExpanded = new Set();
@@ -4548,6 +4564,7 @@ function switchView(view, opts = {}) {
   document.getElementById('accountsView').style.display = view === 'accounts' ? 'block' : 'none';
   document.getElementById('promptsView').style.display = view === 'prompts' ? 'block' : 'none';
   document.getElementById('workersView').style.display = view === 'workers' ? 'block' : 'none';
+  document.getElementById('mcpsView').style.display = view === 'mcps' ? 'block' : 'none';
   document.getElementById('taskStatusesView').style.display = view === 'task-statuses' ? 'block' : 'none';
   document.getElementById('prioritiesView').style.display = view === 'priorities' ? 'block' : 'none';
   const kanbanEl = document.getElementById('kanbanView');
@@ -4562,6 +4579,7 @@ function switchView(view, opts = {}) {
   document.getElementById('menuAccounts').classList.toggle('active', view === 'accounts');
   document.getElementById('menuPrompts').classList.toggle('active', view === 'prompts');
   document.getElementById('menuWorkers').classList.toggle('active', view === 'workers');
+  document.getElementById('menuMcps').classList.toggle('active', view === 'mcps');
   document.getElementById('menuTaskStatuses').classList.toggle('active', view === 'task-statuses');
   document.getElementById('menuPriorities').classList.toggle('active', view === 'priorities');
   document.getElementById('menuKanban').classList.toggle('active', view === 'kanban');
@@ -4581,6 +4599,7 @@ function switchView(view, opts = {}) {
   if (view === 'accounts') loadAccountsCrud();
   if (view === 'prompts') loadPromptsCrud();
   if (view === 'workers') loadWorkersCrud();
+  if (view === 'mcps') loadMcpsCrud();
   if (view === 'task-statuses') loadTaskStatusesCrud();
   if (view === 'priorities') loadPrioritiesCrud();
   if (view === 'kanban') {
@@ -4874,6 +4893,7 @@ function entityTitle(entity) {
   if (entity === 'agent') return tc('agent');
   if (entity === 'prompt') return tc('prompt');
   if (entity === 'worker') return tc('worker');
+  if (entity === 'mcp') return 'MCP сервер';
   if (entity === 'task_status') return tc('task_status');
   if (entity === 'priority') return tc('priority_ref');
   return tc('account');
@@ -4997,6 +5017,23 @@ function renderCrudFields(entity, row = {}) {
       </div>
     `;
   }
+  if (entity === 'mcp') {
+    return `
+      <div class="crud-field"><label>Название</label><input id="crud_name" required value="${esc(row.name || '')}"></div>
+      <div class="crud-field"><label>Shortname</label><input id="crud_shortname" required value="${esc(row.shortname || '')}"></div>
+      <div class="crud-field"><label>Описание</label><textarea id="crud_description">${esc(row.description || '')}</textarea></div>
+      <div class="crud-field"><label>Команда (command)</label><input id="crud_command" value="${esc(row.command || '')}"></div>
+      <div class="crud-field"><label>Args (JSON массив, напр. [-y, @pkg/mcp])</label><textarea id="crud_args">${esc(row.args ? JSON.stringify(row.args, null, 2) : '')}</textarea></div>
+      <div class="crud-field"><label>Env (JSON объект)</label><textarea id="crud_env">${esc(row.env ? JSON.stringify(row.env, null, 2) : '')}</textarea></div>
+      <div class="crud-field"><label>Options (JSON объект)</label><textarea id="crud_options">${esc(row.options ? JSON.stringify(row.options, null, 2) : '')}</textarea></div>
+      <div class="crud-field"><label>Статус</label>
+        <select id="crud_status">
+          <option value="1" ${Number(row.status ?? 1) === 1 ? 'selected' : ''}>1 — Активен</option>
+          <option value="0" ${Number(row.status ?? 1) === 0 ? 'selected' : ''}>0 — Выключен</option>
+        </select>
+      </div>
+    \`;
+  }
   const agentOptions = adminAgentsRows.length
     ? adminAgentsRows.map(a => `<option value="${a.id}" ${Number(row.agent_id) === Number(a.id) ? 'selected' : ''}>${esc(a.name || '')} (#${a.id})</option>`).join('')
     : `<option value="">${tc('no_agents')}</option>`;
@@ -5035,6 +5072,7 @@ async function openCrudModal(entity, mode, id = null) {
     if (entity === 'account') row = adminAccountsRows.find(x => x.id === id) || {};
     if (entity === 'prompt') row = adminPromptsRows.find(x => x.id === id) || {};
     if (entity === 'worker') row = adminWorkersRows.find(x => x.id === id) || {};
+    if (entity === 'mcp') row = adminMcpsRows.find(x => x.id === id) || {};
     if (entity === 'task_status') row = adminTaskStatusesRows.find(x => x.id === id) || {};
     if (entity === 'priority') row = adminPrioritiesRows.find(x => x.id === id) || {};
   }
@@ -5204,6 +5242,34 @@ async function submitCrudModal(e) {
       if (isMobileLayout()) closeCrudScreen();
       else closeCrudModal();
       await loadWorkersCrud();
+      return;
+    }
+    if (crudState.entity === 'mcp') {
+      const argsRaw = document.getElementById('crud_args')?.value.trim() || '';
+      const envRaw = document.getElementById('crud_env')?.value.trim() || '';
+      const optionsRaw = document.getElementById('crud_options')?.value.trim() || '';
+      let parsedArgs = null, parsedEnv = null, parsedOptions = null;
+      if (argsRaw) { try { parsedArgs = JSON.parse(argsRaw); } catch (_) { alert('Неверный JSON в Args'); return; } }
+      if (envRaw) { try { parsedEnv = JSON.parse(envRaw); } catch (_) { alert('Неверный JSON в Env'); return; } }
+      if (optionsRaw) { try { parsedOptions = JSON.parse(optionsRaw); } catch (_) { alert('Неверный JSON в Options'); return; } }
+      const body = {
+        name: crudValue('crud_name').trim(),
+        shortname: crudValue('crud_shortname').trim(),
+        description: crudValue('crud_description').trim() || null,
+        command: crudValue('crud_command').trim() || null,
+        args: parsedArgs,
+        env: parsedEnv,
+        options: parsedOptions,
+        status: parseInt(crudValue('crud_status') || '1', 10),
+      };
+      if (mode === 'create') {
+        await fetchJSON(`${API}/admin/mcps`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        await fetchJSON(`${API}/admin/mcps/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      if (isMobileLayout()) closeCrudScreen();
+      else closeCrudModal();
+      await loadMcpsCrud();
       return;
     }
     if (crudState.entity === 'priority') {
@@ -6572,6 +6638,77 @@ function renderWorkersCards(rows) {
         ${r.agent_name ? `<div class="admin-mobile-kv"><b>Agent:</b> ${esc(r.agent_name)}</div>` : ''}
         <div class="admin-mobile-kv"><b>Статус:</b> ${statusLabel}</div>
         ${r.avatar_url ? `<div class="admin-mobile-kv"><b>Аватар:</b> <a href="${esc(r.avatar_url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;word-break:break-all">${esc(r.avatar_url)}</a></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// --- MCP Servers CRUD ---
+async function loadMcpsCrud() {
+  const q = document.getElementById('mcpsSearch').value.trim();
+  const rows = await fetchJSON(`${API}/admin/mcps${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  adminMcpsRows = rows;
+  const tbody = document.getElementById('mcpsTbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td>${esc(r.name || '')}</td>
+      <td>${esc(r.shortname || '')}</td>
+      <td><code>${esc(r.command || '')}</code></td>
+      <td>${esc(r.description || '')}</td>
+      <td>${r.status === 1 ? 'Активен' : 'Выкл.'}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-ghost" onclick="editMcpCrud(${r.id})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteMcpCrud(${r.id})">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+  renderMcpsCards(rows);
+}
+
+async function createMcpCrud() {
+  await openCrudModal('mcp', 'create');
+}
+
+async function editMcpCrud(id) {
+  await openCrudModal('mcp', 'edit', id);
+}
+
+async function deleteMcpCrud(id) {
+  if (!confirm(`Удалить MCP сервер #${id}?`)) return;
+  try {
+    await fetchJSON(`${API}/admin/mcps/${id}`, { method: 'DELETE' });
+    await loadMcpsCrud();
+  } catch (e) {
+    alert(`Ошибка удаления: ${e.message}`);
+  }
+}
+
+function renderMcpsCards(rows) {
+  const cards = document.getElementById('mcpsCards');
+  cards.innerHTML = rows.map(r => {
+    const expanded = isAdminExpanded('mcp', r.id);
+    const statusLabel = r.status === 1 ? 'Активен' : 'Выкл.';
+    return `
+    <div class="admin-mobile-card${expanded ? ' expanded' : ''}">
+      <div class="admin-mobile-head" onclick="toggleAdminCard('mcp', ${r.id})">
+        <div style="flex:1;min-width:0">
+          <div class="admin-mobile-title">${esc(r.name || '')} <span style="color:var(--text2);font-weight:400;font-size:11px">#${r.id}</span></div>
+          <div class="admin-mobile-sub">
+            <span class="admin-mobile-chip">${esc(r.shortname || '')}</span>
+            <span class="admin-mobile-chip">${statusLabel}</span>
+          </div>
+        </div>
+        <div class="admin-card-menu-wrap">
+          <button class="prompt-mobile-icon-btn" type="button" aria-label="Edit MCP" onclick="event.stopPropagation(); editMcpCrud(${r.id})">✎</button>
+          <button class="prompt-mobile-icon-btn danger" type="button" aria-label="Delete MCP" onclick="event.stopPropagation(); deleteMcpCrud(${r.id})">🗑</button>
+        </div>
+      </div>
+      <div class="admin-mobile-body">
+        ${r.command ? `<div class="admin-mobile-kv"><b>Команда:</b> <code>${esc(r.command)}</code></div>` : ''}
+        ${r.description ? `<div class="admin-mobile-kv"><b>Описание:</b> ${esc(r.description)}</div>` : ''}
+        ${r.args ? `<div class="admin-mobile-kv"><b>Args:</b> <code>${esc(JSON.stringify(r.args))}</code></div>` : ''}
+        <div class="admin-mobile-kv"><b>Статус:</b> ${statusLabel}</div>
       </div>
     </div>`;
   }).join('');
