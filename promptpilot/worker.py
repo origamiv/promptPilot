@@ -22,6 +22,7 @@ from .config import (
     CLAUDE_TASK_TIMEOUT,
     DEFAULT_CLI,
     MAX_DELAY,
+    PM_TASK_TIMEOUT,
     POLL_INTERVAL,
     WORKER_CONCURRENCY,
     TASK_TIMEOUT,
@@ -624,7 +625,11 @@ def execute_task(task):
     if resolved:
         cmd[0] = resolved
 
-    task_timeout = AGENT_TIMEOUT or (CLAUDE_TASK_TIMEOUT if provider.startswith("claude") else TASK_TIMEOUT)
+    # PM orchestration tasks can legitimately run much longer than regular coding tasks.
+    if task.worker_id == 8 and PM_TASK_TIMEOUT > 0:
+        task_timeout = PM_TASK_TIMEOUT
+    else:
+        task_timeout = AGENT_TIMEOUT or (CLAUDE_TASK_TIMEOUT if provider.startswith("claude") else TASK_TIMEOUT)
 
     def _run_once(command):
         return subprocess.run(
@@ -820,6 +825,7 @@ def run_worker():
     queue_names = []
     queue_refresh_at = 0.0
     due_dispatch_at = 0.0
+    last_dispatch_error_at = 0.0
     published_recently: dict[int, float] = {}
 
     print(f"PromptPilot worker started (poll every {POLL_INTERVAL}s)")
@@ -890,6 +896,7 @@ def run_worker():
                         published_recently = {k: v for k, v in published_recently.items() if v >= stale_before}
                     except Exception as e:
                         print(f"  -> Due-dispatch failed: {e}")
+                        last_dispatch_error_at = now_ts
                     due_dispatch_at = now_ts + max(1.0, float(POLL_INTERVAL))
 
                 slots = max(0, WORKER_CONCURRENCY - len(active))
@@ -902,20 +909,28 @@ def run_worker():
                     if rabbit.enabled:
                         msg = rabbit.get_one(queue_names or [queue_name_for_project(None)])
                         if not msg:
-                            break
-                        payload = msg.payload if isinstance(msg.payload, dict) else {}
-                        raw_task_id = payload.get("task_id")
-                        try:
-                            task_id = int(raw_task_id)
-                        except Exception:
-                            print(f"  -> Skip malformed queue message from {msg.queue}: {payload!r}")
-                            rabbit.ack(msg.delivery_tag)
-                            continue
+                            # Fallback path: if dispatcher recently failed (e.g. DB deadlock),
+                            # claim runnable tasks directly from DB to avoid queue starvation.
+                            if (now_ts - last_dispatch_error_at) <= 120.0:
+                                task = db.get_next_runnable()
+                                if task is None:
+                                    break
+                            else:
+                                break
+                        else:
+                            payload = msg.payload if isinstance(msg.payload, dict) else {}
+                            raw_task_id = payload.get("task_id")
+                            try:
+                                task_id = int(raw_task_id)
+                            except Exception:
+                                print(f"  -> Skip malformed queue message from {msg.queue}: {payload!r}")
+                                rabbit.ack(msg.delivery_tag)
+                                continue
 
-                        task = db.claim_task_for_run(task_id)
-                        rabbit.ack(msg.delivery_tag)
-                        if task is None:
-                            continue
+                            task = db.claim_task_for_run(task_id)
+                            rabbit.ack(msg.delivery_tag)
+                            if task is None:
+                                continue
                     else:
                         task = db.get_next_runnable()
                         if task is None:
