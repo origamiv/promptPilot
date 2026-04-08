@@ -1289,6 +1289,16 @@
     padding: 1px 6px;
     white-space: nowrap;
   }
+  .kanban-status-badge {
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 3px;
+    padding: 1px 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    color: #fff;
+    opacity: .85;
+  }
   .kanban-card-id {
     font-size: 10px;
     font-weight: 700;
@@ -5774,11 +5784,19 @@ async function deletePromptCrud(id) {
 function taskKanbanColId(t) {
   if (t.task_status_id) {
     const direct = adminTaskStatusesRows.find(s => s.id === t.task_status_id);
-    if (direct) return direct.status === 1 ? direct.id : '__hidden__';
+    if (direct) {
+      if (direct.status !== 1) return '__hidden__';
+      if (_kanbanMergedIds.has(direct.id)) return '__new_backlog__';
+      return direct.id;
+    }
     return '__none__';
   }
   const rs = adminTaskStatusesRows.find(s => s.status === 1 && s.status_to === t.status);
-  return rs ? rs.id : '__none__';
+  if (rs) {
+    if (_kanbanMergedIds.has(rs.id)) return '__new_backlog__';
+    return rs.id;
+  }
+  return '__none__';
 }
 
 function renderKanbanCard(t) {
@@ -5788,6 +5806,14 @@ function renderKanbanCard(t) {
   const parsed = parseResult(t.result);
   const resultHTML = buildTaskResultHTML(t, parsed);
 
+  let statusBadgeHTML = '';
+  if (t.task_status_id && _kanbanMergedIds.has(t.task_status_id)) {
+    const st = adminTaskStatusesRows.find(s => s.id === t.task_status_id);
+    if (st) {
+      statusBadgeHTML = `<span class="kanban-status-badge" style="background:${esc(st.color || '#6366f1')}">${esc(st.name)}</span>`;
+    }
+  }
+
   return `<div class="kanban-card${expanded ? ' expanded' : ''}" id="kcard-${t.id}" data-task-id="${t.id}">
     <div class="kanban-card-head" onclick="toggleKanbanCard(${t.id})">
       ${taskAvatarHtml(t, { workerRow, imgStyle: 'flex:0 0 22px' })}
@@ -5796,6 +5822,7 @@ function renderKanbanCard(t) {
           ? `${taskParentLinkHtml(taskParentTaskId(t))} - <span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`
           : `<span class="kanban-card-id">#${t.id}</span> ${esc(taskCardTitle(t))}`}</div>
         <div class="kanban-card-meta">
+          ${statusBadgeHTML}
           ${taskPriorityBadgeHtml(t, { className: 'kanban-card-badge' })}
           <span class="kanban-card-badge">${timeAgo(t.created_at)}</span>
         </div>
@@ -5885,6 +5912,9 @@ const KANBAN_PAGE_SIZE = 10;
 // все ключи — строки (String(colId))
 const kanbanColVisible = {};
 let _kanbanColItems = {};
+// IDs статусов, объединённых в колонку __new_backlog__
+let _kanbanMergedIds = new Set();
+let _kanbanMergedMeta = { color: '#6366f1', name: 'Новые / Бэклог' };
 
 function kanbanTaskSort(a, b) {
   const ta = a.updated_at || a.created_at || '';
@@ -5892,8 +5922,19 @@ function kanbanTaskSort(a, b) {
   return tb < ta ? -1 : tb > ta ? 1 : 0;
 }
 
+function kanbanNewBacklogSort(a, b) {
+  const snA = (adminTaskStatusesRows.find(s => s.id === a.task_status_id) || {}).shortname || '';
+  const snB = (adminTaskStatusesRows.find(s => s.id === b.task_status_id) || {}).shortname || '';
+  const aNew = snA === 'new', bNew = snB === 'new';
+  if (aNew !== bNew) return aNew ? -1 : 1;
+  const ta = a.created_at || '';
+  const tb = b.created_at || '';
+  return tb < ta ? -1 : tb > ta ? 1 : 0;
+}
+
 function kanbanColMeta(colIdStr) {
   if (colIdStr === '__none__') return { color: '#9ca3af', name: 'Без статуса' };
+  if (colIdStr === '__new_backlog__') return _kanbanMergedMeta;
   const col = adminTaskStatusesRows.find(s => String(s.id) === String(colIdStr));
   return { color: (col && col.color) || '#9ca3af', name: (col && col.name) || 'Без статуса' };
 }
@@ -5970,7 +6011,7 @@ function upsertTaskInColItems(task, colIdStr) {
   const idx = _kanbanColItems[key].findIndex(x => x.id === task.id);
   if (idx >= 0) _kanbanColItems[key][idx] = task;
   else _kanbanColItems[key].push(task);
-  _kanbanColItems[key].sort(kanbanTaskSort);
+  _kanbanColItems[key].sort(key === '__new_backlog__' ? kanbanNewBacklogSort : kanbanTaskSort);
 }
 
 function removeTaskFromColItems(taskId, colIdStr) {
@@ -6005,9 +6046,9 @@ function kanbanShowMore(colIdStr) {
   const items = _kanbanColItems[colIdStr];
   if (!items) return;
   kanbanColVisible[colIdStr] = (kanbanColVisible[colIdStr] ?? KANBAN_PAGE_SIZE) + KANBAN_PAGE_SIZE;
-  const col = adminTaskStatusesRows.find(s => String(s.id) === colIdStr);
-  const color = col ? (col.color || '#9ca3af') : '#9ca3af';
-  const name = col ? col.name : 'Без статуса';
+  const meta = kanbanColMeta(colIdStr);
+  const color = meta.color;
+  const name = meta.name;
   const newColHTML = renderKanbanCol(colIdStr, items, color, name);
   const el = [...document.querySelectorAll('.kanban-col')].find(e => e.dataset.colId === colIdStr);
   if (el) {
@@ -6024,22 +6065,41 @@ async function loadKanban() {
   await Promise.all([ensureWorkersRows(), ensureTaskStatusesRows(), ensurePrioritiesRows()]);
   const tasks = await fetchKanbanTasksForSelectedProject();
 
-  const activeCols = adminTaskStatusesRows.filter(s => s.status === 1);
+  const allActiveCols = adminTaskStatusesRows.filter(s => s.status === 1);
+
+  // Определяем статусы "Новая" и "Бэклог" для объединённой колонки
+  const newStatus = allActiveCols.find(s => (s.shortname || '').toLowerCase() === 'new');
+  const backlogStatus = allActiveCols.find(s => (s.shortname || '').toLowerCase() === 'backlog');
+  _kanbanMergedIds = new Set([newStatus, backlogStatus].filter(Boolean).map(s => s.id));
+  if (newStatus || backlogStatus) {
+    const mergedColor = (newStatus && newStatus.color) || (backlogStatus && backlogStatus.color) || '#6366f1';
+    _kanbanMergedMeta = { color: mergedColor, name: 'Новые / Бэклог' };
+  }
+  const activeCols = allActiveCols.filter(s => !_kanbanMergedIds.has(s.id));
 
   // Group tasks by column id
   const colMap = Object.fromEntries(activeCols.map(c => [c.id, []]));
   const unassigned = [];
+  const mergedItems = [];
   tasks.forEach(t => {
     const cid = taskKanbanColId(t);
     if (cid === '__hidden__') return;
+    if (cid === '__new_backlog__') { mergedItems.push(t); return; }
     if (cid !== '__none__' && colMap[cid] !== undefined) colMap[cid].push(t);
     else unassigned.push(t);
   });
+  mergedItems.sort(kanbanNewBacklogSort);
 
   // Save for kanbanShowMore
   _kanbanColItems = {};
   activeCols.forEach(c => { _kanbanColItems[String(c.id)] = colMap[c.id] || []; });
+  if (_kanbanMergedIds.size > 0) _kanbanColItems['__new_backlog__'] = mergedItems;
   if (unassigned.length) _kanbanColItems['__none__'] = unassigned;
+
+  // Объединённая колонка идёт первой (показываем всегда, если статусы существуют)
+  const mergedHTML = _kanbanMergedIds.size > 0
+    ? renderKanbanCol('__new_backlog__', mergedItems, _kanbanMergedMeta.color, _kanbanMergedMeta.name)
+    : '';
 
   const colsHTML = activeCols.map(col => {
     const items = colMap[col.id] || [];
@@ -6050,7 +6110,7 @@ async function loadKanban() {
     ? renderKanbanCol('__none__', unassigned, '#9ca3af', 'Без статуса')
     : '';
 
-  board.innerHTML = colsHTML + noneHTML;
+  board.innerHTML = mergedHTML + colsHTML + noneHTML;
   syncKanbanStateFromItems();
   reapplyParentHighlights();
 }

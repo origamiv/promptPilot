@@ -34,6 +34,7 @@ class TaskCreate(BaseModel):
     worker_id: Optional[int] = None
     task_status_id: Optional[int] = None
     prompt_list: Optional[str] = None  # e.g. "base, current, project, end"
+    nom_run: Optional[int] = None  # execution order in multi-agent system (set by PM agent)
 
 
 class TaskUpdate(BaseModel):
@@ -41,6 +42,7 @@ class TaskUpdate(BaseModel):
     priority: Optional[int] = Field(default=None, ge=1)
     task_status_id: Optional[int] = None
     questions: Optional[str] = None
+    nom_run: Optional[int] = None
 
 
 class TaskInDB(BaseModel):
@@ -81,6 +83,7 @@ class TaskInDB(BaseModel):
     task_status_id: Optional[int] = None
     prompt_list: Optional[str] = None
     questions: Optional[str] = None
+    nom_run: Optional[int] = None
 
 
 class Stats(BaseModel):

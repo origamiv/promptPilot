@@ -1,7 +1,6 @@
 """FastAPI web API + static file serving."""
 
-import base64
-import io
+import json
 import os
 import pwd
 import re
@@ -9,13 +8,9 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
 import threading
-import urllib.parse
-import urllib.request
 import uuid
-import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -26,12 +21,46 @@ from pydantic import BaseModel, Field
 import pyte
 
 from . import db
-from .config import APP_TIMEZONE, AGENT_USER, get_skills, load_providers, PROJECTS_ROOT
+from .config import APP_TIMEZONE, AGENT_USER, load_providers, PROJECTS_ROOT
 from .config import get_provider_env
-from .config import ensure_skill_dirs, list_managed_user_skills, set_skill_enabled
 from .models import CostStats, Stats, TaskCreate, TaskInDB, TaskStatus, TaskUpdate
 from . import relogin
 from .version import check_for_update
+
+def _get_skills_dir() -> Path:
+    """Return ~/.claude/commands for the agent user (AGENT_USER if set, otherwise current user)."""
+    if AGENT_USER:
+        try:
+            pw = pwd.getpwnam(AGENT_USER)
+            return Path(pw.pw_dir) / ".claude" / "commands"
+        except KeyError:
+            pass
+    return Path.home() / ".claude" / "commands"
+
+
+SKILLS_DIR = _get_skills_dir()
+
+
+def _name_to_slug(name: str) -> str:
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9_-]+", "-", slug)
+    slug = slug.strip("-")
+    return slug or "skill"
+
+
+def _skill_file_path(slug: str) -> Path:
+    return SKILLS_DIR / f"{slug}.md"
+
+
+def _write_skill_file(slug: str, content: str) -> None:
+    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    _skill_file_path(slug).write_text(content, encoding="utf-8")
+
+
+def _delete_skill_file(slug: str) -> None:
+    path = _skill_file_path(slug)
+    if path.exists():
+        path.unlink()
 
 app = FastAPI(title="PromptPilot", version="0.1.0")
 
@@ -64,93 +93,6 @@ class InteractiveStartRequest(BaseModel):
 class InteractiveInputRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20000)
     append_newline: bool = True
-
-
-def _skills_base_dir() -> Path:
-    return (Path.home() / ".claude" / "skills").resolve()
-
-
-def _normalize_archive_member(member_name: str) -> Optional[Path]:
-    """Normalize archived path to relative destination under ~/.claude/skills."""
-    raw = str(member_name or "").replace("\\", "/").strip().lstrip("/")
-    if not raw:
-        return None
-    parts = [p for p in raw.split("/") if p and p not in (".", "..")]
-    if not parts:
-        return None
-    if len(parts) >= 2 and parts[0] in (".claude", "claude") and parts[1] in ("skills", "commands"):
-        parts = parts[2:]
-    elif parts[0] in ("skills", "commands"):
-        parts = parts[1:]
-    if not parts:
-        return None
-    return Path(*parts)
-
-
-def _safe_join_under(base_dir: Path, relative_path: Path) -> Path:
-    dst = (base_dir / relative_path).resolve()
-    if base_dir != dst and base_dir not in dst.parents:
-        raise ValueError("Unsafe archive path")
-    return dst
-
-
-def _extract_archive_bytes(payload: bytes, filename: str, dest_dir: Path) -> int:
-    """Extract zip/tar archive bytes under dest_dir. Returns extracted file count."""
-    extracted = 0
-
-    def _ensure_parent(path: Path):
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-    if zipfile.is_zipfile(io.BytesIO(payload)):
-        with zipfile.ZipFile(io.BytesIO(payload)) as zf:
-            for info in zf.infolist():
-                rel = _normalize_archive_member(info.filename)
-                if rel is None:
-                    continue
-                target = _safe_join_under(dest_dir, rel)
-                if info.is_dir():
-                    target.mkdir(parents=True, exist_ok=True)
-                    continue
-                _ensure_parent(target)
-                with zf.open(info, "r") as src, open(target, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                extracted += 1
-        return extracted
-
-    try:
-        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:*") as tf:
-            for info in tf.getmembers():
-                rel = _normalize_archive_member(info.name)
-                if rel is None:
-                    continue
-                target = _safe_join_under(dest_dir, rel)
-                if info.isdir():
-                    target.mkdir(parents=True, exist_ok=True)
-                    continue
-                if not info.isfile():
-                    continue
-                src = tf.extractfile(info)
-                if src is None:
-                    continue
-                _ensure_parent(target)
-                with src, open(target, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                extracted += 1
-        return extracted
-    except tarfile.TarError:
-        pass
-
-    raise ValueError(f"Unsupported archive format: {filename or 'unknown file'}")
-
-
-def _decode_b64_content(encoded: str) -> bytes:
-    raw = str(encoded or "").strip()
-    if "," in raw and raw.lower().startswith("data:"):
-        raw = raw.split(",", 1)[1]
-    try:
-        return base64.b64decode(raw, validate=True)
-    except Exception as e:
-        raise ValueError(f"Invalid base64 payload: {e}")
 
 
 def _interactive_read_output_locked(session: dict):
@@ -526,6 +468,10 @@ def api_update_task(task_id: int, update: TaskUpdate):
         if not db.update_task_questions(task_id, update.questions):
             raise HTTPException(404, "Task not found")
 
+    if update.nom_run is not None:
+        if not db.update_task_nom_run(task_id, update.nom_run):
+            raise HTTPException(404, "Task not found")
+
     return {"ok": True}
 
 
@@ -605,12 +551,23 @@ def api_providers():
 
 @app.get("/api/skills")
 def api_skills(provider: Optional[str] = None, workdir: Optional[str] = None):
-    """Return available Claude Code skills. Empty list if provider doesn't support skills."""
+    """Return active skills for a provider from DB. Empty list if provider doesn't support skills."""
     if provider is not None:
         providers = load_providers()
         if not providers.get(provider, {}).get("supports_skills", False):
             return []
-    return get_skills(working_dir=workdir)
+        rows = db.list_skills_for_provider(provider)
+    else:
+        rows = db.list_skills_for_provider("")
+    return [
+        {
+            "name": r["name"],
+            "description": r.get("description"),
+            "argument_hint": r.get("argument_hint"),
+            "source": "db",
+        }
+        for r in rows
+    ]
 
 
 @app.get("/api/admin/skills/agents")
@@ -636,122 +593,136 @@ def api_admin_skills_agents():
 
 
 @app.get("/api/admin/skills")
-def api_admin_skills():
-    return list_managed_user_skills()
+def api_admin_skills_list(
+    page: int = 1,
+    page_size: int = 50,
+    q: Optional[str] = None,
+    agent: Optional[str] = None,
+    active_only: bool = False,
+):
+    result = db.list_skills(page=page, page_size=page_size, q=q or None, agent=agent or None, active_only=active_only)
+    items = result["items"]
+    for item in items:
+        if "agents" in item and isinstance(item["agents"], str):
+            try:
+                item["agents"] = json.loads(item["agents"])
+            except Exception:
+                item["agents"] = []
+    return result
 
 
-@app.patch("/api/admin/skills/toggle")
-def api_admin_skills_toggle(payload: dict):
-    if "path" not in payload:
-        raise HTTPException(400, "path is required")
-    enabled_raw = payload.get("enabled")
-    if isinstance(enabled_raw, bool):
-        enabled = enabled_raw
-    elif isinstance(enabled_raw, (int, float)):
-        enabled = bool(int(enabled_raw))
-    elif isinstance(enabled_raw, str):
-        enabled = enabled_raw.strip().lower() in ("1", "true", "yes", "on")
-    else:
-        enabled = False
+@app.post("/api/admin/skills")
+def api_admin_skills_create(payload: dict):
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "name is required")
+    slug = str(payload.get("slug") or "").strip() or _name_to_slug(name)
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", slug):
+        raise HTTPException(400, f"Invalid slug: {slug!r}. Only lowercase letters, digits, hyphens and underscores.")
+    description = payload.get("description") or None
+    content = str(payload.get("content") or "")
+    argument_hint = payload.get("argument_hint") or None
+    agents = payload.get("agents") or []
+    if not isinstance(agents, list):
+        agents = []
+    is_active = bool(payload.get("is_active", True))
     try:
-        return set_skill_enabled(str(payload.get("path")), enabled=enabled)
+        row = db.create_skill(name, slug, description, content, argument_hint, agents, is_active)
     except Exception as e:
-        raise HTTPException(400, f"Toggle skill failed: {e}")
-
-
-@app.delete("/api/admin/skills")
-def api_admin_skills_delete(path: str):
-    target = Path(str(path or "").strip())
-    if not str(target):
-        raise HTTPException(400, "path is required")
+        msg = str(e)
+        if "unique" in msg.lower() or "duplicate" in msg.lower():
+            raise HTTPException(400, "Skill with this name or slug already exists")
+        raise HTTPException(400, f"Create failed: {msg}")
     try:
-        resolved = target.resolve()
-        roots = {(Path.home() / ".claude" / "skills").resolve(), (Path.home() / ".claude" / "commands").resolve()}
-        if not any(resolved == root or root in resolved.parents for root in roots):
-            raise ValueError("Path is outside of mutable skill directories")
-        if not resolved.exists():
-            raise ValueError("Skill path does not exist")
-        if resolved.is_dir():
-            shutil.rmtree(resolved)
-        else:
-            resolved.unlink()
-        return {"ok": True}
-    except Exception as e:
-        raise HTTPException(400, f"Delete skill failed: {e}")
-
-
-@app.post("/api/admin/skills/archive")
-def api_admin_skills_upload_archive(payload: dict):
-    filename = str(payload.get("filename") or "").strip() or "skills-archive"
-    encoded = payload.get("content_base64")
-    if not encoded:
-        raise HTTPException(400, "content_base64 is required")
-    try:
-        data = _decode_b64_content(str(encoded))
-    except Exception as e:
-        raise HTTPException(400, str(e))
-    if len(data) > 30 * 1024 * 1024:
-        raise HTTPException(400, "Archive is too large (max 30 MB)")
-    ensure_skill_dirs()
-    base = _skills_base_dir()
-    try:
-        count = _extract_archive_bytes(data, filename=filename, dest_dir=base)
-    except Exception as e:
-        raise HTTPException(400, f"Archive import failed: {e}")
-    if count == 0:
-        raise HTTPException(400, "Archive imported but no files were extracted")
-    return {"ok": True, "files_extracted": count}
-
-
-@app.post("/api/admin/skills/url")
-def api_admin_skills_upload_url(payload: dict):
-    url = str(payload.get("url") or "").strip()
-    if not url:
-        raise HTTPException(400, "url is required")
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise HTTPException(400, "Only http/https URLs are allowed")
-
-    req = urllib.request.Request(url, headers={"User-Agent": "PromptPilot/skills-import"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            blob = resp.read()
-            content_type = str(resp.headers.get("Content-Type") or "").lower()
-    except Exception as e:
-        raise HTTPException(400, f"Download failed: {e}")
-
-    if len(blob) > 30 * 1024 * 1024:
-        raise HTTPException(400, "Downloaded file is too large (max 30 MB)")
-
-    ensure_skill_dirs()
-    base = _skills_base_dir()
-    filename = Path(parsed.path).name or "skill-from-url"
-    lower_name = filename.lower()
-
-    is_archive_hint = any(lower_name.endswith(s) for s in (".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2"))
-    is_text_hint = lower_name.endswith(".md") or "text/markdown" in content_type or content_type.startswith("text/plain")
-
-    if is_archive_hint or (not is_text_hint):
+        _write_skill_file(slug, content)
+    except Exception:
+        pass
+    if row and isinstance(row.get("agents"), str):
         try:
-            count = _extract_archive_bytes(blob, filename=filename, dest_dir=base)
-        except Exception as e:
-            raise HTTPException(400, f"Import from URL failed: {e}")
-        if count == 0:
-            raise HTTPException(400, "URL archive imported but no files were extracted")
-        return {"ok": True, "files_extracted": count}
+            row["agents"] = json.loads(row["agents"])
+        except Exception:
+            row["agents"] = []
+    return row
 
-    # Plain markdown file import
-    safe_stem = re.sub(r"[^a-zA-Z0-9._-]+", "-", Path(filename).stem or "skill").strip("-") or "skill"
-    target = base / f"{safe_stem}.md"
-    i = 1
-    while target.exists():
-        target = base / f"{safe_stem}-{i}.md"
-        i += 1
+
+@app.get("/api/admin/skills/{skill_id}")
+def api_admin_skills_get(skill_id: int):
+    row = db.get_skill(skill_id)
+    if not row:
+        raise HTTPException(404, "Skill not found")
+    if isinstance(row.get("agents"), str):
+        try:
+            row["agents"] = json.loads(row["agents"])
+        except Exception:
+            row["agents"] = []
+    return row
+
+
+@app.put("/api/admin/skills/{skill_id}")
+def api_admin_skills_update(skill_id: int, payload: dict):
+    existing = db.get_skill(skill_id)
+    if not existing:
+        raise HTTPException(404, "Skill not found")
+    old_slug = existing["slug"]
+    name = str(payload.get("name") or existing["name"]).strip()
+    slug = str(payload.get("slug") or existing["slug"]).strip()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", slug):
+        raise HTTPException(400, f"Invalid slug: {slug!r}")
+    description = payload.get("description", existing.get("description"))
+    if description is not None:
+        description = description or None
+    content = str(payload.get("content", existing.get("content", "")))
+    argument_hint = payload.get("argument_hint", existing.get("argument_hint")) or None
+    agents = payload.get("agents", existing.get("agents") or [])
+    if not isinstance(agents, list):
+        agents = []
+    is_active = bool(payload.get("is_active", existing.get("is_active", True)))
     try:
-        target.write_bytes(blob)
+        row = db.update_skill(skill_id, name, slug, description, content, argument_hint, agents, is_active)
     except Exception as e:
-        raise HTTPException(400, f"Failed to save skill file: {e}")
-    return {"ok": True, "files_extracted": 1, "path": str(target.resolve())}
+        msg = str(e)
+        if "unique" in msg.lower() or "duplicate" in msg.lower():
+            raise HTTPException(400, "Skill with this name or slug already exists")
+        raise HTTPException(400, f"Update failed: {msg}")
+    if not row:
+        raise HTTPException(404, "Skill not found")
+    try:
+        if old_slug != slug:
+            _delete_skill_file(old_slug)
+        _write_skill_file(slug, content)
+    except Exception:
+        pass
+    if isinstance(row.get("agents"), str):
+        try:
+            row["agents"] = json.loads(row["agents"])
+        except Exception:
+            row["agents"] = []
+    return row
+
+
+@app.patch("/api/admin/skills/{skill_id}/toggle")
+def api_admin_skills_toggle(skill_id: int, payload: dict = None):
+    is_active = None
+    if payload:
+        raw = payload.get("is_active")
+        if raw is not None:
+            is_active = bool(raw)
+    row = db.toggle_skill(skill_id, is_active)
+    if not row:
+        raise HTTPException(404, "Skill not found")
+    return row
+
+
+@app.delete("/api/admin/skills/{skill_id}")
+def api_admin_skills_delete(skill_id: int):
+    slug = db.delete_skill(skill_id)
+    if slug is None:
+        raise HTTPException(404, "Skill not found")
+    try:
+        _delete_skill_file(slug)
+    except Exception:
+        pass
+    return {"ok": True}
 
 
 @app.get("/api/projects")
