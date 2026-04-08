@@ -6464,7 +6464,18 @@ function selectWorker(id) {
   const providerLabel = document.getElementById('providerLabel');
   if (providerLabel) {
     const worker = id ? adminWorkersRows.find(w => w.id === id) : null;
-    providerLabel.style.display = (worker && worker.agent_id) ? 'none' : '';
+    if (worker && worker.agent_id) {
+      providerLabel.style.display = 'none';
+      // Устанавливаем провайдер по shortname агента
+      const workerAgent = agentById(worker.agent_id);
+      if (workerAgent && workerAgent.shortname && providersData[workerAgent.shortname]) {
+        document.getElementById('providerInput').value = workerAgent.shortname;
+      }
+    } else {
+      providerLabel.style.display = '';
+    }
+    updateSkillsToggle();
+    updateModelSelect();
   }
 }
 
