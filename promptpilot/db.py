@@ -2418,36 +2418,39 @@ def delete_task_status(status_id: int) -> bool:
 
 
 def pick_available_agent_account(provider: str) -> Optional[dict]:
-    """Pick an active (status=1, is_active=1) agent account matching provider name."""
+    """Pick an active (status=1, is_active=1) agent account matching provider name exactly."""
     provider_key = (provider or "").strip().lower()
     if not provider_key:
         return None
-    like = f"%{provider_key.split('-', 1)[0]}%"
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
                 """
                 SELECT aa.id, aa.name, aa.shortname, aa.agent_id, a.name AS agent_name,
-                       aa.status, aa.token
+                       a.shortname AS agent_shortname, aa.status, aa.token
                 FROM {}.agents_accounts aa
                 LEFT JOIN {}.agents a ON a.id = aa.agent_id
                 WHERE aa.status = 1
                   AND aa.is_active = TRUE
-                  AND (LOWER(COALESCE(a.shortname, '')) LIKE %s OR LOWER(COALESCE(a.name, '')) LIKE %s)
+                  AND (LOWER(COALESCE(a.shortname, '')) = %s OR LOWER(COALESCE(a.name, '')) = %s)
                 ORDER BY aa.updated_at NULLS FIRST, aa.id
                 LIMIT 1
                 """
             ).format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME)),
-            (like, like),
+            (provider_key, provider_key),
         )
         row = cur.fetchone()
-        if row:
-            return dict(row)
+        return dict(row) if row else None
+
+
+def pick_any_available_agent_account() -> Optional[dict]:
+    """Pick any active (status=1, is_active=1) agent account."""
+    with _connect() as conn, conn.cursor() as cur:
         cur.execute(
             sql.SQL(
                 """
                 SELECT aa.id, aa.name, aa.shortname, aa.agent_id, a.name AS agent_name,
-                       aa.status, aa.token
+                       a.shortname AS agent_shortname, aa.status, aa.token
                 FROM {}.agents_accounts aa
                 LEFT JOIN {}.agents a ON a.id = aa.agent_id
                 WHERE aa.status = 1
@@ -2457,8 +2460,31 @@ def pick_available_agent_account(provider: str) -> Optional[dict]:
                 """
             ).format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME)),
         )
-        fallback = cur.fetchone()
-        return dict(fallback) if fallback else None
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def pick_available_agent_account_by_agent_id(agent_id: int) -> Optional[dict]:
+    """Pick an active account for a specific agent."""
+    with _connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            sql.SQL(
+                """
+                SELECT aa.id, aa.name, aa.shortname, aa.agent_id, a.name AS agent_name,
+                       a.shortname AS agent_shortname, aa.status, aa.token
+                FROM {}.agents_accounts aa
+                LEFT JOIN {}.agents a ON a.id = aa.agent_id
+                WHERE aa.status = 1
+                  AND aa.is_active = TRUE
+                  AND aa.agent_id = %s
+                ORDER BY aa.updated_at NULLS FIRST, aa.id
+                LIMIT 1
+                """
+            ).format(sql.Identifier(SCHEMA_NAME), sql.Identifier(SCHEMA_NAME)),
+            (agent_id,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
 
 
 def set_task_agent_account(task_id: int, account_id: Optional[int]) -> None:

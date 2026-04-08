@@ -4477,7 +4477,7 @@ let currentView = 'tasks';
 let lastContentView = 'tasks';
 let currentHelpSection = 'tasks';
 
-const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'skills', 'accounts', 'prompts', 'help', 'workers', 'task-statuses', 'priorities', 'kanban']);
+const VIEW_NAMES = new Set(['tasks', 'interactive', 'projects', 'agents', 'skills', 'accounts', 'prompts', 'help', 'workers', 'mcps', 'task-statuses', 'priorities', 'kanban']);
 
 function isMobileLayout() {
   return window.matchMedia('(max-width: 980px)').matches;
@@ -4936,7 +4936,7 @@ function renderCrudFields(entity, row = {}) {
       <div class="crud-field"><label>${tc('color')}</label><input id="crud_color" required value="${esc(agentColor)}" placeholder="#38bdf8"></div>
       <div class="crud-field">
         <label>Аватар (URL картинки)</label>
-        <input id="crud_avatar_url" type="url" placeholder="https://..." value="${esc(row.avatar_url || '')}">
+        <input id="crud_avatar_url" type="text" placeholder="https://... или /images/..." value="${esc(row.avatar_url || '')}">
         ${row.avatar_url ? `<div style="margin-top:6px"><img src="${esc(row.avatar_url)}" style="width:48px;height:48px;border-radius:50%;border:1px solid var(--border);object-fit:cover" alt="avatar"></div>` : ''}
       </div>
       <div class="crud-field"><label>${tc('status')}</label>
@@ -5012,7 +5012,7 @@ function renderCrudFields(entity, row = {}) {
       </div>
       <div class="crud-field">
         <label>Аватар (URL картинки)</label>
-        <input id="crud_avatar_url" type="url" placeholder="https://..." value="${esc(row.avatar_url || '')}">
+        <input id="crud_avatar_url" type="text" placeholder="https://... или /images/..." value="${esc(row.avatar_url || '')}">
         ${row.avatar_url ? `<div style="margin-top:6px"><img src="${esc(row.avatar_url)}" style="width:48px;height:48px;border-radius:50%;border:1px solid var(--border);object-fit:cover" alt="avatar"></div>` : ''}
       </div>
     `;

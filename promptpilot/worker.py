@@ -345,32 +345,39 @@ def _build_prompt_from_list(task, skip_base: bool = False) -> str:
 
 def execute_task(task):
     """Run CLI with the task's prompt."""
-    # Determine provider: worker's linked agent takes priority over task's agent.
+    # Determine provider and account by worker's agent, or any available account if no agent set.
     provider = task.provider or DEFAULT_CLI
+    account = None
+
     if task.worker_id:
         worker = db.get_worker(int(task.worker_id))
-        if worker and worker.get("agent_shortname"):
-            provider = worker["agent_shortname"]
-            print(f"  -> Provider from worker #{task.worker_id} agent: {provider}")
-        elif worker and not worker.get("agent_shortname"):
-            # Worker has no agent linked — fall back to task's agent account
-            if task.agent_account_id:
-                acc = db.get_agent_account(int(task.agent_account_id))
-                if acc and acc.get("agent_shortname"):
-                    provider = acc["agent_shortname"]
-                    print(f"  -> Provider from task agent account: {provider}")
-    provider_key = provider.strip().lower()
+        if worker:
+            worker_agent_id = worker.get("agent_id")
+            if worker_agent_id:
+                # Worker has specific agent — find account for that agent
+                account = db.pick_available_agent_account_by_agent_id(int(worker_agent_id))
+                if account and account.get("agent_shortname"):
+                    provider = account["agent_shortname"]
+                    print(f"  -> Provider from worker #{task.worker_id} agent (id={worker_agent_id}): {provider}")
+            else:
+                # Worker has no agent — pick any available account
+                account = db.pick_any_available_agent_account()
+                if account and account.get("agent_shortname"):
+                    provider = account["agent_shortname"]
+                    print(f"  -> Provider from any available agent account (worker #{task.worker_id} has no agent): {provider}")
 
-    account = None
-    if task.agent_account_id:
-        account = db.get_agent_account(int(task.agent_account_id))
     if not account:
-        account = db.pick_available_agent_account(provider)
+        if task.agent_account_id:
+            account = db.get_agent_account(int(task.agent_account_id))
+        if not account:
+            account = db.pick_available_agent_account(provider)
+
     if account:
         try:
             db.set_task_agent_account(task.id, int(account["id"]))
         except Exception:
             pass
+    provider_key = provider.strip().lower()
 
     def _is_exhausted_status(acc: dict) -> bool:
         status = acc.get("status")
