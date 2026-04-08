@@ -5032,7 +5032,7 @@ function renderCrudFields(entity, row = {}) {
           <option value="0" ${Number(row.status ?? 1) === 0 ? 'selected' : ''}>0 — Выключен</option>
         </select>
       </div>
-    \`;
+    `;
   }
   const agentOptions = adminAgentsRows.length
     ? adminAgentsRows.map(a => `<option value="${a.id}" ${Number(row.agent_id) === Number(a.id) ? 'selected' : ''}>${esc(a.name || '')} (#${a.id})</option>`).join('')
